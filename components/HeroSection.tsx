@@ -82,12 +82,12 @@ function IconSubmit() {
 
 export default function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden pb-24 pt-20">
+    <section className="relative isolate flex min-h-[calc(100vh-120px)] flex-col justify-between overflow-hidden px-6 pb-16 pt-16">
       <div className="absolute inset-0 -z-40 bg-[radial-gradient(circle_at_18%_12%,rgba(82,59,231,0.55),transparent_58%),radial-gradient(circle_at_86%_-8%,rgba(249,207,0,0.45),transparent_55%),radial-gradient(circle_at_60%_120%,rgba(251,35,194,0.35),transparent_65%),linear-gradient(180deg,rgba(8,8,10,0.95)_0%,rgba(8,8,10,0.78)_42%,rgba(6,6,8,0.96)_100%)]" />
       <div className="absolute inset-0 -z-30 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%27320%27%20height%3D%27320%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cfilter%20id%3D%27n%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.45%27%20numOctaves%3D%273%27%2F%3E%3CfeColorMatrix%20type%3D%27saturate%27%20values%3D%270%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27320%27%20height%3D%27320%27%20filter%3D%27url%28%23n%29%27%20opacity%3D%270.1%27%2F%3E%3C%2Fsvg%3E')] opacity-35" />
       <div className="absolute inset-x-0 top-0 -z-20 h-44 bg-gradient-to-b from-black/75 via-black/40 to-transparent" />
 
-      <div className="mx-auto w-full max-w-[1180px] px-6">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-1 flex-col items-center px-0">
         <div className="text-center">
           <h1 className="font-[\'EB Garamond\',var(--font-sans)] text-[48px] uppercase tracking-[0.3em] text-white drop-shadow-[0_18px_48px_rgba(0,0,0,0.35)] md:text-[56px]">
             一键生成任何3D内容
@@ -97,7 +97,7 @@ export default function HeroSection() {
           </p>
         </div>
 
-        <div className="mx-auto mt-12 w-full max-w-[820px]">
+        <div className="mx-auto mt-10 w-full max-w-[820px]">
           <div className="relative">
             <div className="absolute inset-0 -z-10 rounded-[32px] bg-[radial-gradient(circle_at_14%_20%,rgba(255,230,120,0.32),transparent_56%),radial-gradient(circle_at_88%_70%,rgba(255,197,73,0.24),transparent_65%)] opacity-45 blur-[14px]" />
             <div className="relative flex h-[84px] items-center gap-6 rounded-[30px] border border-[rgba(255,214,64,0.45)] bg-[linear-gradient(135deg,rgba(50,45,54,0.9)_0%,rgba(42,38,45,0.85)_45%,rgba(33,30,37,0.82)_100%)] px-8 shadow-[0_26px_76px_rgba(0,0,0,0.55)]">
@@ -141,16 +141,17 @@ export default function HeroSection() {
           </div>
         </div>
 
-        <div className="relative mt-20">
+        <div className="relative mt-12 w-full">
           <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-[radial-gradient(circle_at_18%_52%,rgba(126,104,255,0.22),transparent_62%),radial-gradient(circle_at_82%_48%,rgba(249,207,0,0.22),transparent_65%)] opacity-75 blur-[120px]" />
-          <div className="relative flex flex-col items-center gap-6 md:flex-row md:items-end md:justify-center">
+          <div className="relative flex flex-wrap items-end justify-center gap-4 sm:flex-nowrap sm:gap-5">
             {FEATURE_CARDS.map((card) => (
               <div
                 key={card.title}
                 className="group relative flex items-end justify-center overflow-hidden rounded-[30px] border border-white/12 bg-white/8 shadow-[0_32px_80px_rgba(0,0,0,0.5)] backdrop-blur-[18px] transition-transform duration-300 hover:-translate-y-3"
                 style={{
-                  width: card.primary ? 278 : 224,
-                  height: card.primary ? 278 : 224,
+                  width: card.primary ? 256 : 210,
+                  height: card.primary ? 256 : 210,
+                  maxWidth: "90vw",
                 }}
               >
                 {card.ribbon && (

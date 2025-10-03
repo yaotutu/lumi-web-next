@@ -97,7 +97,7 @@ export default function ModelGallery() {
         </div>
 
         {/* Featured Collections */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <button
             type="button"
             className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white text-sm font-medium hover:opacity-90 flex items-center gap-2"
@@ -125,14 +125,14 @@ export default function ModelGallery() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-4">
           {filteredItems.map((item) => (
             <a
               key={item.id}
               href={item.href}
               target="_blank"
               rel="noreferrer"
-              className="group relative flex flex-col overflow-hidden rounded-[28px] border border-white/12 bg-[rgba(18,19,24,0.75)] shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-[14px] transition-transform hover:-translate-y-2"
+              className="group relative flex flex-col overflow-hidden rounded-[26px] border border-white/12 bg-[rgba(18,19,24,0.8)] shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-[16px] transition-transform hover:-translate-y-2"
             >
               <div className="relative aspect-square overflow-hidden">
                 <div className="absolute inset-0 flex items-start justify-between px-3 pt-3 z-10 text-white/80 text-base">
@@ -149,7 +149,7 @@ export default function ModelGallery() {
                   fill
                   unoptimized
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 90vw"
+                  sizes="(min-width: 1280px) 20vw, (min-width: 768px) 28vw, 80vw"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/20 to-black/75" />
               </div>
