@@ -92,9 +92,6 @@ export default function HeroSection() {
           <h1 className="font-[\'EB Garamond\',var(--font-sans)] text-[48px] uppercase tracking-[0.3em] text-white drop-shadow-[0_18px_48px_rgba(0,0,0,0.35)] md:text-[56px]">
             一键生成任何3D内容
           </h1>
-          <p className="mt-3 font-[\'EB Garamond\',var(--font-sans)] text-[22px] text-white/75 md:text-[24px]">
-            最先进的 AI 3D 模型生成器
-          </p>
         </div>
 
         <div className="mx-auto mt-10 w-full max-w-[820px]">
@@ -164,9 +161,8 @@ export default function HeroSection() {
                     src={card.image}
                     alt={card.title}
                     fill
-                    className={`object-cover transition-transform duration-500 ${
-                      card.primary ? "scale-100" : "scale-102"
-                    } group-hover:scale-108`}
+                    className={`object-cover transition-transform duration-500 ${card.primary ? "scale-100" : "scale-102"
+                      } group-hover:scale-108`}
                     sizes="(min-width: 1280px) 18vw, (min-width: 768px) 32vw, 80vw"
                     priority={card.primary}
                   />
