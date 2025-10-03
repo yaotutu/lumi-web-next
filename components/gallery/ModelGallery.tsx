@@ -2,9 +2,19 @@
 
 import { useState } from "react";
 
-import GalleryCard from "./gallery/GalleryCard";
+import GalleryCard from "./GalleryCard";
+import type { GalleryCardProps } from "./GalleryCard";
 
-const categories = [
+type Collection = {
+  name: string;
+  badge?: string;
+};
+
+type GalleryItem = GalleryCardProps & {
+  id: number;
+};
+
+const categories: string[] = [
   "精选",
   "人物",
   "载具",
@@ -20,7 +30,7 @@ const categories = [
   "抽象符号",
 ];
 
-const collections = [
+const collections: Collection[] = [
   {
     name: "Steam Punk",
     badge: "+10",
@@ -30,7 +40,7 @@ const collections = [
   },
 ];
 
-const modelItem = {
+const modelItem: Omit<GalleryCardProps, 'key'> = {
   image: "/gallery/bat-bunny.webp",
   title: "Whimsical bat bunny",
   author: "AquaVortex",
@@ -38,7 +48,7 @@ const modelItem = {
   href: "https://studio.tripo3d.ai/workspace?project=12a1e2dc-bc32-4506-bafb-1be989bda190",
 };
 
-const galleryItems = Array.from({ length: 12 }, (_, index) => ({
+const galleryItems: GalleryItem[] = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
   ...modelItem,
 }));

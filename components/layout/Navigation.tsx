@@ -1,6 +1,13 @@
 import Link from "next/link";
+import type { ComponentProps } from "react";
 
-const NAV_LINKS = [
+type NavLink = {
+  label: string;
+  href: string;
+  active?: boolean;
+};
+
+const NAV_LINKS: NavLink[] = [
   { label: "首页", href: "/", active: true },
   { label: "3D工作台", href: "/workspace" },
   { label: "资产", href: "/assets" },
@@ -62,12 +69,10 @@ export default function Navigation() {
               </span>
             </Link>
             <nav className="hidden items-center gap-6 text-sm text-foreground-subtle lg:flex">
-              {NAV_LINKS.map(({ label, href, active, external }) => (
+              {NAV_LINKS.map(({ label, href, active }) => (
                 <Link
                   key={label}
                   href={href}
-                  target={external ? "_blank" : undefined}
-                  rel={external ? "noreferrer" : undefined}
                   className={`transition-colors ${
                     active
                       ? "text-foreground"

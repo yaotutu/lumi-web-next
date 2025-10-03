@@ -1,7 +1,10 @@
-import HeroFeatureCard from "./hero/HeroFeatureCard";
-import HeroSearchBar from "./hero/HeroSearchBar";
+import HeroFeatureCard from "./HeroFeatureCard";
+import HeroSearchBar from "./HeroSearchBar";
+import type { HeroFeatureCardProps } from "./HeroFeatureCard";
 
-const PROMPT_TAGS = [
+type FeatureCard = Omit<HeroFeatureCardProps, 'key'>;
+
+const PROMPT_TAGS: string[] = [
   "写实角色",
   "影视道具",
   "低面数",
@@ -13,7 +16,7 @@ const PROMPT_TAGS = [
   "批量生成",
 ];
 
-const FEATURE_CARDS = [
+const FEATURE_CARDS: FeatureCard[] = [
   {
     title: "图像生成",
     image: "https://studio.tripo3d.ai/static/images/home/image-generate.webp",
