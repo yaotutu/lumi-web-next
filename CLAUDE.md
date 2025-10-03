@@ -39,7 +39,10 @@ npm run format
   - `layout.tsx` - 根布局，包含元数据和字体配置
   - `page.tsx` - 首页
   - `globals.css` - 全局样式，包含 Tailwind 指令
-- **@/** - 路径别名，指向项目根目录
+- **components/** - React 组件，按功能分组
+  - `layout/` - 布局相关组件（如导航）
+  - `hero/` - 首页英雄区域组件
+  - `gallery/` - 模型画廊组件
 
 ## 代码规范
 
@@ -73,3 +76,5 @@ npm run format
 - 开发服务器运行在 http://localhost:3000
 - 通过 Turbopack 启用热重载
 - 使用 `next/font` 优化字体，采用 Geist 字体系列
+- 组件按功能分组在 components/ 目录下
+- 所有样式都在 globals.css 中定义，组件通过类名引用
