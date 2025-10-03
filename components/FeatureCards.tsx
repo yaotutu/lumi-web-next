@@ -23,7 +23,10 @@ export default function FeatureCards() {
               <br />
               ≤50MB,≤100万面数
             </p>
-            <button className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors">
+            <button
+              type="button"
+              className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors"
+            >
               上传3D模型
             </button>
           </div>
@@ -37,7 +40,10 @@ export default function FeatureCards() {
             </div>
             <div className="flex items-center justify-between">
               <h3 className="text-white text-sm font-medium">3D工作台</h3>
-              <button className="px-4 py-1.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg text-black text-xs font-medium transition-colors flex items-center gap-1">
+              <button
+                type="button"
+                className="px-4 py-1.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg text-black text-xs font-medium transition-colors flex items-center gap-1"
+              >
                 <span>⚡</span>
                 3D工作台
               </button>
@@ -53,7 +59,10 @@ export default function FeatureCards() {
               <br />
               ≤50MB,≤100万面数
             </p>
-            <button className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors">
+            <button
+              type="button"
+              className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors"
+            >
               上传3D模型
             </button>
           </div>
@@ -69,7 +78,10 @@ export default function FeatureCards() {
               <br />
               ≤50MB,≤100万面数
             </p>
-            <button className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors">
+            <button
+              type="button"
+              className="w-full py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs transition-colors"
+            >
               上传3D模型
             </button>
           </div>

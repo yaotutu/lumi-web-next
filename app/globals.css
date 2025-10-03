@@ -1,32 +1,148 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  --foreground: #ffffff;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  color-scheme: dark;
+  --surface-base: #050506;
+  --surface-1: #0c0d10;
+  --surface-2: #101114;
+  --surface-3: #1b1d20;
+  --surface-overlay: rgba(255, 255, 255, 0.03);
+  --text-strong: #f2f2f2;
+  --text-muted: rgba(255, 255, 255, 0.68);
+  --text-subtle: rgba(255, 255, 255, 0.4);
+  --accent-yellow: #f9cf00;
+  --accent-purple: #503be3;
+  --accent-pink: #fb23c2;
+  --accent-blue: #1ca1f1;
+  --accent-green: #3fdd78;
+  --accent-red: #ff3e3e;
+  --accent-orange: #fb923c;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --shadow-glass-primary: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-glass-ambient: 0 24px 80px rgba(0, 0, 0, 0.45);
+  --shadow-soft-ambient: 0 12px 45px rgba(0, 0, 0, 0.4);
+  --shadow-glow-yellow: 0 0 36px rgba(249, 207, 0, 0.45);
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 2rem;
+  --radius-pill: 6.25rem;
+  --blur-glass: 40px;
+  --noise-texture: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27100%27%20height%3D%27100%27%20fill%3D%27none%27%3E%3Cfilter%20id%3D%27noise%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.9%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%27%20height%3D%27100%27%20filter%3D%27url%28%23noise%29%27%20opacity%3D%270.15%27%2F%3E%3C%2Fsvg%3E");
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+@theme inline {
+  --color-background: var(--surface-base);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay: var(--surface-overlay);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--text-strong);
+  --color-foreground-muted: var(--text-muted);
+  --color-foreground-subtle: var(--text-subtle);
+  --color-yellow-1: var(--accent-yellow);
+  --color-purple-1: var(--accent-purple);
+  --color-pink-1: var(--accent-pink);
+  --color-blue-2: var(--accent-blue);
+  --color-green-1: var(--accent-green);
+  --color-red-1: var(--accent-red);
+  --color-orange-1: var(--accent-orange);
+  --color-white-5: rgba(255, 255, 255, 0.05);
+  --color-white-10: rgba(255, 255, 255, 0.1);
+  --color-white-20: rgba(255, 255, 255, 0.2);
+  --color-black-40: rgba(0, 0, 0, 0.4);
+  --color-black-60: rgba(0, 0, 0, 0.6);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+  --shadow-glass: var(--shadow-glass-primary), var(--shadow-glass-ambient);
+  --shadow-soft: var(--shadow-soft-ambient);
+  --shadow-glow-yellow: var(--shadow-glow-yellow);
+  --blur-glass: var(--blur-glass);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  background-color: var(--surface-base);
+  color: var(--text-strong);
+  font-family:
+    var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
   margin: 0;
-  padding: 0;
+  min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+  background-image:
+    radial-gradient(circle at 20% 18%, rgba(80, 59, 227, 0.18), transparent 55%),
+    radial-gradient(circle at 82% 0%, rgba(251, 35, 194, 0.12), transparent 52%),
+    radial-gradient(
+      circle at 48% 100%,
+      rgba(249, 207, 0, 0.08),
+      transparent 62%
+    ),
+    linear-gradient(
+      160deg,
+      var(--surface-2) 0%,
+      var(--surface-base) 45%,
+      var(--surface-3) 100%
+    );
+  background-attachment: fixed;
+  background-size: cover;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--noise-texture);
+  background-size: 320px 320px;
+  opacity: 0.22;
+  mix-blend-mode: screen;
+  z-index: -1;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Custom scrollbar */
+::selection {
+  background: rgba(249, 207, 0, 0.3);
+  color: #050506;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  color: rgba(249, 207, 0, 0.85);
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -42,15 +158,50 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.32);
 }
 
-/* Hide scrollbar for elements with scrollbar-hide class */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+@layer utilities {
+  .glass-panel {
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.02)
+    );
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glass);
+    backdrop-filter: blur(var(--blur-glass));
+    -webkit-backdrop-filter: blur(var(--blur-glass));
+  }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+  .surface-card {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .border-gradient-yellow {
+    position: relative;
+  }
+
+  .border-gradient-yellow::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      120deg,
+      rgba(249, 207, 0, 0.8),
+      rgba(251, 35, 194, 0.35)
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
 }

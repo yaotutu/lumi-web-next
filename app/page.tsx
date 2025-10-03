@@ -1,7 +1,7 @@
-import Navigation from "@/components/Navigation";
-import HeroSection from "@/components/HeroSection";
 import FeatureCards from "@/components/FeatureCards";
+import HeroSection from "@/components/HeroSection";
 import ModelGallery from "@/components/ModelGallery";
+import Navigation from "@/components/Navigation";
 
 export default function Home() {
   return (

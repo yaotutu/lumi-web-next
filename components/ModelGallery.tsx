@@ -152,9 +152,15 @@ export default function ModelGallery() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">模型画廊</h2>
-          <button className="text-white/70 hover:text-white text-sm flex items-center gap-2">
+          <button
+            type="button"
+            className="text-white/70 hover:text-white text-sm flex items-center gap-2"
+          >
             筛选与排序
             <svg
+              aria-hidden="true"
+              role="presentation"
+              focusable="false"
               className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
@@ -175,6 +181,7 @@ export default function ModelGallery() {
           {categories.map((category) => (
             <button
               key={category}
+              type="button"
               onClick={() => setActiveCategory(category)}
               className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors ${
                 activeCategory === category
@@ -189,7 +196,10 @@ export default function ModelGallery() {
 
         {/* Featured Collections */}
         <div className="flex gap-3 mb-6">
-          <button className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white text-sm font-medium hover:opacity-90 flex items-center gap-2">
+          <button
+            type="button"
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white text-sm font-medium hover:opacity-90 flex items-center gap-2"
+          >
             <span>✨</span>
             加入精选
           </button>
@@ -227,8 +237,14 @@ export default function ModelGallery() {
                 </div>
                 {/* Hover Actions */}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                  <button className="w-8 h-8 bg-black/50 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/70">
+                  <button
+                    type="button"
+                    className="w-8 h-8 bg-black/50 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/70"
+                  >
                     <svg
+                      aria-hidden="true"
+                      role="presentation"
+                      focusable="false"
                       className="w-4 h-4 text-white"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -242,8 +258,14 @@ export default function ModelGallery() {
                       />
                     </svg>
                   </button>
-                  <button className="w-8 h-8 bg-black/50 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/70">
+                  <button
+                    type="button"
+                    className="w-8 h-8 bg-black/50 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/70"
+                  >
                     <svg
+                      aria-hidden="true"
+                      role="presentation"
+                      focusable="false"
                       className="w-4 h-4 text-white"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -269,6 +291,9 @@ export default function ModelGallery() {
                   <span className="text-white/40 text-xs">{model.author}</span>
                   <div className="flex items-center gap-1">
                     <svg
+                      aria-hidden="true"
+                      role="presentation"
+                      focusable="false"
                       className="w-3 h-3 text-white/40"
                       fill="currentColor"
                       viewBox="0 0 20 20"
@@ -285,7 +310,10 @@ export default function ModelGallery() {
 
         {/* Load More Button */}
         <div className="mt-12 text-center">
-          <button className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm font-medium transition-colors">
+          <button
+            type="button"
+            className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm font-medium transition-colors"
+          >
             加载更多
           </button>
         </div>
