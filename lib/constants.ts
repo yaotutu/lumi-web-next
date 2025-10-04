@@ -39,13 +39,13 @@ export const ERROR_MESSAGES = {
 
 // Mock 用户配置（开发阶段）
 export const MOCK_USER = {
-  id: 'user_dev_001',
-  email: 'dev@lumi.com',
-  name: 'Development User',
+  id: "user_dev_001",
+  email: "dev@lumi.com",
+  name: "Development User",
 } as const;
 
 // 存储路径配置
 export const STORAGE_PATHS = {
-  IMAGES_DIR: '/generated/images',
-  MODELS_DIR: '/generated/models',
+  IMAGES_DIR: "/generated/images",
+  MODELS_DIR: "/generated/models",
 } as const;

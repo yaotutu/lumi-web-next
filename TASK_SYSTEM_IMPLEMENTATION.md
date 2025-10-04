@@ -1152,33 +1152,52 @@ npm run test:api
 
 ---
 
-### 阶段 5: 实现文生图 API（流式 + 本地存储）
+### 阶段 5: 集成现有文生图 API 与任务系统
 
-#### 5.1 创建文生图 API
+**说明**: 项目已有完整的流式图片生成 API (`app/api/generate-images/route.ts`)，使用 `ReadableStream` + SSE 格式实现生成一张显示一张的效果。本阶段只需要在现有 API 基础上添加任务系统集成。
 
-创建 `app/api/generate-images/route.ts`:
+#### 5.1 修改现有的文生图 API
 
+编辑 `app/api/generate-images/route.ts`，在流式返回的同时保存到任务数据库:
+
+**关键修改点**:
+
+1. **接收 taskId 参数**:
 ```typescript
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { LocalStorage } from '@/lib/storage';
-import { IMAGE_GENERATION } from '@/lib/constants';
+const { prompt, count = 4, stream = true, taskId } = await request.json();
+```
 
-/**
- * POST /api/generate-images
- * 文生图 API - 流式返回
- */
-export async function POST(request: NextRequest) {
-  const { taskId, prompt } = await request.json();
-
-  if (!taskId || !prompt) {
-    return Response.json(
-      { error: 'taskId and prompt are required' },
-      { status: 400 }
-    );
+2. **在流式处理中保存到数据库**:
+```typescript
+// 在 for await 循环中
+for await (const imageUrl of generateImageStream(prompt.trim(), count)) {
+  // 1. 保存到数据库
+  if (taskId) {
+    await prisma.taskImage.create({
+      data: {
+        taskId,
+        url: imageUrl,
+        index,
+      },
+    });
   }
 
-  // 更新任务状态为生成中
+  // 2. 推送给前端 (原有逻辑保持不变)
+  const data = JSON.stringify({
+    type: "image",
+    index,
+    url: imageUrl,
+    total: count,
+  });
+  controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+  index++;
+}
+```
+
+3. **更新任务状态**:
+```typescript
+// 开始生成前
+if (taskId) {
   await prisma.task.update({
     where: { id: taskId },
     data: {
@@ -1186,106 +1205,152 @@ export async function POST(request: NextRequest) {
       imageGenerationStartedAt: new Date(),
     },
   });
+}
 
-  // 创建流式响应
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        // 生成 4 张图片
-        for (let i = 0; i < IMAGE_GENERATION.COUNT; i++) {
-          // 模拟生成延迟
-          await new Promise(resolve => setTimeout(resolve, IMAGE_GENERATION.DELAY / 4));
-
-          // 生成 Mock 图片并保存到本地
-          const url = await LocalStorage.saveMockImage(taskId, i);
-
-          // 保存到数据库
-          await prisma.taskImage.create({
-            data: {
-              taskId,
-              url,
-              index: i,
-            },
-          });
-
-          // 推送给前端
-          const data = JSON.stringify({
-            type: 'image',
-            index: i,
-            url,
-          });
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-        }
-
-        // 更新任务状态为图片就绪
-        await prisma.task.update({
-          where: { id: taskId },
-          data: {
-            status: 'IMAGES_READY',
-            imageGenerationCompletedAt: new Date(),
-          },
-        });
-
-        // 发送完成信号
-        const doneData = JSON.stringify({ type: 'done' });
-        controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
-        controller.close();
-      } catch (error) {
-        console.error('Image generation failed:', error);
-
-        // 更新任务状态为失败
-        await prisma.task.update({
-          where: { id: taskId },
-          data: {
-            status: 'FAILED',
-            failedAt: new Date(),
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-
-        const errorData = JSON.stringify({
-          type: 'error',
-          message: error instanceof Error ? error.message : 'Image generation failed',
-        });
-        controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+// 全部完成后
+if (taskId) {
+  await prisma.task.update({
+    where: { id: taskId },
+    data: {
+      status: 'IMAGES_READY',
+      imageGenerationCompletedAt: new Date(),
     },
   });
 }
 ```
 
-#### 5.2 更新 ImageGrid 组件集成任务
-
-编辑 `components/workspace/ImageGrid.tsx`，将 `taskId` 参数传递给 API:
-
-找到 `handleGenerate` 函数中的 fetch 调用（大约第 84 行），确保传递 `taskId`:
+**完整修改后的代码** (只展示关键部分):
 
 ```typescript
-// 修改前
-body: JSON.stringify({
-  prompt: trimmedText,
-  count: IMAGE_GENERATION.COUNT,
-  stream: true,
-}),
+import { generateImageStream } from "@/lib/aliyun-image";
+import { NextRequest } from "next/server";
+import { prisma } from '@/lib/prisma';
 
-// 修改后
-body: JSON.stringify({
-  taskId: taskId,  // 确保有这一行
-  prompt: trimmedText,
-  count: IMAGE_GENERATION.COUNT,
-  stream: true,
-}),
+export async function POST(request: NextRequest) {
+  try {
+    const { prompt, count = 4, stream = true, taskId } = await request.json();
+
+    // ... 验证逻辑保持不变 ...
+
+    if (stream) {
+      const encoder = new TextEncoder();
+
+      const customReadable = new ReadableStream({
+        async start(controller) {
+          try {
+            // 更新任务状态为生成中
+            if (taskId) {
+              await prisma.task.update({
+                where: { id: taskId },
+                data: {
+                  status: 'GENERATING_IMAGES',
+                  imageGenerationStartedAt: new Date(),
+                },
+              });
+            }
+
+            let index = 0;
+
+            // 使用生成器函数逐张生成图片
+            for await (const imageUrl of generateImageStream(prompt.trim(), count)) {
+              // 保存到数据库
+              if (taskId) {
+                await prisma.taskImage.create({
+                  data: {
+                    taskId,
+                    url: imageUrl,
+                    index,
+                  },
+                });
+              }
+
+              // 推送给前端
+              const data = JSON.stringify({
+                type: "image",
+                index,
+                url: imageUrl,
+                total: count,
+              });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              index++;
+            }
+
+            // 更新任务状态为图片就绪
+            if (taskId) {
+              await prisma.task.update({
+                where: { id: taskId },
+                data: {
+                  status: 'IMAGES_READY',
+                  imageGenerationCompletedAt: new Date(),
+                },
+              });
+            }
+
+            // 发送完成事件
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "done", total: index })}\n\n`
+              )
+            );
+            controller.close();
+          } catch (error) {
+            // 更新任务状态为失败
+            if (taskId) {
+              await prisma.task.update({
+                where: { id: taskId },
+                data: {
+                  status: 'FAILED',
+                  failedAt: new Date(),
+                  errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                },
+              });
+            }
+
+            const errorData = JSON.stringify({
+              type: "error",
+              message: error instanceof Error ? error.message : "图片生成失败",
+            });
+            controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(customReadable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // 非流式逻辑保持不变...
+  } catch (error) {
+    // 错误处理保持不变...
+  }
+}
 ```
+
+#### 5.2 ImageGrid 组件已支持 taskId
+
+检查 `components/workspace/ImageGrid.tsx`，确保在调用 API 时传递 `taskId`:
+
+```typescript
+// 第 60-70 行应该包含
+const response = await fetch("/api/generate-images", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    taskId: taskId,  // 确保传递 taskId
+    prompt: trimmedText,
+    count: IMAGE_GENERATION.COUNT,
+    stream: true,
+  }),
+});
+```
+
+**注意**: 如果 ImageGrid 组件还未接收 `taskId` prop，需要在阶段 7 中添加。
 
 #### ✅ 验证步骤 5
 
@@ -1961,6 +2026,44 @@ useEffect(() => {
 
 #### ✅ 验证步骤 7
 
+**自动化测试**:
+
+1. 运行工作台集成测试:
+```bash
+npm run test:workspace
+```
+
+**预期结果**:
+```
+🧪 开始测试工作台任务集成
+
+📝 步骤 1: 创建新任务
+✅ 任务创建成功
+
+📥 步骤 2: 加载任务数据
+✅ 任务加载成功
+
+🎨 步骤 3: 开始生成图片（流式）
+✅ 图片生成完成
+
+🔄 步骤 4: 验证图片已保存到数据库
+✅ 任务重新加载成功
+✅ 图片数量正确 (4张)
+
+👆 步骤 5: 选择第 2 张图片
+✅ 图片选择已保存
+
+🔍 步骤 6: 最终验证
+✅ 最终任务状态
+
+📊 验证结果:
+   ✅ 任务状态为 IMAGES_READY
+   ✅ 图片数量为 4
+   ✅ 选中索引为 1
+
+🎉 所有测试通过！工作台任务集成正常！
+```
+
 **手动端到端验证**:
 
 1. 启动开发服务器:
@@ -2206,6 +2309,48 @@ export default function HistoryPage() {
 ```
 
 #### ✅ 验证步骤 8
+
+**自动化测试**:
+
+1. 运行历史记录功能测试:
+```bash
+npm run test:history
+```
+
+**预期结果**:
+```
+🧪 开始测试历史记录功能
+
+📝 步骤 1: 创建测试任务
+✅ 创建任务: "一只可爱的猫咪"
+✅ 创建任务: "未来科技机器人"
+✅ 创建任务: "卡通风格汽车"
+
+🎨 步骤 2: 为第一个任务生成图片
+✅ 图片生成完成
+
+📋 步骤 3: 获取任务列表
+✅ 获取到 N 个任务
+✅ 任务数量正确 (至少3个)
+
+🔍 步骤 4: 测试任务筛选
+✅ 筛选结果: N 个任务状态为 IMAGES_READY
+
+🗑️  步骤 5: 测试删除任务
+✅ 任务删除成功
+
+🔄 步骤 6: 验证删除后的任务列表
+✅ 当前任务数: N
+✅ 已删除的任务不在列表中
+
+📊 最终验证:
+   ✅ 成功创建多个任务
+   ✅ 成功生成图片
+   ✅ 任务列表获取正常
+   ✅ 任务删除功能正常
+
+🎉 所有测试通过！历史记录功能正常！
+```
 
 **手动验证**:
 

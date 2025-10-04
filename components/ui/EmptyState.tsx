@@ -44,7 +44,11 @@ export default function EmptyState({
  * 预定义的空状态变体
  */
 
-export function NoModelsEmptyState({ onCreateClick }: { onCreateClick?: () => void }) {
+export function NoModelsEmptyState({
+  onCreateClick,
+}: {
+  onCreateClick?: () => void;
+}) {
   return (
     <EmptyState
       icon={

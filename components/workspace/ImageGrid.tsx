@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import type { GenerationStatus } from "@/types";
+import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
   initialPrompt?: string;
-  onGenerate3D?: (imageIndex: number, prompt: string) => void;
+  onGenerate3D?: (imageIndex: number) => void;
+  task?: TaskWithDetails | null;
+  taskId?: string;
 }
 
 // 每张图片的加载状态
@@ -20,12 +22,37 @@ interface ImageSlot {
 export default function ImageGrid({
   initialPrompt = "",
   onGenerate3D,
+  task,
+  taskId,
 }: ImageGridProps) {
   const [inputText, setInputText] = useState(initialPrompt);
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string>("");
+
+  // 如果任务已有图片数据，初始化图片槽位
+  useEffect(() => {
+    if (task?.images && task.images.length > 0) {
+      const slots: ImageSlot[] = Array.from(
+        { length: IMAGE_GENERATION.COUNT },
+        (_, index) => {
+          const image = task.images.find((img) => img.index === index);
+          return {
+            url: image ? image.url : null,
+            status: image ? "completed" : "pending",
+          };
+        },
+      );
+      setImageSlots(slots);
+      setStatus("completed");
+
+      // 如果任务已有选中的图片，设置选中状态
+      if (task.selectedImageIndex !== null) {
+        setSelectedImage(task.selectedImageIndex);
+      }
+    }
+  }, [task]);
 
   // 流式接收图片 - 生成一张显示一张
   const handleGenerate = useCallback(async () => {
@@ -49,10 +76,13 @@ export default function ImageGrid({
     setSelectedImage(null);
 
     // 初始化4个图片槽位
-    const slots: ImageSlot[] = Array.from({ length: IMAGE_GENERATION.COUNT }, () => ({
-      url: null,
-      status: "pending" as ImageSlotStatus,
-    }));
+    const slots: ImageSlot[] = Array.from(
+      { length: IMAGE_GENERATION.COUNT },
+      () => ({
+        url: null,
+        status: "pending" as ImageSlotStatus,
+      }),
+    );
     setImageSlots(slots);
 
     try {
@@ -66,6 +96,7 @@ export default function ImageGrid({
           prompt: trimmedText,
           count: IMAGE_GENERATION.COUNT,
           stream: true,
+          taskId: taskId, // 传递 taskId 到 API
         }),
       });
 
@@ -127,12 +158,12 @@ export default function ImageGrid({
     }
   }, [inputText]);
 
-  // 如果有初始prompt,自动生成图片
+  // 如果有初始prompt且任务没有图片,自动生成图片
   useEffect(() => {
-    if (initialPrompt) {
+    if (initialPrompt && (!task || task.images.length === 0)) {
       handleGenerate();
     }
-  }, [initialPrompt]);
+  }, [initialPrompt, task]);
 
   const handleGenerate3D = () => {
     if (selectedImage === null) {
@@ -140,7 +171,7 @@ export default function ImageGrid({
       return;
     }
     setError("");
-    onGenerate3D?.(selectedImage, inputText);
+    onGenerate3D?.(selectedImage);
   };
 
   return (
@@ -186,7 +217,9 @@ export default function ImageGrid({
 
       {/* 生成结果区域 */}
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
-        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">生成结果</h2>
+        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">
+          生成结果
+        </h2>
 
         {status === "idle" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
@@ -215,7 +248,8 @@ export default function ImageGrid({
                       } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
                       aria-label={`图片 ${idx + 1}`}
                     >
-                      {slot.status === "pending" || slot.status === "loading" ? (
+                      {slot.status === "pending" ||
+                      slot.status === "loading" ? (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />

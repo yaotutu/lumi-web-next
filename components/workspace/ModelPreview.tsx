@@ -3,16 +3,20 @@
 import { useState, useEffect, useRef } from "react";
 import { MODEL_GENERATION } from "@/lib/constants";
 import GenerationProgress from "./GenerationProgress";
-import type { GenerationStatus } from "@/types";
+import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
   prompt: string;
+  task?: TaskWithDetails | null;
+  taskId?: string;
 }
 
 export default function ModelPreview({
   imageIndex,
   prompt,
+  task,
+  taskId,
 }: ModelPreviewProps) {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [progress, setProgress] = useState(0);
@@ -69,7 +73,9 @@ export default function ModelPreview({
           {status === "generating" ? (
             <div className="text-center">
               <div className="mb-4 h-12 w-12 animate-spin rounded-full border-3 border-yellow-1/20 border-t-yellow-1 mx-auto" />
-              <p className="text-sm font-medium text-foreground-muted">正在生成3D模型...</p>
+              <p className="text-sm font-medium text-foreground-muted">
+                正在生成3D模型...
+              </p>
               <p className="mt-2 text-[13px] font-semibold tabular-nums text-yellow-1">
                 {Math.round(progress)}%
               </p>
@@ -85,7 +91,9 @@ export default function ModelPreview({
           ) : (
             <div className="text-center">
               <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
-              <p className="text-sm text-foreground-subtle">3D模型将在这里显示</p>
+              <p className="text-sm text-foreground-subtle">
+                3D模型将在这里显示
+              </p>
               <p className="mt-1 text-xs text-foreground-subtle">
                 (Three.js / React Three Fiber)
               </p>
@@ -193,10 +201,7 @@ export default function ModelPreview({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="btn-primary w-full"
-            >
+            <button type="button" className="btn-primary w-full">
               下载模型
             </button>
           </>
@@ -206,9 +211,7 @@ export default function ModelPreview({
               <h3 className="mb-1.5 text-sm font-semibold text-white">
                 模型信息
               </h3>
-              <div className="text-xs text-white/60">
-                等待生成模型...
-              </div>
+              <div className="text-xs text-white/60">等待生成模型...</div>
             </div>
 
             <button

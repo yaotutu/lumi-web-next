@@ -9,7 +9,11 @@
     "lint": "biome check",
     "format": "biome format --write",
     "init:storage": "tsx scripts/init-storage.ts",
-    "test:storage": "tsx scripts/test-storage.ts"
+    "test:storage": "tsx scripts/test-storage.ts",
+    "test:api": "tsx scripts/test-task-api.ts",
+    "test:image-gen": "tsx scripts/test-image-generation.ts",
+    "test:workspace": "tsx scripts/test-workspace-integration.ts",
+    "test:history": "tsx scripts/test-history.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

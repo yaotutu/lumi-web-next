@@ -8,8 +8,8 @@
   --surface-3: #262626;
   --surface-overlay: rgba(255, 255, 255, var(--alpha-5));
   --text-strong: #ffffff;
-  --text-muted: rgba(255, 255, 255, 0.90);
-  --text-subtle: rgba(255, 255, 255, 0.60);
+  --text-muted: rgba(255, 255, 255, 0.9);
+  --text-subtle: rgba(255, 255, 255, 0.6);
   --accent-yellow: #ffd93d;
   --accent-yellow-dim: #f9cf00;
   --accent-purple: #503be3;
@@ -204,7 +204,7 @@ a:hover {
 @layer utilities {
   .glass-panel {
     background: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-lg);
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   }
@@ -253,32 +253,72 @@ a:hover {
   }
 
   /* 通用圆角类 */
-  .rounded-sm { border-radius: var(--radius-sm); }
-  .rounded-md { border-radius: var(--radius-md); }
-  .rounded-lg { border-radius: var(--radius-lg); }
-  .rounded-xl { border-radius: var(--radius-xl); }
-  .rounded-pill { border-radius: var(--radius-pill); }
+  .rounded-sm {
+    border-radius: var(--radius-sm);
+  }
+  .rounded-md {
+    border-radius: var(--radius-md);
+  }
+  .rounded-lg {
+    border-radius: var(--radius-lg);
+  }
+  .rounded-xl {
+    border-radius: var(--radius-xl);
+  }
+  .rounded-pill {
+    border-radius: var(--radius-pill);
+  }
 
   /* 通用阴影类 */
-  .shadow-glass { box-shadow: var(--shadow-glass); }
-  .shadow-soft { box-shadow: var(--shadow-soft); }
-  .shadow-glow-yellow { box-shadow: var(--shadow-glow-yellow); }
+  .shadow-glass {
+    box-shadow: var(--shadow-glass);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-glow-yellow {
+    box-shadow: var(--shadow-glow-yellow);
+  }
 
   /* 通用透明度类 */
-  .text-white-alpha-5 { color: rgba(255, 255, 255, var(--alpha-5)); }
-  .text-white-alpha-10 { color: rgba(255, 255, 255, var(--alpha-10)); }
-  .text-white-alpha-20 { color: rgba(255, 255, 255, var(--alpha-20)); }
-  .text-white-alpha-70 { color: rgba(255, 255, 255, var(--alpha-70)); }
-  .text-white-alpha-75 { color: rgba(255, 255, 255, var(--alpha-75)); }
-  .text-white-alpha-85 { color: rgba(255, 255, 255, var(--alpha-85)); }
+  .text-white-alpha-5 {
+    color: rgba(255, 255, 255, var(--alpha-5));
+  }
+  .text-white-alpha-10 {
+    color: rgba(255, 255, 255, var(--alpha-10));
+  }
+  .text-white-alpha-20 {
+    color: rgba(255, 255, 255, var(--alpha-20));
+  }
+  .text-white-alpha-70 {
+    color: rgba(255, 255, 255, var(--alpha-70));
+  }
+  .text-white-alpha-75 {
+    color: rgba(255, 255, 255, var(--alpha-75));
+  }
+  .text-white-alpha-85 {
+    color: rgba(255, 255, 255, var(--alpha-85));
+  }
 
-  .bg-white-alpha-5 { background-color: rgba(255, 255, 255, var(--alpha-5)); }
-  .bg-white-alpha-10 { background-color: rgba(255, 255, 255, var(--alpha-10)); }
-  .bg-white-alpha-20 { background-color: rgba(255, 255, 255, var(--alpha-20)); }
+  .bg-white-alpha-5 {
+    background-color: rgba(255, 255, 255, var(--alpha-5));
+  }
+  .bg-white-alpha-10 {
+    background-color: rgba(255, 255, 255, var(--alpha-10));
+  }
+  .bg-white-alpha-20 {
+    background-color: rgba(255, 255, 255, var(--alpha-20));
+  }
 
-  .border-white-alpha-5 { border-color: rgba(255, 255, 255, var(--alpha-5)); }
-  .border-white-alpha-10 { border-color: rgba(255, 255, 255, var(--alpha-10)); }
-  .border-white-alpha-12 { border-color: rgba(255, 255, 255, 0.12); }
+  .border-white-alpha-5 {
+    border-color: rgba(255, 255, 255, var(--alpha-5));
+  }
+  .border-white-alpha-10 {
+    border-color: rgba(255, 255, 255, var(--alpha-10));
+  }
+  .border-white-alpha-12 {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
 }
 
 @layer components {
@@ -306,7 +346,8 @@ a:hover {
   }
 
   @keyframes pulse-glow {
-    0%, 100% {
+    0%,
+    100% {
       box-shadow: 0 0 0 0 rgba(249, 207, 0, 0.4);
     }
     50% {
@@ -357,7 +398,7 @@ a:hover {
     font-size: 14px;
     font-weight: 500;
     background: #0d0d0d;
-    border: 1.5px solid rgba(255, 255, 255, 0.10);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
     color: #ffffff;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
@@ -390,8 +431,7 @@ a:hover {
     inset: 0;
     z-index: -40;
     background:
-      var(--gradient-primary),
-      var(--gradient-secondary),
+      var(--gradient-primary), var(--gradient-secondary),
       var(--gradient-tertiary),
       linear-gradient(
         180deg,
@@ -699,7 +739,7 @@ a:hover {
     flex-direction: column;
     overflow: hidden;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: #1a1a1a;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);

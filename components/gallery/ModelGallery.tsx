@@ -40,7 +40,7 @@ const collections: Collection[] = [
   },
 ];
 
-const modelItem: Omit<GalleryCardProps, 'key'> = {
+const modelItem: Omit<GalleryCardProps, "key"> = {
   image: "/gallery/bat-bunny.webp",
   title: "Whimsical bat bunny",
   author: "AquaVortex",

@@ -1,8 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-import { STORAGE_PATHS } from './constants';
+import fs from "fs";
+import path from "path";
+import { STORAGE_PATHS } from "./constants";
 
-const STORAGE_ROOT = path.join(process.cwd(), 'public', 'generated');
+const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
 
 /**
  * 本地文件存储工具类
@@ -19,9 +19,9 @@ export class LocalStorage {
   static async saveTaskImage(
     taskId: string,
     index: number,
-    imageData: Buffer | string
+    imageData: Buffer | string,
   ): Promise<string> {
-    const dir = path.join(STORAGE_ROOT, 'images', taskId);
+    const dir = path.join(STORAGE_ROOT, "images", taskId);
 
     // 确保目录存在
     if (!fs.existsSync(dir)) {
@@ -33,10 +33,10 @@ export class LocalStorage {
 
     // 处理不同格式的图片数据
     let buffer: Buffer;
-    if (typeof imageData === 'string') {
+    if (typeof imageData === "string") {
       // Base64 字符串
-      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-      buffer = Buffer.from(base64Data, 'base64');
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+      buffer = Buffer.from(base64Data, "base64");
     } else {
       // Buffer
       buffer = imageData;
@@ -58,9 +58,9 @@ export class LocalStorage {
   static async saveTaskModel(
     taskId: string,
     modelData: Buffer,
-    format: string = 'glb'
+    format: string = "glb",
   ): Promise<string> {
-    const dir = path.join(STORAGE_ROOT, 'models');
+    const dir = path.join(STORAGE_ROOT, "models");
 
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -80,15 +80,19 @@ export class LocalStorage {
    */
   static async deleteTaskResources(taskId: string): Promise<void> {
     // 删除图片目录
-    const imageDir = path.join(STORAGE_ROOT, 'images', taskId);
+    const imageDir = path.join(STORAGE_ROOT, "images", taskId);
     if (fs.existsSync(imageDir)) {
       fs.rmSync(imageDir, { recursive: true, force: true });
     }
 
     // 删除模型文件（尝试常见格式）
-    const formats = ['glb', 'gltf', 'fbx'];
+    const formats = ["glb", "gltf", "fbx"];
     for (const format of formats) {
-      const modelPath = path.join(STORAGE_ROOT, 'models', `${taskId}.${format}`);
+      const modelPath = path.join(
+        STORAGE_ROOT,
+        "models",
+        `${taskId}.${format}`,
+      );
       if (fs.existsSync(modelPath)) {
         fs.unlinkSync(modelPath);
       }
@@ -102,12 +106,12 @@ export class LocalStorage {
    */
   static getFileSize(url: string): number {
     try {
-      const filepath = path.join(process.cwd(), 'public', url);
+      const filepath = path.join(process.cwd(), "public", url);
       if (fs.existsSync(filepath)) {
         return fs.statSync(filepath).size;
       }
     } catch (error) {
-      console.error('Failed to get file size:', error);
+      console.error("Failed to get file size:", error);
     }
     return 0;
   }
@@ -118,7 +122,7 @@ export class LocalStorage {
    */
   static fileExists(url: string): boolean {
     try {
-      const filepath = path.join(process.cwd(), 'public', url);
+      const filepath = path.join(process.cwd(), "public", url);
       return fs.existsSync(filepath);
     } catch (error) {
       return false;
@@ -133,7 +137,8 @@ export class LocalStorage {
    */
   static async saveMockImage(taskId: string, index: number): Promise<string> {
     // 创建一个简单的 1x1 PNG (透明像素)
-    const mockImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const mockImageBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     return this.saveTaskImage(taskId, index, mockImageBase64);
   }
 
@@ -145,10 +150,19 @@ export class LocalStorage {
   static async saveMockModel(taskId: string): Promise<string> {
     // 创建一个最小的 GLB 文件头
     const mockModelBuffer = Buffer.from([
-      0x67, 0x6C, 0x54, 0x46, // "glTF" magic
-      0x02, 0x00, 0x00, 0x00, // version 2
-      0x00, 0x00, 0x00, 0x00, // length (placeholder)
+      0x67,
+      0x6c,
+      0x54,
+      0x46, // "glTF" magic
+      0x02,
+      0x00,
+      0x00,
+      0x00, // version 2
+      0x00,
+      0x00,
+      0x00,
+      0x00, // length (placeholder)
     ]);
-    return this.saveTaskModel(taskId, mockModelBuffer, 'glb');
+    return this.saveTaskModel(taskId, mockModelBuffer, "glb");
   }
 }

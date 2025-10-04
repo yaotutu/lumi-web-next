@@ -1,16 +1,16 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
-const STORAGE_ROOT = path.join(process.cwd(), 'public', 'generated');
+const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
 
 const dirs = [
-  path.join(STORAGE_ROOT, 'images'),
-  path.join(STORAGE_ROOT, 'models'),
+  path.join(STORAGE_ROOT, "images"),
+  path.join(STORAGE_ROOT, "models"),
 ];
 
-console.log('📁 Initializing storage directories...');
+console.log("📁 Initializing storage directories...");
 
-dirs.forEach(dir => {
+dirs.forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     console.log(`✅ Created: ${path.relative(process.cwd(), dir)}`);
@@ -20,8 +20,11 @@ dirs.forEach(dir => {
 });
 
 // 创建 .gitkeep 保持目录结构
-const gitkeepPath = path.join(STORAGE_ROOT, '.gitkeep');
-fs.writeFileSync(gitkeepPath, '# This file keeps the generated directory in git\n');
+const gitkeepPath = path.join(STORAGE_ROOT, ".gitkeep");
+fs.writeFileSync(
+  gitkeepPath,
+  "# This file keeps the generated directory in git\n",
+);
 console.log(`✅ Created: ${path.relative(process.cwd(), gitkeepPath)}`);
 
-console.log('✅ Storage initialization complete!');
+console.log("✅ Storage initialization complete!");

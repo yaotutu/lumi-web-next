@@ -4,7 +4,7 @@
  */
 
 // 是否启用mock模式（开发阶段使用假数据）
-const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
 // Mock图片数据 - 开发阶段使用的假图片URL
 const MOCK_IMAGES = [
@@ -72,12 +72,12 @@ const API_ENDPOINT =
  */
 export async function generateImages(
   prompt: string,
-  count: number = 4
+  count: number = 4,
 ): Promise<string[]> {
   // 如果启用mock模式，返回mock数据
   if (MOCK_MODE) {
     // 模拟API延迟
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // 返回mock图片数据
     const mockImages = [];
@@ -91,7 +91,9 @@ export async function generateImages(
 
   // 验证API密钥
   if (!API_KEY) {
-    throw new Error("缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY");
+    throw new Error(
+      "缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY",
+    );
   }
 
   // 注意: API一次只能生成1张图片,需要多次调用
@@ -133,14 +135,17 @@ export async function generateImages(
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`
+          `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
         );
       }
 
       const data: QwenImageResponse = await response.json();
 
       // 调试: 打印完整响应数据
-      console.log(`图片 ${i + 1}/${count} API响应:`, JSON.stringify(data, null, 2));
+      console.log(
+        `图片 ${i + 1}/${count} API响应:`,
+        JSON.stringify(data, null, 2),
+      );
 
       // 检查响应数据结构
       if (!data || !data.output || !data.output.choices) {
@@ -178,12 +183,13 @@ export async function generateImages(
  */
 export async function* generateImageStream(
   prompt: string,
-  count: number = 4
+  count: number = 4,
 ): AsyncGenerator<string> {
   // 如果启用mock模式，返回mock数据
   if (MOCK_MODE) {
     // 模拟API延迟
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
 
     for (let i = 0; i < count; i++) {
       // 模拟API调用延迟
@@ -199,7 +205,9 @@ export async function* generateImageStream(
 
   // 验证API密钥
   if (!API_KEY) {
-    throw new Error("缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY");
+    throw new Error(
+      "缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY",
+    );
   }
 
   for (let i = 0; i < count; i++) {
@@ -237,7 +245,7 @@ export async function* generateImageStream(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`
+        `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
       );
     }
 

@@ -11,6 +11,7 @@ type NavLink = {
 const NAV_LINKS: NavLink[] = [
   { label: "首页", href: "/" },
   { label: "3D工作台", href: "/workspace" },
+  { label: "历史记录", href: "/history" },
   { label: "资产", href: "/assets" },
 ];
 
@@ -79,9 +80,7 @@ export default function Navigation() {
                     key={label}
                     href={href}
                     className={`relative font-medium transition-colors duration-200 ${
-                      isActive
-                        ? "text-foreground"
-                        : "hover:text-foreground"
+                      isActive ? "text-foreground" : "hover:text-foreground"
                     }`}
                   >
                     {label}

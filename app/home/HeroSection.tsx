@@ -5,7 +5,7 @@ import HeroFeatureCard from "./HeroFeatureCard";
 import HeroSearchBar from "./HeroSearchBar";
 import type { HeroFeatureCardProps } from "./HeroFeatureCard";
 
-type FeatureCard = Omit<HeroFeatureCardProps, 'key'>;
+type FeatureCard = Omit<HeroFeatureCardProps, "key">;
 
 const PROMPT_TAGS: string[] = [
   "写实角色",
@@ -55,7 +55,7 @@ export default function HeroSection() {
     setSelectedTag(tag);
     // 触发自定义事件,让 HeroSearchBar 接收到标签内容
     window.dispatchEvent(
-      new CustomEvent("hero-tag-selected", { detail: { tag } })
+      new CustomEvent("hero-tag-selected", { detail: { tag } }),
     );
   };
 
