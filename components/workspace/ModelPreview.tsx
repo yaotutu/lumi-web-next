@@ -1,11 +1,60 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
+import { MODEL_GENERATION } from "@/lib/constants";
 import GenerationProgress from "./GenerationProgress";
+import type { GenerationStatus } from "@/types";
 
-export default function ModelPreview() {
-  // 这里后续会集成3D渲染库
-  const isGenerating = false;
-  const progress = 30;
+interface ModelPreviewProps {
+  imageIndex: number | null;
+  prompt: string;
+}
+
+export default function ModelPreview({
+  imageIndex,
+  prompt,
+}: ModelPreviewProps) {
+  const [status, setStatus] = useState<GenerationStatus>("idle");
+  const [progress, setProgress] = useState(0);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 当选择图片并触发生成时
+  useEffect(() => {
+    if (imageIndex !== null && prompt) {
+      startModelGeneration();
+    }
+
+    // 清理定时器
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [imageIndex, prompt]);
+
+  const startModelGeneration = () => {
+    setStatus("generating");
+    setProgress(0);
+
+    // 模拟进度更新
+    progressIntervalRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 95) {
+          return prev;
+        }
+        return prev + Math.random() * 5;
+      });
+    }, MODEL_GENERATION.PROGRESS_INTERVAL);
+
+    // 模拟生成完成
+    setTimeout(() => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      setProgress(100);
+      setStatus("completed");
+    }, MODEL_GENERATION.DELAY);
+  };
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
@@ -17,13 +66,31 @@ export default function ModelPreview() {
 
         {/* 3D渲染区域占位 */}
         <div className="flex h-full w-full items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
-            <p className="text-sm text-foreground-subtle">3D模型将在这里显示</p>
-            <p className="mt-1 text-xs text-foreground-subtle">
-              (Three.js / React Three Fiber)
-            </p>
-          </div>
+          {status === "generating" ? (
+            <div className="text-center">
+              <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-yellow-1 border-t-transparent mx-auto" />
+              <p className="text-sm text-foreground-muted">正在生成3D模型...</p>
+              <p className="mt-1 text-xs text-foreground-subtle">
+                {Math.round(progress)}%
+              </p>
+            </div>
+          ) : status === "completed" ? (
+            <div className="text-center">
+              <div className="mb-4 text-5xl">✨</div>
+              <p className="text-sm text-foreground-muted">模型生成完成</p>
+              <p className="mt-1 text-xs text-foreground-subtle">
+                基于图片 {(imageIndex ?? 0) + 1}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
+              <p className="text-sm text-foreground-subtle">3D模型将在这里显示</p>
+              <p className="mt-1 text-xs text-foreground-subtle">
+                (Three.js / React Three Fiber)
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 控制按钮 */}
@@ -86,8 +153,26 @@ export default function ModelPreview() {
 
       {/* 生成进度和操作区域 */}
       <div className="shrink-0 p-5">
-        {isGenerating ? (
-          <GenerationProgress progress={progress} />
+        {status === "generating" ? (
+          <GenerationProgress progress={Math.round(progress)} />
+        ) : status === "completed" ? (
+          <>
+            <div className="mb-3">
+              <h3 className="mb-1.5 text-sm font-medium text-foreground-muted">
+                预计耗材:
+              </h3>
+              <div className="text-xs text-foreground-subtle">
+                PLA: ~50g | 预计时间: 2小时
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="w-full rounded-lg bg-yellow-1 py-2.5 text-sm font-medium text-black transition hover:brightness-110"
+            >
+              打印
+            </button>
+          </>
         ) : (
           <>
             <div className="mb-3">
@@ -95,13 +180,14 @@ export default function ModelPreview() {
                 预计耗材:
               </h3>
               <div className="text-xs text-foreground-subtle">
-                等待选择模型...
+                等待生成模型...
               </div>
             </div>
 
             <button
               type="button"
-              className="w-full rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-white-10"
+              disabled
+              className="w-full cursor-not-allowed rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground opacity-50"
             >
               打印
             </button>

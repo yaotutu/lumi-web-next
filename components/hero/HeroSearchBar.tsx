@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import type { ComponentPropsWithoutRef } from "react";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
@@ -12,11 +13,27 @@ export default function HeroSearchBar({
 }: HeroSearchBarProps) {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = () => {
-    if (prompt.trim()) {
-      router.push(`/workspace?prompt=${encodeURIComponent(prompt.trim())}`);
+    const trimmedPrompt = prompt.trim();
+
+    // 验证输入
+    if (!trimmedPrompt) {
+      setError(VALIDATION_MESSAGES.PROMPT_REQUIRED);
+      return;
     }
+    if (trimmedPrompt.length < IMAGE_GENERATION.MIN_PROMPT_LENGTH) {
+      setError(VALIDATION_MESSAGES.PROMPT_TOO_SHORT);
+      return;
+    }
+    if (trimmedPrompt.length > IMAGE_GENERATION.MAX_PROMPT_LENGTH) {
+      setError(VALIDATION_MESSAGES.PROMPT_TOO_LONG);
+      return;
+    }
+
+    setError("");
+    router.push(`/workspace?prompt=${encodeURIComponent(trimmedPrompt)}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -55,18 +72,30 @@ export default function HeroSearchBar({
             <path d="m12 14-3 3" />
           </svg>
         </button>
-        <label htmlFor="hero-prompt" className="sr-only">
-          描述你想生成的模型
-        </label>
-        <input
-          id="hero-prompt"
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="描述你想生成的模型..."
-          className="flex-1 border-none bg-transparent text-[18px] text-[#ECEFF8]/80 outline-none placeholder:text-[#ECEFF8]/55"
-        />
+        <div className="flex flex-1 flex-col gap-1">
+          <label htmlFor="hero-prompt" className="sr-only">
+            描述你想生成的模型
+          </label>
+          <input
+            id="hero-prompt"
+            type="text"
+            value={prompt}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              if (error) setError("");
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="描述你想生成的模型..."
+            maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+            className="border-none bg-transparent text-[18px] text-[#ECEFF8]/80 outline-none placeholder:text-[#ECEFF8]/55"
+            aria-invalid={!!error}
+          />
+          {error && (
+            <span className="text-xs text-red-1" role="alert">
+              {error}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleSubmit}

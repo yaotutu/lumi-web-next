@@ -1,50 +1,71 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
+import type { GenerationStatus } from "@/types";
 
 interface ImageGridProps {
   initialPrompt?: string;
+  onGenerate3D?: (imageIndex: number, prompt: string) => void;
 }
 
-export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
+export default function ImageGrid({
+  initialPrompt = "",
+  onGenerate3D,
+}: ImageGridProps) {
   const [inputText, setInputText] = useState(initialPrompt);
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [status, setStatus] = useState<GenerationStatus>("idle");
+  const [error, setError] = useState<string>("");
+
+  // 模拟图片生成
+  const handleGenerate = useCallback(() => {
+    // 验证输入
+    const trimmedText = inputText.trim();
+    if (!trimmedText) {
+      setError(VALIDATION_MESSAGES.PROMPT_REQUIRED);
+      return;
+    }
+    if (trimmedText.length < IMAGE_GENERATION.MIN_PROMPT_LENGTH) {
+      setError(VALIDATION_MESSAGES.PROMPT_TOO_SHORT);
+      return;
+    }
+    if (trimmedText.length > IMAGE_GENERATION.MAX_PROMPT_LENGTH) {
+      setError(VALIDATION_MESSAGES.PROMPT_TOO_LONG);
+      return;
+    }
+
+    setError("");
+    setStatus("generating");
+    setImages([]);
+    setSelectedImage(null);
+
+    // 模拟生成图片
+    setTimeout(() => {
+      const generatedImages = Array.from(
+        { length: IMAGE_GENERATION.COUNT },
+        (_, i) => `/placeholder-${i + 1}.jpg`
+      );
+      setImages(generatedImages);
+      setStatus("completed");
+    }, IMAGE_GENERATION.DELAY);
+  }, [inputText]);
 
   // 如果有初始prompt,自动生成图片
   useEffect(() => {
     if (initialPrompt) {
       handleGenerate();
     }
-  }, [initialPrompt]);
-
-  // 模拟图片生成
-  const handleGenerate = () => {
-    setIsGenerating(true);
-    // 模拟生成4张图片
-    setTimeout(() => {
-      setImages([
-        "/placeholder-1.jpg",
-        "/placeholder-2.jpg",
-        "/placeholder-3.jpg",
-        "/placeholder-4.jpg",
-      ]);
-      setIsGenerating(false);
-    }, 1500);
-  };
-
-  const handleRegenerate = () => {
-    setImages([]);
-    setSelectedImage(null);
-    handleGenerate();
-  };
+  }, [initialPrompt, handleGenerate]);
 
   const handleGenerate3D = () => {
-    if (selectedImage !== null) {
-      // 触发3D模型生成
-      console.log("生成3D模型,使用图片:", selectedImage);
+    if (selectedImage === null) {
+      setError(VALIDATION_MESSAGES.SELECT_IMAGE_REQUIRED);
+      return;
     }
+    setError("");
+    onGenerate3D?.(selectedImage, inputText);
   };
 
   return (
@@ -53,21 +74,41 @@ export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
       <div className="glass-panel flex shrink-0 flex-col gap-3 p-5">
         <h2 className="text-base font-semibold">输入与生成</h2>
 
-        <textarea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="在这里描述你想要的物体..."
-          className="min-h-[100px] resize-none rounded-lg border border-border-subtle bg-surface-2 p-3 text-sm text-foreground placeholder:text-foreground-subtle focus:border-yellow-1 focus:outline-none"
-        />
+        <div className="relative">
+          <textarea
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (error) setError("");
+            }}
+            placeholder="在这里描述你想要的物体..."
+            maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+            className={`min-h-[100px] w-full resize-none rounded-lg border bg-surface-2 p-3 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none ${
+              error
+                ? "border-red-1 focus:border-red-1"
+                : "border-border-subtle focus:border-yellow-1"
+            }`}
+            aria-label="描述你想要的物体"
+            aria-invalid={!!error}
+          />
+          <div className="mt-1 flex items-center justify-between text-xs">
+            <span className={error ? "text-red-1" : "text-transparent"}>
+              {error || "placeholder"}
+            </span>
+            <span className="text-foreground-subtle">
+              {inputText.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+            </span>
+          </div>
+        </div>
 
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={isGenerating}
-            className="rounded-lg bg-yellow-1 px-5 py-2 text-sm font-medium text-black transition hover:brightness-110 disabled:opacity-50"
+            disabled={status === "generating"}
+            className="rounded-lg bg-yellow-1 px-5 py-2 text-sm font-medium text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isGenerating ? "生成中..." : "重新再生"}
+            {status === "generating" ? "生成中..." : "重新再生"}
           </button>
         </div>
 
@@ -80,9 +121,16 @@ export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
       <div className="glass-panel flex flex-1 flex-col gap-3 overflow-hidden p-5">
         <h2 className="text-base font-semibold">生成结果</h2>
 
-        {images.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-foreground-subtle">
-            等待生成图片...
+        {status === "idle" || status === "generating" ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
+            {status === "generating" ? (
+              <>
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1 border-t-transparent" />
+                <p className="text-sm">正在生成图片...</p>
+              </>
+            ) : (
+              <p className="text-sm">等待生成图片...</p>
+            )}
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-3 overflow-hidden">
@@ -91,12 +139,16 @@ export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => setSelectedImage(idx)}
+                  onClick={() => {
+                    setSelectedImage(idx);
+                    if (error) setError("");
+                  }}
                   className={`relative overflow-hidden rounded-lg border-2 transition ${
                     selectedImage === idx
                       ? "border-yellow-1"
                       : "border-border-subtle hover:border-white-10"
                   }`}
+                  aria-label={`选择图片 ${idx + 1}`}
                 >
                   <div className="flex h-full items-center justify-center bg-surface-3 text-sm text-foreground-subtle">
                     图片 {idx + 1}
@@ -108,6 +160,7 @@ export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -126,7 +179,7 @@ export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
               type="button"
               onClick={handleGenerate3D}
               disabled={selectedImage === null}
-              className="shrink-0 rounded-lg border border-border-subtle bg-surface-2 py-2.5 text-sm font-medium text-foreground transition hover:border-yellow-1 hover:text-yellow-1 disabled:opacity-50"
+              className="shrink-0 rounded-lg border border-border-subtle bg-surface-2 py-2.5 text-sm font-medium text-foreground transition hover:border-yellow-1 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-50"
             >
               生成 3D 模型
             </button>
