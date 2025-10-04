@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ComponentPropsWithoutRef } from "react";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
@@ -6,6 +10,21 @@ export default function HeroSearchBar({
   className = "",
   ...props
 }: HeroSearchBarProps) {
+  const router = useRouter();
+  const [prompt, setPrompt] = useState("");
+
+  const handleSubmit = () => {
+    if (prompt.trim()) {
+      router.push(`/workspace?prompt=${encodeURIComponent(prompt.trim())}`);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSubmit();
+    }
+  };
+
   return (
     <div
       className={`relative mx-auto mt-10 w-full max-w-[820px] ${className}`}
@@ -42,11 +61,15 @@ export default function HeroSearchBar({
         <input
           id="hero-prompt"
           type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="描述你想生成的模型..."
           className="flex-1 border-none bg-transparent text-[18px] text-[#ECEFF8]/80 outline-none placeholder:text-[#ECEFF8]/55"
         />
         <button
           type="button"
+          onClick={handleSubmit}
           aria-label="提交生成请求"
           className="hero-search-submit"
         >

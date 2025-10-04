@@ -1,12 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function ImageGrid() {
-  const [inputText, setInputText] = useState("");
+interface ImageGridProps {
+  initialPrompt?: string;
+}
+
+export default function ImageGrid({ initialPrompt = "" }: ImageGridProps) {
+  const [inputText, setInputText] = useState(initialPrompt);
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // 如果有初始prompt,自动生成图片
+  useEffect(() => {
+    if (initialPrompt) {
+      handleGenerate();
+    }
+  }, [initialPrompt]);
 
   // 模拟图片生成
   const handleGenerate = () => {
