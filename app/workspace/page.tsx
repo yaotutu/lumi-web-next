@@ -3,8 +3,8 @@
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navigation from "@/components/layout/Navigation";
-import ImageGrid from "@/components/workspace/ImageGrid";
-import ModelPreview from "@/components/workspace/ModelPreview";
+import ImageGrid from "./components/ImageGrid";
+import ModelPreview from "./components/ModelPreview";
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 import type { TaskWithDetails } from "@/types";
 
