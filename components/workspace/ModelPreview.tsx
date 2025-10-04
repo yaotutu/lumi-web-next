@@ -59,8 +59,8 @@ export default function ModelPreview({
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
       {/* 3D预览区域 */}
-      <div className="relative flex flex-1 flex-col items-center justify-center border-b border-border-subtle overflow-hidden">
-        <h2 className="absolute left-5 top-5 text-base font-semibold">
+      <div className="relative flex flex-1 flex-col items-center justify-center border-b border-white/10 overflow-hidden">
+        <h2 className="absolute left-5 top-5 text-base font-semibold text-white">
           3D 预览
         </h2>
 
@@ -94,7 +94,7 @@ export default function ModelPreview({
         </div>
 
         {/* 控制按钮 */}
-        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-2/90 p-1.5 backdrop-blur-md">
+        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0d0d] p-1.5">
           <button
             type="button"
             className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
@@ -170,21 +170,21 @@ export default function ModelPreview({
         ) : status === "completed" ? (
           <>
             <div className="mb-3">
-              <h3 className="mb-1.5 text-sm font-medium text-foreground-muted">
+              <h3 className="mb-1.5 text-sm font-semibold text-white">
                 模型信息
               </h3>
-              <div className="space-y-1 text-xs text-foreground-subtle">
+              <div className="space-y-1 text-xs text-white/60">
                 <div className="flex justify-between">
                   <span>格式:</span>
-                  <span className="text-foreground-muted">GLB</span>
+                  <span className="text-white/90">GLB</span>
                 </div>
                 <div className="flex justify-between">
                   <span>大小:</span>
-                  <span className="text-foreground-muted">2.5 MB</span>
+                  <span className="text-white/90">2.5 MB</span>
                 </div>
                 <div className="flex justify-between">
                   <span>面数:</span>
-                  <span className="text-foreground-muted">50,248</span>
+                  <span className="text-white/90">50,248</span>
                 </div>
                 <div className="flex justify-between">
                   <span>质量:</span>
@@ -203,10 +203,10 @@ export default function ModelPreview({
         ) : (
           <>
             <div className="mb-3">
-              <h3 className="mb-1.5 text-sm font-medium text-foreground-muted">
+              <h3 className="mb-1.5 text-sm font-semibold text-white">
                 模型信息
               </h3>
-              <div className="text-xs text-foreground-subtle">
+              <div className="text-xs text-white/60">
                 等待生成模型...
               </div>
             </div>

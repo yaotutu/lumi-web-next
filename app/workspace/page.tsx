@@ -44,7 +44,7 @@ function WorkspaceLoading() {
 
 export default function WorkspacePage() {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-black text-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#000000] text-white">
       <Navigation />
       <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row">
         <Suspense fallback={<WorkspaceLoading />}>

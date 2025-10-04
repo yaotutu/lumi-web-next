@@ -71,9 +71,7 @@ export default function ImageGrid({
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
       {/* 输入与生成区域 */}
-      <div className="glass-panel flex shrink-0 flex-col gap-3 p-5">
-        <h2 className="text-base font-semibold">输入与生成</h2>
-
+      <div className="glass-panel flex shrink-0 flex-col gap-2.5 p-4">
         <div className="relative">
           <textarea
             value={inputText}
@@ -81,12 +79,12 @@ export default function ImageGrid({
               setInputText(e.target.value);
               if (error) setError("");
             }}
-            placeholder="在这里描述你想要的物体..."
+            placeholder="描述你想要的物体..."
             maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            className={`min-h-[100px] w-full resize-none rounded-lg border bg-surface-2 p-3 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none ${
+            className={`h-20 w-full resize-none rounded-lg border bg-[#0d0d0d] p-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none ${
               error
                 ? "border-red-1 focus:border-red-1"
-                : "border-border-subtle focus:border-yellow-1"
+                : "border-white/10 focus:border-yellow-1 focus:ring-1 focus:ring-yellow-1/20"
             }`}
             aria-label="描述你想要的物体"
             aria-invalid={!!error}
@@ -95,31 +93,25 @@ export default function ImageGrid({
             <span className={error ? "text-red-1" : "text-transparent"}>
               {error || "placeholder"}
             </span>
-            <span className="text-foreground-subtle">
+            <span className="text-white/50">
               {inputText.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={status === "generating"}
-            className="btn-primary"
-          >
-            {status === "generating" ? "生成中..." : "重新再生"}
-          </button>
-        </div>
-
-        <div className="text-center text-xs text-foreground-subtle">
-          💡 提示: 添加更多细节描述可提升生成质量
-        </div>
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={status === "generating"}
+          className="btn-primary w-full"
+        >
+          {status === "generating" ? "生成中..." : "重新再生"}
+        </button>
       </div>
 
       {/* 生成结果区域 */}
-      <div className="glass-panel flex flex-1 flex-col gap-3 overflow-hidden p-5">
-        <h2 className="text-base font-semibold">生成结果</h2>
+      <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
+        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">生成结果</h2>
 
         {status === "idle" || status === "generating" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
@@ -133,8 +125,8 @@ export default function ImageGrid({
             )}
           </div>
         ) : (
-          <div className="flex flex-1 flex-col gap-3 overflow-hidden">
-            <div className="grid flex-1 grid-cols-2 gap-2.5 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-2.5">
               {images.map((img, idx) => (
                 <button
                   key={idx}
@@ -143,22 +135,22 @@ export default function ImageGrid({
                     setSelectedImage(idx);
                     if (error) setError("");
                   }}
-                  className={`group relative overflow-hidden rounded-xl border-2 transition-all duration-250 ${
+                  className={`group relative h-full w-full overflow-hidden rounded-xl border-2 transition-all duration-250 ${
                     selectedImage === idx
-                      ? "scale-[1.02] border-yellow-1 bg-gradient-to-br from-yellow-1/15 to-yellow-1/5 shadow-[0_0_0_3px_rgba(249,207,0,0.15),0_8px_24px_rgba(249,207,0,0.25)]"
-                      : "border-white/8 hover:scale-[1.01] hover:border-white/20"
+                      ? "border-yellow-1 p-0 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
+                      : "border-white/10 p-px hover:border-white/20"
                   }`}
                   aria-label={`选择图片 ${idx + 1}`}
                 >
                   <div
                     className={`flex h-full items-center justify-center bg-gradient-to-br text-sm ${
                       idx === 0
-                        ? "from-purple-1/20 to-surface-3"
+                        ? "from-purple-1/15 to-[#0d0d0d]"
                         : idx === 1
-                          ? "from-pink-1/20 to-surface-3"
+                          ? "from-pink-1/15 to-[#0d0d0d]"
                           : idx === 2
-                            ? "from-blue-2/20 to-surface-3"
-                            : "from-yellow-1/20 to-surface-3"
+                            ? "from-blue-2/15 to-[#0d0d0d]"
+                            : "from-yellow-1/15 to-[#0d0d0d]"
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -211,14 +203,16 @@ export default function ImageGrid({
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={handleGenerate3D}
-              disabled={selectedImage === null}
-              className="btn-secondary w-full"
-            >
-              生成 3D 模型
-            </button>
+            <div className="shrink-0">
+              <button
+                type="button"
+                onClick={handleGenerate3D}
+                disabled={selectedImage === null}
+                className="btn-secondary w-full"
+              >
+                生成 3D 模型
+              </button>
+            </div>
           </div>
         )}
       </div>
