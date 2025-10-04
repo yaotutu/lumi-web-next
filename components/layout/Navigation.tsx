@@ -1,14 +1,15 @@
+"use client";
+
 import Link from "next/link";
-import type { ComponentProps } from "react";
+import { usePathname } from "next/navigation";
 
 type NavLink = {
   label: string;
   href: string;
-  active?: boolean;
 };
 
 const NAV_LINKS: NavLink[] = [
-  { label: "首页", href: "/", active: true },
+  { label: "首页", href: "/" },
   { label: "3D工作台", href: "/workspace" },
   { label: "资产", href: "/assets" },
 ];
@@ -55,6 +56,8 @@ function IconBell() {
 }
 
 export default function Navigation() {
+  const pathname = usePathname();
+
   return (
     <header className="sticky inset-x-0 top-0 z-50 pt-4">
       <div className="mx-auto flex w-full max-w-[1600px] items-center px-3">
@@ -69,19 +72,22 @@ export default function Navigation() {
               </span>
             </Link>
             <nav className="hidden items-center gap-6 text-sm text-foreground-subtle lg:flex">
-              {NAV_LINKS.map(({ label, href, active }) => (
-                <Link
-                  key={label}
-                  href={href}
-                  className={`transition-colors ${
-                    active
-                      ? "text-foreground"
-                      : "hover:text-foreground text-foreground-subtle"
-                  }`}
-                >
-                  {label}
-                </Link>
-              ))}
+              {NAV_LINKS.map(({ label, href }) => {
+                const isActive = pathname === href;
+                return (
+                  <Link
+                    key={label}
+                    href={href}
+                    className={`transition-colors ${
+                      isActive
+                        ? "text-foreground"
+                        : "hover:text-foreground text-foreground-subtle"
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
             </nav>
           </div>
 
