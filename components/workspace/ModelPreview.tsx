@@ -97,56 +97,68 @@ export default function ModelPreview({
         <div className="absolute bottom-5 right-5 flex items-center gap-2.5">
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground"
-            title="禁用"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            title="显示网格"
+            disabled={status !== "completed"}
           >
             <svg
               className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              strokeWidth={1.5}
             >
-              <circle cx="12" cy="12" r="10" strokeWidth={1.5} />
-              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" strokeWidth={1.5} />
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
             </svg>
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+              显示网格
+            </span>
           </button>
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground"
-            title="刷新"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            title="重置视角"
+            disabled={status !== "completed"}
           >
             <svg
               className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              strokeWidth={1.5}
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={1.5}
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+              重置视角
+            </span>
           </button>
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground"
-            title="全屏"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            title="全屏预览"
+            disabled={status !== "completed"}
           >
             <svg
               className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              strokeWidth={1.5}
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={1.5}
                 d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
               />
             </svg>
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+              全屏预览
+            </span>
           </button>
         </div>
       </div>
@@ -159,10 +171,25 @@ export default function ModelPreview({
           <>
             <div className="mb-3">
               <h3 className="mb-1.5 text-sm font-medium text-foreground-muted">
-                预计耗材:
+                模型信息
               </h3>
-              <div className="text-xs text-foreground-subtle">
-                PLA: ~50g | 预计时间: 2小时
+              <div className="space-y-1 text-xs text-foreground-subtle">
+                <div className="flex justify-between">
+                  <span>格式:</span>
+                  <span className="text-foreground-muted">GLB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>大小:</span>
+                  <span className="text-foreground-muted">2.5 MB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>面数:</span>
+                  <span className="text-foreground-muted">50,248</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>质量:</span>
+                  <span className="text-yellow-1">高清</span>
+                </div>
               </div>
             </div>
 
@@ -170,14 +197,14 @@ export default function ModelPreview({
               type="button"
               className="w-full rounded-lg bg-yellow-1 py-2.5 text-sm font-medium text-black transition hover:brightness-110"
             >
-              打印
+              下载模型
             </button>
           </>
         ) : (
           <>
             <div className="mb-3">
               <h3 className="mb-1.5 text-sm font-medium text-foreground-muted">
-                预计耗材:
+                模型信息
               </h3>
               <div className="text-xs text-foreground-subtle">
                 等待生成模型...
@@ -189,7 +216,7 @@ export default function ModelPreview({
               disabled
               className="w-full cursor-not-allowed rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground opacity-50"
             >
-              打印
+              下载模型
             </button>
           </>
         )}

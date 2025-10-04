@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import HeroFeatureCard from "./HeroFeatureCard";
 import HeroSearchBar from "./HeroSearchBar";
 import type { HeroFeatureCardProps } from "./HeroFeatureCard";
@@ -46,6 +49,16 @@ const PROMPT_TAG_CLASSES =
   "rounded-full border border-[rgba(118,124,143,0.35)] bg-[rgba(47,49,59,0.75)] px-3 py-[6px] transition hover:border-[var(--accent-yellow)] hover:text-white";
 
 export default function HeroSection() {
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  const handleTagClick = (tag: string) => {
+    setSelectedTag(tag);
+    // 触发自定义事件,让 HeroSearchBar 接收到标签内容
+    window.dispatchEvent(
+      new CustomEvent("hero-tag-selected", { detail: { tag } })
+    );
+  };
+
   return (
     <section className="hero-section">
       <div className="hero-background" />
@@ -66,7 +79,16 @@ export default function HeroSection() {
 
         <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs text-white/70">
           {PROMPT_TAGS.map((tag) => (
-            <button key={tag} type="button" className={PROMPT_TAG_CLASSES}>
+            <button
+              key={tag}
+              type="button"
+              onClick={() => handleTagClick(tag)}
+              className={`${PROMPT_TAG_CLASSES} ${
+                selectedTag === tag
+                  ? "border-[var(--accent-yellow)] bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)]"
+                  : ""
+              }`}
+            >
               #{tag}
             </button>
           ))}

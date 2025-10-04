@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import type { ComponentPropsWithoutRef } from "react";
@@ -14,6 +14,27 @@ export default function HeroSearchBar({
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState("");
+
+  // 监听标签选择事件
+  useEffect(() => {
+    const handleTagSelected = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tag: string }>;
+      const tag = customEvent.detail.tag;
+      setPrompt((prev) => {
+        // 如果已有内容,在后面追加标签
+        if (prev.trim()) {
+          return `${prev} #${tag}`;
+        }
+        return `#${tag}`;
+      });
+      if (error) setError("");
+    };
+
+    window.addEventListener("hero-tag-selected", handleTagSelected);
+    return () => {
+      window.removeEventListener("hero-tag-selected", handleTagSelected);
+    };
+  }, [error]);
 
   const handleSubmit = () => {
     const trimmedPrompt = prompt.trim();

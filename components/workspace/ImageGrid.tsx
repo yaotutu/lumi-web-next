@@ -113,7 +113,7 @@ export default function ImageGrid({
         </div>
 
         <div className="text-center text-xs text-foreground-subtle">
-          不满意? 倒叙描述后重新生成
+          💡 提示: 添加更多细节描述可提升生成质量
         </div>
       </div>
 
@@ -143,18 +143,54 @@ export default function ImageGrid({
                     setSelectedImage(idx);
                     if (error) setError("");
                   }}
-                  className={`relative overflow-hidden rounded-lg border-2 transition ${
+                  className={`group relative overflow-hidden rounded-lg border-2 transition-all ${
                     selectedImage === idx
-                      ? "border-yellow-1"
+                      ? "border-yellow-1 shadow-glow-yellow"
                       : "border-border-subtle hover:border-white-10"
                   }`}
                   aria-label={`选择图片 ${idx + 1}`}
                 >
-                  <div className="flex h-full items-center justify-center bg-surface-3 text-sm text-foreground-subtle">
-                    图片 {idx + 1}
+                  <div
+                    className={`flex h-full items-center justify-center bg-gradient-to-br text-sm ${
+                      idx === 0
+                        ? "from-purple-1/20 to-surface-3"
+                        : idx === 1
+                          ? "from-pink-1/20 to-surface-3"
+                          : idx === 2
+                            ? "from-blue-2/20 to-surface-3"
+                            : "from-yellow-1/20 to-surface-3"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <svg
+                        className={`h-10 w-10 transition-opacity ${
+                          selectedImage === idx
+                            ? "text-yellow-1"
+                            : "text-foreground-subtle group-hover:text-foreground-muted"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                      >
+                        <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
+                        <circle cx="9" cy="10" r="1.5" />
+                        <path d="M21 15.5 16.5 11 9 18" />
+                        <path d="m12 14-3 3" />
+                      </svg>
+                      <span
+                        className={`text-xs ${
+                          selectedImage === idx
+                            ? "text-yellow-1"
+                            : "text-foreground-subtle group-hover:text-foreground-muted"
+                        }`}
+                      >
+                        图片 {idx + 1}
+                      </span>
+                    </div>
                   </div>
                   {selectedImage === idx && (
-                    <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-1">
+                    <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-1 shadow-lg">
                       <svg
                         className="h-3 w-3 text-black"
                         fill="none"
