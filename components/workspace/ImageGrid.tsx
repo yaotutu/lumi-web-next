@@ -9,18 +9,26 @@ interface ImageGridProps {
   onGenerate3D?: (imageIndex: number, prompt: string) => void;
 }
 
+// 每张图片的加载状态
+type ImageSlotStatus = "pending" | "loading" | "completed" | "failed";
+
+interface ImageSlot {
+  url: string | null;
+  status: ImageSlotStatus;
+}
+
 export default function ImageGrid({
   initialPrompt = "",
   onGenerate3D,
 }: ImageGridProps) {
   const [inputText, setInputText] = useState(initialPrompt);
-  const [images, setImages] = useState<string[]>([]);
+  const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string>("");
 
-  // 模拟图片生成
-  const handleGenerate = useCallback(() => {
+  // 流式接收图片 - 生成一张显示一张
+  const handleGenerate = useCallback(async () => {
     // 验证输入
     const trimmedText = inputText.trim();
     if (!trimmedText) {
@@ -38,18 +46,85 @@ export default function ImageGrid({
 
     setError("");
     setStatus("generating");
-    setImages([]);
     setSelectedImage(null);
 
-    // 模拟生成图片
-    setTimeout(() => {
-      const generatedImages = Array.from(
-        { length: IMAGE_GENERATION.COUNT },
-        (_, i) => `/placeholder-${i + 1}.jpg`
-      );
-      setImages(generatedImages);
-      setStatus("completed");
-    }, IMAGE_GENERATION.DELAY);
+    // 初始化4个图片槽位
+    const slots: ImageSlot[] = Array.from({ length: IMAGE_GENERATION.COUNT }, () => ({
+      url: null,
+      status: "pending" as ImageSlotStatus,
+    }));
+    setImageSlots(slots);
+
+    try {
+      // 使用 EventSource 接收流式数据
+      const response = await fetch("/api/generate-images", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: trimmedText,
+          count: IMAGE_GENERATION.COUNT,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "图片生成失败");
+      }
+
+      // 处理流式响应
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("无法读取响应流");
+      }
+
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6);
+            try {
+              const data = JSON.parse(jsonStr);
+
+              if (data.type === "image") {
+                // 更新对应索引的图片槽位
+                setImageSlots((prev) => {
+                  const newSlots = [...prev];
+                  newSlots[data.index] = {
+                    url: data.url,
+                    status: "completed",
+                  };
+                  return newSlots;
+                });
+              } else if (data.type === "done") {
+                setStatus("completed");
+              } else if (data.type === "error") {
+                throw new Error(data.message);
+              }
+            } catch (parseError) {
+              console.error("解析SSE数据失败:", parseError);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("生成图片失败:", err);
+      setError(err instanceof Error ? err.message : "图片生成失败,请重试");
+      setStatus("failed");
+    }
   }, [inputText]);
 
   // 如果有初始prompt,自动生成图片
@@ -113,94 +188,77 @@ export default function ImageGrid({
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
         <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">生成结果</h2>
 
-        {status === "idle" || status === "generating" ? (
+        {status === "idle" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
-            {status === "generating" ? (
-              <>
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1 border-t-transparent" />
-                <p className="text-sm">正在生成图片...</p>
-              </>
-            ) : (
-              <p className="text-sm">等待生成图片...</p>
-            )}
+            <p className="text-sm">等待生成图片...</p>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="grid min-h-0 flex-1 grid-cols-2 gap-2.5">
-              {images.map((img, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSelectedImage(idx);
-                    if (error) setError("");
-                  }}
-                  className={`group relative h-full w-full overflow-hidden rounded-xl border-2 transition-all duration-250 ${
-                    selectedImage === idx
-                      ? "border-yellow-1 p-0 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
-                      : "border-white/10 p-px hover:border-white/20"
-                  }`}
-                  aria-label={`选择图片 ${idx + 1}`}
-                >
-                  <div
-                    className={`flex h-full items-center justify-center bg-gradient-to-br text-sm ${
-                      idx === 0
-                        ? "from-purple-1/15 to-[#0d0d0d]"
-                        : idx === 1
-                          ? "from-pink-1/15 to-[#0d0d0d]"
-                          : idx === 2
-                            ? "from-blue-2/15 to-[#0d0d0d]"
-                            : "from-yellow-1/15 to-[#0d0d0d]"
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <svg
-                        className={`h-10 w-10 transition-opacity ${
-                          selectedImage === idx
-                            ? "text-yellow-1"
-                            : "text-foreground-subtle group-hover:text-foreground-muted"
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                      >
-                        <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
-                        <circle cx="9" cy="10" r="1.5" />
-                        <path d="M21 15.5 16.5 11 9 18" />
-                        <path d="m12 14-3 3" />
-                      </svg>
-                      <span
-                        className={`text-xs ${
-                          selectedImage === idx
-                            ? "text-yellow-1"
-                            : "text-foreground-subtle group-hover:text-foreground-muted"
-                        }`}
-                      >
-                        图片 {idx + 1}
-                      </span>
-                    </div>
+            {/* 图片容器 - 修复尺寸问题 */}
+            <div className="flex-1 overflow-hidden">
+              <div className="grid h-full w-full grid-cols-2 gap-2.5">
+                {imageSlots.map((slot, idx) => (
+                  <div key={idx} className="relative h-full w-full">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (slot.status === "completed") {
+                          setSelectedImage(idx);
+                          if (error) setError("");
+                        }
+                      }}
+                      disabled={slot.status !== "completed"}
+                      className={`group absolute inset-0 overflow-hidden rounded-xl border-2 transition-all duration-250 ${
+                        selectedImage === idx && slot.status === "completed"
+                          ? "border-yellow-1 p-0 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
+                          : "border-white/10 p-px hover:border-white/20"
+                      } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
+                      aria-label={`图片 ${idx + 1}`}
+                    >
+                      {slot.status === "pending" || slot.status === "loading" ? (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />
+                            <span className="text-xs text-foreground-subtle">
+                              生成中...
+                            </span>
+                          </div>
+                        </div>
+                      ) : slot.status === "completed" && slot.url ? (
+                        <div className="relative h-full w-full">
+                          <img
+                            src={slot.url}
+                            alt={`生成的图片 ${idx + 1}`}
+                            className="absolute inset-0 h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
+                          />
+                          {selectedImage === idx && (
+                            <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
+                              <svg
+                                className="h-3.5 w-3.5 text-black"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2.5}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-500/10 to-[#0d0d0d]">
+                          <span className="text-xs text-red-500">生成失败</span>
+                        </div>
+                      )}
+                    </button>
                   </div>
-                  {selectedImage === idx && (
-                    <div className="absolute right-2 top-2 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
-                      <svg
-                        className="h-3.5 w-3.5 text-black"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2.5}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </button>
-              ))}
+                ))}
+              </div>
             </div>
 
             <div className="shrink-0">
