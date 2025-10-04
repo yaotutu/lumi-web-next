@@ -132,7 +132,7 @@ export default function ImageGrid({
     if (initialPrompt) {
       handleGenerate();
     }
-  }, [initialPrompt, handleGenerate]);
+  }, [initialPrompt]);
 
   const handleGenerate3D = () => {
     if (selectedImage === null) {
