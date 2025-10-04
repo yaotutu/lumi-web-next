@@ -36,3 +36,16 @@ export const ERROR_MESSAGES = {
   MODEL_GENERATION_FAILED: "3D模型生成失败,请重试",
   NETWORK_ERROR: "网络错误,请检查连接",
 } as const;
+
+// Mock 用户配置（开发阶段）
+export const MOCK_USER = {
+  id: 'user_dev_001',
+  email: 'dev@lumi.com',
+  name: 'Development User',
+} as const;
+
+// 存储路径配置
+export const STORAGE_PATHS = {
+  IMAGES_DIR: '/generated/images',
+  MODELS_DIR: '/generated/models',
+} as const;
