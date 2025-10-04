@@ -68,7 +68,10 @@ npm run format
 - `ModelPreview` - 3D模型生成状态、进度显示、模型信息展示
 - `GenerationProgress` - 进度条组件
 
-**首页组件** (`components/hero/`)
+**首页页面** (`app/home/`)
+- `page.tsx` - 首页路由页面
+
+**首页组件** (`app/home/`)
 - `HeroSection` - 主页面英雄区,包含搜索框和标签云
 - `HeroSearchBar` - 主搜索框,支持标签注入,导航到工作台
 - `HeroFeatureCard` - 功能特性卡片

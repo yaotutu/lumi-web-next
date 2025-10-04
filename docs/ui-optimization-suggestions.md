@@ -108,8 +108,8 @@
 - [app/workspace/page.tsx](../app/workspace/page.tsx) - Workspace布局
 - [components/workspace/ImageGrid.tsx](../components/workspace/ImageGrid.tsx) - 图片网格
 - [components/workspace/ModelPreview.tsx](../components/workspace/ModelPreview.tsx) - 3D预览
-- [components/hero/HeroSection.tsx](../components/hero/HeroSection.tsx) - Hero区域
-- [components/hero/HeroSearchBar.tsx](../components/hero/HeroSearchBar.tsx) - 搜索栏
+- [app/home/HeroSection.tsx](../app/home/HeroSection.tsx) - Hero区域
+- [app/home/HeroSearchBar.tsx](../app/home/HeroSearchBar.tsx) - 搜索栏
 - [app/globals.css](../app/globals.css) - 全局样式
 
 ### 新增的UI组件
