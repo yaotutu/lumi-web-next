@@ -46,7 +46,7 @@ const FEATURE_CARDS: FeatureCard[] = [
 ];
 
 const PROMPT_TAG_CLASSES =
-  "rounded-full border border-[rgba(118,124,143,0.35)] bg-[rgba(47,49,59,0.75)] px-3 py-[6px] transition hover:border-[var(--accent-yellow)] hover:text-white";
+  "rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-white";
 
 export default function HeroSection() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -67,10 +67,10 @@ export default function HeroSection() {
 
       <div className="hero-container">
         <div className="text-center">
-          <h1 className="font-[\'EB Garamond\',var(--font-sans)] text-[48px] uppercase tracking-[0.3em] text-white drop-shadow-[0_18px_48px_rgba(0,0,0,0.35)] md:text-[56px]">
+          <h1 className="text-[42px] font-bold uppercase tracking-[0.24em] text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.4)] md:text-[52px]">
             一键生成任何3D内容
           </h1>
-          <p className="mt-3 font-[\'EB Garamond\',var(--font-sans)] text-[22px] text-white/75 md:text-[24px]">
+          <p className="mt-4 text-[20px] font-medium text-white/60 md:text-[22px]">
             最先进的 AI 3D 模型生成器
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function HeroSection() {
               onClick={() => handleTagClick(tag)}
               className={`${PROMPT_TAG_CLASSES} ${
                 selectedTag === tag
-                  ? "border-[var(--accent-yellow)] bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)]"
+                  ? "!border-yellow-1 !bg-yellow-1/15 !text-yellow-1"
                   : ""
               }`}
             >

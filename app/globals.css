@@ -2,23 +2,25 @@
 
 :root {
   color-scheme: dark;
-  --surface-base: #050506;
-  --surface-1: #0c0d10;
-  --surface-2: #101114;
-  --surface-3: #1b1d20;
+  --surface-base: #030304;
+  --surface-1: #0a0b0e;
+  --surface-2: #0f1013;
+  --surface-3: #1a1c1f;
   --surface-overlay: rgba(255, 255, 255, var(--alpha-5));
-  --text-strong: #f2f2f2;
-  --text-muted: rgba(255, 255, 255, var(--alpha-68));
-  --text-subtle: rgba(255, 255, 255, var(--alpha-40));
-  --accent-yellow: #f9cf00;
+  --text-strong: #f5f5f5;
+  --text-muted: rgba(255, 255, 255, var(--alpha-72));
+  --text-subtle: rgba(255, 255, 255, var(--alpha-45));
+  --accent-yellow: #ffd93d;
+  --accent-yellow-dim: #f9cf00;
   --accent-purple: #503be3;
   --accent-pink: #fb23c2;
   --accent-blue: #1ca1f1;
   --accent-green: #3fdd78;
   --accent-red: #ff3e3e;
   --accent-orange: #fb923c;
-  --border-subtle: rgba(255, 255, 255, var(--alpha-5));
-  --border-strong: rgba(255, 255, 255, var(--alpha-10));
+  --border-subtle: rgba(255, 255, 255, var(--alpha-6));
+  --border-medium: rgba(255, 255, 255, var(--alpha-12));
+  --border-strong: rgba(255, 255, 255, var(--alpha-18));
   --shadow-glass-primary: 0 0 0 1px rgba(255, 255, 255, var(--alpha-5));
   --shadow-glass-ambient: 0 24px 80px rgba(0, 0, 0, var(--alpha-40));
   --shadow-soft-ambient: 0 12px 45px rgba(0, 0, 0, var(--alpha-40));
@@ -35,13 +37,18 @@
 
   /* 透明度变量 */
   --alpha-5: 0.05;
+  --alpha-6: 0.06;
   --alpha-10: 0.1;
+  --alpha-12: 0.12;
+  --alpha-18: 0.18;
   --alpha-20: 0.2;
   --alpha-32: 0.32;
   --alpha-40: 0.4;
+  --alpha-45: 0.45;
   --alpha-60: 0.6;
   --alpha-68: 0.68;
   --alpha-70: 0.7;
+  --alpha-72: 0.72;
   --alpha-75: 0.75;
   --alpha-80: 0.8;
   --alpha-85: 0.85;
@@ -161,6 +168,7 @@ body::before {
 
 * {
   box-sizing: border-box;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::selection {
@@ -291,6 +299,98 @@ a:hover {
 }
 
 @layer components {
+  /* 动画系统 */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(249, 207, 0, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(249, 207, 0, 0);
+    }
+  }
+
+  .fade-in-up {
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* 按钮系统 */
+  .btn-primary {
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #ffd93d 0%, #f9cf00 100%);
+    color: #000;
+    border: none;
+    box-shadow: 0 4px 12px rgba(249, 207, 0, 0.3);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(249, 207, 0, 0.45);
+    filter: brightness(1.05);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    background: transparent;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: rgba(249, 207, 0, 0.5);
+    color: rgba(249, 207, 0, 0.9);
+    background: rgba(249, 207, 0, 0.05);
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .hero-section {
     position: relative;
     isolation: isolate;
@@ -615,16 +715,18 @@ a:hover {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-radius: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(18, 19, 24, 0.8);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(16px);
-    transition: transform 150ms ease;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(18, 19, 24, 0.6);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .gallery-card:hover {
-    transform: translateY(-8px);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+    border-color: rgba(249, 207, 0, 0.3);
   }
 
   .gallery-card__media {

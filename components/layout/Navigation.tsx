@@ -59,49 +59,52 @@ export default function Navigation() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky inset-x-0 top-0 z-50 pt-4">
+    <header className="sticky inset-x-0 top-0 z-50 pt-3">
       <div className="mx-auto flex w-full max-w-[1600px] items-center px-3">
-        <div className="glass-panel flex h-14 w-full items-center justify-between !rounded-[6.25rem] px-4">
-          <div className="flex items-center gap-7">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
+        <div className="flex h-[52px] w-full items-center justify-between rounded-[6.25rem] border border-white-5 bg-gradient-to-r from-white-5/40 to-white-5/20 px-5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-[24px]">
+          <div className="flex items-center gap-8">
+            <Link href="/" className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/8 text-white ring-1 ring-white/10">
                 <IconAI3DGlyph />
               </span>
-              <span className="text-sm font-semibold uppercase tracking-[0.32em] text-foreground-subtle">
+              <span className="text-[13px] font-semibold uppercase tracking-[0.18em] text-foreground">
                 AI3D STUDIO
               </span>
             </Link>
-            <nav className="hidden items-center gap-6 text-sm text-foreground-subtle lg:flex">
+            <nav className="hidden items-center gap-7 text-[13px] text-foreground-subtle lg:flex">
               {NAV_LINKS.map(({ label, href }) => {
                 const isActive = pathname === href;
                 return (
                   <Link
                     key={label}
                     href={href}
-                    className={`transition-colors ${
+                    className={`relative font-medium transition-colors duration-200 ${
                       isActive
                         ? "text-foreground"
-                        : "hover:text-foreground text-foreground-subtle"
+                        : "hover:text-foreground"
                     }`}
                   >
                     {label}
+                    {isActive && (
+                      <span className="absolute -bottom-1 left-0 h-[2px] w-full rounded-full bg-yellow-1" />
+                    )}
                   </Link>
                 );
               })}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2 whitespace-nowrap text-xs font-medium">
+          <div className="flex items-center gap-2.5 whitespace-nowrap text-xs font-medium">
             <button
               type="button"
-              className="hidden h-10 w-10 items-center justify-center rounded-[1.5rem] border border-border-subtle text-foreground-subtle transition hover:border-[var(--accent-yellow)] hover:text-[var(--accent-yellow)] md:flex"
+              className="hidden h-9 w-9 items-center justify-center rounded-xl border border-border-subtle text-foreground-subtle transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1 md:flex"
             >
               <IconBell />
             </button>
 
             <Link
               href="/auth"
-              className="flex h-9 items-center justify-center rounded-[6.25rem] border border-border-subtle px-4 text-[13px] text-foreground transition hover:border-[var(--accent-yellow)] hover:text-[var(--accent-yellow)]"
+              className="flex h-9 items-center justify-center rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
             >
               Sign up/Log in
             </Link>

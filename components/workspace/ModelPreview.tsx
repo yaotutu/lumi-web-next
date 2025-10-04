@@ -68,9 +68,9 @@ export default function ModelPreview({
         <div className="flex h-full w-full items-center justify-center">
           {status === "generating" ? (
             <div className="text-center">
-              <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-yellow-1 border-t-transparent mx-auto" />
-              <p className="text-sm text-foreground-muted">正在生成3D模型...</p>
-              <p className="mt-1 text-xs text-foreground-subtle">
+              <div className="mb-4 h-12 w-12 animate-spin rounded-full border-3 border-yellow-1/20 border-t-yellow-1 mx-auto" />
+              <p className="text-sm font-medium text-foreground-muted">正在生成3D模型...</p>
+              <p className="mt-2 text-[13px] font-semibold tabular-nums text-yellow-1">
                 {Math.round(progress)}%
               </p>
             </div>
@@ -94,10 +94,10 @@ export default function ModelPreview({
         </div>
 
         {/* 控制按钮 */}
-        <div className="absolute bottom-5 right-5 flex items-center gap-2.5">
+        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-2/90 p-1.5 backdrop-blur-md">
           <button
             type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
             title="显示网格"
             disabled={status !== "completed"}
           >
@@ -110,13 +110,13 @@ export default function ModelPreview({
             >
               <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
             </svg>
-            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               显示网格
             </span>
           </button>
           <button
             type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
             title="重置视角"
             disabled={status !== "completed"}
           >
@@ -133,13 +133,13 @@ export default function ModelPreview({
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               重置视角
             </span>
           </button>
           <button
             type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface-2 text-foreground-subtle transition hover:border-white-10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
             title="全屏预览"
             disabled={status !== "completed"}
           >
@@ -156,7 +156,7 @@ export default function ModelPreview({
                 d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
               />
             </svg>
-            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-xs opacity-0 transition group-hover:opacity-100">
+            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               全屏预览
             </span>
           </button>
@@ -195,7 +195,7 @@ export default function ModelPreview({
 
             <button
               type="button"
-              className="w-full rounded-lg bg-yellow-1 py-2.5 text-sm font-medium text-black transition hover:brightness-110"
+              className="btn-primary w-full"
             >
               下载模型
             </button>

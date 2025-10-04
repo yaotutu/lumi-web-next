@@ -65,21 +65,20 @@ export default function HeroSearchBar({
 
   return (
     <div
-      className={`relative mx-auto mt-10 w-full max-w-[820px] ${className}`}
+      className={`relative mx-auto mt-12 w-full max-w-[780px] ${className}`}
       {...props}
     >
-      <div className="absolute inset-0 -z-10 rounded-[32px] bg-hero-search-glow" />
-      <div className="relative flex h-[84px] items-center gap-6 rounded-[30px] border border-hero-search-border bg-hero-search-surface px-8 shadow-hero-search backdrop-blur-[26px]">
+      <div className="relative flex h-[72px] items-center gap-5 rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/4 px-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-[20px] transition-all duration-200 focus-within:border-yellow-1/60 focus-within:shadow-[0_8px_32px_rgba(249,207,0,0.2)]">
         <button
           type="button"
           aria-label="上传参考图像"
-          className="hero-search-icon"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/8 text-white/70 transition-all duration-200 hover:border-yellow-1/50 hover:bg-yellow-1/10 hover:text-yellow-1"
         >
           <svg
             aria-hidden="true"
             role="presentation"
             focusable="false"
-            className="h-6 w-6 text-white/75"
+            className="h-5 w-5"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -93,7 +92,7 @@ export default function HeroSearchBar({
             <path d="m12 14-3 3" />
           </svg>
         </button>
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex flex-1 flex-col gap-0.5">
           <label htmlFor="hero-prompt" className="sr-only">
             描述你想生成的模型
           </label>
@@ -108,7 +107,7 @@ export default function HeroSearchBar({
             onKeyDown={handleKeyDown}
             placeholder="描述你想生成的模型..."
             maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            className="border-none bg-transparent text-[18px] text-[#ECEFF8]/80 outline-none placeholder:text-[#ECEFF8]/55"
+            className="border-none bg-transparent text-[16px] text-white/85 outline-none placeholder:text-white/50"
             aria-invalid={!!error}
           />
           {error && (
@@ -121,17 +120,17 @@ export default function HeroSearchBar({
           type="button"
           onClick={handleSubmit}
           aria-label="提交生成请求"
-          className="hero-search-submit"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-yellow-1/50 bg-gradient-to-br from-yellow-1 to-accent-yellow-dim text-black shadow-[0_8px_24px_rgba(249,207,0,0.4)] transition-all duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(249,207,0,0.5)] active:scale-95"
         >
           <svg
             aria-hidden="true"
             role="presentation"
             focusable="false"
-            className="h-6 w-6 text-black"
+            className="h-5 w-5"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth={1.8}
+            strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
           >

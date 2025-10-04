@@ -106,7 +106,7 @@ export default function ImageGrid({
             type="button"
             onClick={handleGenerate}
             disabled={status === "generating"}
-            className="rounded-lg bg-yellow-1 px-5 py-2 text-sm font-medium text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary"
           >
             {status === "generating" ? "生成中..." : "重新再生"}
           </button>
@@ -143,10 +143,10 @@ export default function ImageGrid({
                     setSelectedImage(idx);
                     if (error) setError("");
                   }}
-                  className={`group relative overflow-hidden rounded-lg border-2 transition-all ${
+                  className={`group relative overflow-hidden rounded-xl border-2 transition-all duration-250 ${
                     selectedImage === idx
-                      ? "border-yellow-1 shadow-glow-yellow"
-                      : "border-border-subtle hover:border-white-10"
+                      ? "scale-[1.02] border-yellow-1 bg-gradient-to-br from-yellow-1/15 to-yellow-1/5 shadow-[0_0_0_3px_rgba(249,207,0,0.15),0_8px_24px_rgba(249,207,0,0.25)]"
+                      : "border-white/8 hover:scale-[1.01] hover:border-white/20"
                   }`}
                   aria-label={`选择图片 ${idx + 1}`}
                 >
@@ -190,9 +190,9 @@ export default function ImageGrid({
                     </div>
                   </div>
                   {selectedImage === idx && (
-                    <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-1 shadow-lg">
+                    <div className="absolute right-2 top-2 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
                       <svg
-                        className="h-3 w-3 text-black"
+                        className="h-3.5 w-3.5 text-black"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -215,7 +215,7 @@ export default function ImageGrid({
               type="button"
               onClick={handleGenerate3D}
               disabled={selectedImage === null}
-              className="shrink-0 rounded-lg border border-border-subtle bg-surface-2 py-2.5 text-sm font-medium text-foreground transition hover:border-yellow-1 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-secondary w-full"
             >
               生成 3D 模型
             </button>
