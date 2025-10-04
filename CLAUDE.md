@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是一个使用 App Router 的 Next.js 15 项目，技术栈包括 React 19、TypeScript 和 Tailwind CSS v4。
+Lumi Web Next 是一个 AI 3D 模型生成平台,允许用户通过文本描述生成图片,然后将选中的图片转换为 3D 模型。
 
 ## 技术栈
 
@@ -33,48 +33,200 @@ npm run lint
 npm run format
 ```
 
-## 项目结构
+## 核心架构
 
-- **app/** - Next.js App Router 页面和布局
-  - `layout.tsx` - 根布局，包含元数据和字体配置
-  - `page.tsx` - 首页
-  - `globals.css` - 全局样式，包含 Tailwind 指令
-- **components/** - React 组件，按功能分组
-  - `layout/` - 布局相关组件（如导航）
-  - `hero/` - 首页英雄区域组件
-  - `gallery/` - 模型画廊组件
+### 页面结构
+
+项目采用 Next.js App Router 架构:
+
+- **`/`** (首页) - 展示 Hero 区域和模型画廊
+  - `HeroSection` - 主搜索框和功能卡片展示
+  - `ModelGallery` - 3D 模型展示画廊
+
+- **`/workspace`** (工作台) - 图片生成和 3D 模型生成主工作流
+  - 左侧:`ImageGrid` - 输入描述 → 生成4张图片 → 选择图片
+  - 右侧:`ModelPreview` - 3D 模型生成进度和预览
+
+### 工作流程
+
+```
+用户输入文本描述
+    ↓
+生成4张参考图片 (模拟延迟1.5秒)
+    ↓
+用户选择一张图片
+    ↓
+生成3D模型 (模拟延迟3秒,带进度条)
+    ↓
+显示模型信息和下载按钮
+```
+
+### 核心组件
+
+**工作台组件** (`components/workspace/`)
+- `ImageGrid` - 管理文本输入、图片生成、图片选择的完整流程
+- `ModelPreview` - 3D模型生成状态、进度显示、模型信息展示
+- `GenerationProgress` - 进度条组件
+
+**首页组件** (`components/hero/`)
+- `HeroSection` - 主页面英雄区,包含搜索框和标签云
+- `HeroSearchBar` - 主搜索框,支持标签注入,导航到工作台
+- `HeroFeatureCard` - 功能特性卡片
+
+**布局组件** (`components/layout/`)
+- `Navigation` - 顶部导航栏,响应式设计
+
+**UI 组件** (`components/ui/`)
+- `Skeleton` - 加载骨架屏
+- `Toast` - 消息提示
+- `EmptyState` - 空状态占位
+
+### 状态管理
+
+项目使用 React 内置 hooks 管理状态:
+- `useState` - 本地组件状态
+- `useEffect` - 副作用处理
+- `useSearchParams` - URL 参数传递(Hero → Workspace)
+
+**关键状态类型** (`types/index.ts`):
+- `GenerationStatus`: "idle" | "generating" | "completed" | "failed"
+- `GeneratedImage` - 图片数据结构
+- `Model3D` - 3D 模型数据结构
+
+### 常量配置 (`lib/constants.ts`)
+
+```typescript
+IMAGE_GENERATION.COUNT = 4           // 每次生成4张图片
+IMAGE_GENERATION.DELAY = 1500        // 模拟1.5秒延迟
+IMAGE_GENERATION.MAX_PROMPT_LENGTH = 500  // 最大输入长度
+MODEL_GENERATION.DELAY = 3000        // 3D生成3秒延迟
+```
+
+## 样式系统
+
+### 设计系统 (`app/globals.css`)
+
+项目使用**专业3D工具级**的深色主题配色:
+
+**颜色层级**:
+- `--surface-base`: `#000000` - 页面背景(纯黑)
+- `--surface-1`: `#0d0d0d` - 输入框等深色元素
+- `--surface-2`: `#1a1a1a` - 卡片背景
+- `--surface-3`: `#262626` - 高亮区域
+
+**文字层级**:
+- `--text-strong`: `#ffffff` - 主要文字(纯白)
+- `--text-muted`: `rgba(255,255,255,0.90)` - 次要文字
+- `--text-subtle`: `rgba(255,255,255,0.60)` - 辅助文字
+
+**品牌色**:
+- `--accent-yellow`: `#ffd93d` - 主要交互色
+- `--accent-yellow-dim`: `#f9cf00` - 黄色暗调
+
+### 通用样式类
+
+**面板系统**:
+- `.glass-panel` - 标准卡片容器(纯色背景 `#1a1a1a`,微妙边框)
+- `.surface-card` - 备用卡片样式
+
+**按钮系统**:
+- `.btn-primary` - 黄色主要按钮(渐变背景)
+- `.btn-secondary` - 次要按钮(深色背景+边框)
+
+**动画**:
+- `.fade-in-up` - 淡入上移动画
+- `@keyframes scale-in` - 缩放进入动画
+
+### 圆角规范
+
+- `--radius-sm`: `0.75rem` (12px)
+- `--radius-md`: `1rem` (16px)
+- `--radius-lg`: `1.25rem` (20px)
+- `--radius-xl`: `2rem` (32px)
 
 ## 代码规范
 
-### 代码检查与格式化
-- 使用 **Biome** 替代 ESLint/Prettier
-- 2 空格缩进
-- 自动整理 imports
-- 启用 Next.js 和 React 推荐规则
-- 提交前运行 `npm run format`
+### 组件规范
 
-### TypeScript 配置
-- 启用严格模式
-- 路径别名：`@/*` 映射到项目根目录
-- 编译目标：ES2017
-- 模块解析：bundler
+- 使用 **函数组件** + **TypeScript**
+- 所有组件使用 `"use client"` 指令(客户端交互)
+- Props 类型定义使用 `interface` 并导出
 
-## 关键配置
+### 样式规范
 
-### Next.js
-- 使用 TypeScript 配置文件（`next.config.ts`）
-- 开发和构建均启用 Turbopack
-- App Router 架构
+- **优先使用全局样式类** - `.btn-primary`、`.glass-panel` 等
+- **Tailwind 用于布局** - flex、grid、间距等
+- **避免内联样式** - 除非动态计算
 
-### Tailwind CSS
-- 版本 4（最新的基于 PostCSS 的架构）
-- 配置文件：`postcss.config.mjs`
-- 全局样式：`app/globals.css`
+### 文件组织
+
+```
+components/
+  ├── layout/      # 布局组件(导航等)
+  ├── hero/        # 首页英雄区
+  ├── gallery/     # 模型画廊
+  ├── workspace/   # 工作台核心组件
+  └── ui/          # 通用UI组件
+
+lib/
+  ├── constants.ts # 全局常量
+  └── utils.ts     # 工具函数(如有)
+
+types/
+  └── index.ts     # TypeScript 类型定义
+
+app/
+  ├── page.tsx           # 首页
+  ├── workspace/page.tsx # 工作台页面
+  ├── layout.tsx         # 根布局
+  └── globals.css        # 全局样式
+```
 
 ## 开发注意事项
 
-- 开发服务器运行在 http://localhost:3000
-- 通过 Turbopack 启用热重载
-- 使用 `next/font` 优化字体，采用 Geist 字体系列
-- 组件按功能分组在 components/ 目录下
-- 所有样式都在 globals.css 中定义，组件通过类名引用
+### 路径别名
+
+- 使用 `@/*` 引用根目录文件
+- 示例: `import { IMAGE_GENERATION } from "@/lib/constants"`
+
+### 布局技巧
+
+**工作台左侧布局** (ImageGrid):
+- 输入区固定高度,图片网格使用 `flex-1` 自动填充
+- 使用 `min-h-0` 允许 flex 子元素正确缩小
+- 图片卡片使用 `h-full w-full` 填充网格单元格
+
+**避免布局抖动**:
+- 选中状态边框变化时,使用内边距补偿(如 `p-px` vs `p-0`)
+
+### 状态管理模式
+
+```typescript
+// 图片生成流程
+const [status, setStatus] = useState<GenerationStatus>("idle");
+const [images, setImages] = useState<string[]>([]);
+const [selectedImage, setSelectedImage] = useState<number | null>(null);
+
+// 生成 → 选择 → 传递给3D预览
+handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
+```
+
+### 字体配置
+
+- 使用 `next/font` 加载 Geist Sans 和 Geist Mono
+- 在 `app/layout.tsx` 中配置
+- CSS 变量: `--font-geist-sans`, `--font-geist-mono`
+
+## TypeScript 配置
+
+- **严格模式启用** - `strict: true`
+- **路径映射** - `@/*` → 根目录
+- **编译目标** - ES2017
+- **模块解析** - bundler
+
+## Biome 配置
+
+- **缩进**: 2空格
+- **自动整理 imports**
+- **启用推荐规则集**
+- 提交前运行 `npm run format`
