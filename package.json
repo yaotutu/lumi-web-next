@@ -13,7 +13,8 @@
     "test:api": "tsx scripts/test-task-api.ts",
     "test:image-gen": "tsx scripts/test-image-generation.ts",
     "test:workspace": "tsx scripts/test-workspace-integration.ts",
-    "test:history": "tsx scripts/test-history.ts"
+    "test:history": "tsx scripts/test-history.ts",
+    "test:queue": "tsx scripts/test-queue.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

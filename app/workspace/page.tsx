@@ -6,7 +6,17 @@ import Navigation from "@/components/layout/Navigation";
 import ImageGrid from "./components/ImageGrid";
 import ModelPreview from "./components/ModelPreview";
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
+import QueueStatus from "@/components/ui/QueueStatus";
 import type { TaskWithDetails } from "@/types";
+
+// 队列状态接口
+interface QueueStatusData {
+  pending: number;
+  running: number;
+  completed: number;
+  maxConcurrent: number;
+  maxQueueSize: number;
+}
 
 function WorkspaceContent() {
   const router = useRouter();
@@ -19,6 +29,7 @@ function WorkspaceContent() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null,
   );
+  const [queueStatus, setQueueStatus] = useState<QueueStatusData | null>(null);
 
   // 初始化：从 URL 参数创建或加载任务
   useEffect(() => {
@@ -81,7 +92,7 @@ function WorkspaceContent() {
     initializeTask();
   }, [taskId, prompt, router]);
 
-  // 轮询任务状态更新
+  // 轮询任务状态和队列状态
   useEffect(() => {
     if (!task?.id) return;
 
@@ -95,24 +106,35 @@ function WorkspaceContent() {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/tasks/${task.id}`);
-        const data = await response.json();
+        // 同时获取任务状态和队列状态
+        const [taskResponse, queueResponse] = await Promise.all([
+          fetch(`/api/tasks/${task.id}`),
+          fetch("/api/queue/status"),
+        ]);
 
-        if (data.success) {
-          setTask(data.data);
+        const taskData = await taskResponse.json();
+        const queueData = await queueResponse.json();
+
+        if (taskData.success) {
+          setTask(taskData.data);
 
           // 如果任务完成或失败，停止轮询
           if (
-            data.data.status === "IMAGES_READY" ||
-            data.data.status === "MODEL_READY" ||
-            data.data.status === "FAILED" ||
-            data.data.status === "COMPLETED"
+            taskData.data.status === "IMAGES_READY" ||
+            taskData.data.status === "MODEL_READY" ||
+            taskData.data.status === "FAILED" ||
+            taskData.data.status === "COMPLETED"
           ) {
             clearInterval(interval);
+            setQueueStatus(null); // 清除队列状态
           }
         }
+
+        if (queueData.success) {
+          setQueueStatus(queueData.data);
+        }
       } catch (error) {
-        console.error("Failed to poll task status:", error);
+        console.error("Failed to poll status:", error);
       }
     }, 1000); // 每秒轮询一次
 
@@ -172,6 +194,17 @@ function WorkspaceContent() {
 
   return (
     <>
+      {/* 队列状态显示(悬浮在顶部) */}
+      {queueStatus && (
+        <div className="fixed left-1/2 top-20 z-50 -translate-x-1/2 animate-[fade-in-up_0.3s_ease-out]">
+          <QueueStatus
+            pending={queueStatus.pending}
+            running={queueStatus.running}
+            maxConcurrent={queueStatus.maxConcurrent}
+          />
+        </div>
+      )}
+
       {/* 左侧:输入与生成区域 */}
       <div className="flex w-full flex-col gap-4 overflow-hidden lg:w-2/5">
         <ImageGrid

@@ -177,6 +177,16 @@ export default function ImageGrid({
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
             <p className="text-sm">等待生成图片...</p>
           </div>
+        ) : task?.status === "PENDING" ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <div className="h-12 w-12 animate-pulse rounded-full border-3 border-yellow-1/30 border-t-yellow-1 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-white">任务在队列中</p>
+              <p className="mt-1 text-xs text-white/60">
+                正在等待处理,请稍候...
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* 图片容器 - 修复尺寸问题 */}
