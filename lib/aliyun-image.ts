@@ -3,6 +3,24 @@
  * 文档: https://help.aliyun.com/zh/model-studio/qwen-image-api
  */
 
+// ============================================
+// 自定义错误类
+// ============================================
+
+/**
+ * 阿里云API错误类
+ * 携带HTTP状态码，便于精确的错误处理
+ */
+export class AliyunAPIError extends Error {
+  constructor(
+    public statusCode: number, // HTTP状态码
+    message: string, // 错误描述
+  ) {
+    super(message);
+    this.name = "AliyunAPIError";
+  }
+}
+
 // 是否启用mock模式（开发阶段使用假数据）
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
@@ -134,7 +152,10 @@ export async function generateImages(
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
+
+        // 抛出携带状态码的自定义错误
+        throw new AliyunAPIError(
+          response.status,
           `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
         );
       }
@@ -154,7 +175,7 @@ export async function generateImages(
 
       // 提取图片URL
       const choice = data.output.choices[0];
-      if (choice && choice.message && choice.message.content) {
+      if (choice?.message?.content) {
         const imageContent = choice.message.content.find((c) => c.image);
         if (imageContent?.image) {
           allImages.push(imageContent.image);
@@ -244,7 +265,10 @@ export async function* generateImageStream(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(
+
+      // 抛出携带状态码的自定义错误
+      throw new AliyunAPIError(
+        response.status,
         `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
       );
     }
@@ -258,7 +282,7 @@ export async function* generateImageStream(
     }
 
     const choice = data.output.choices[0];
-    if (choice && choice.message && choice.message.content) {
+    if (choice?.message?.content) {
       const imageContent = choice.message.content.find((c) => c.image);
       if (imageContent?.image) {
         // 立即yield返回这张图片的URL

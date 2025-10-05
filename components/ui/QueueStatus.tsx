@@ -54,7 +54,8 @@ export default function QueueStatus({
 
           <div className="mt-1 flex items-center gap-3 text-xs text-white/60">
             <span>
-              运行中: <span className="text-white">{running}</span>/{maxConcurrent}
+              运行中: <span className="text-white">{running}</span>/
+              {maxConcurrent}
             </span>
             {pending > 0 && (
               <span>
@@ -67,7 +68,9 @@ export default function QueueStatus({
         {/* 进度条 */}
         {pending > 0 && (
           <div className="text-xs text-white/60">
-            前面还有 <span className="text-yellow-1 font-semibold">{pending}</span> 个任务
+            前面还有{" "}
+            <span className="text-yellow-1 font-semibold">{pending}</span>{" "}
+            个任务
           </div>
         )}
       </div>

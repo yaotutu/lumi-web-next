@@ -38,13 +38,17 @@ async function testWorkspaceIntegration() {
     let currentTask = createResult.data;
 
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const loadResponse = await fetch(`${WORKSPACE_API_BASE}/api/tasks/${taskId}`);
+      const loadResponse = await fetch(
+        `${WORKSPACE_API_BASE}/api/tasks/${taskId}`,
+      );
       const loadResult = await loadResponse.json();
       currentTask = loadResult.data;
 
-      console.log(`   [${attempts + 1}/${maxAttempts}] 状态: ${currentTask.status}, 图片数: ${currentTask.images.length}`);
+      console.log(
+        `   [${attempts + 1}/${maxAttempts}] 状态: ${currentTask.status}, 图片数: ${currentTask.images.length}`,
+      );
 
       if (currentTask.status === "IMAGES_READY") {
         console.log("✅ 图片生成完成!");
@@ -79,13 +83,16 @@ async function testWorkspaceIntegration() {
     // 步骤 4: 选择图片（模拟用户点击选择）
     // ========================================
     console.log("\n👆 步骤 4: 选择第 2 张图片");
-    const selectResponse = await fetch(`${WORKSPACE_API_BASE}/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        selectedImageIndex: 1, // 选择索引 1
-      }),
-    });
+    const selectResponse = await fetch(
+      `${WORKSPACE_API_BASE}/api/tasks/${taskId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedImageIndex: 1, // 选择索引 1
+        }),
+      },
+    );
 
     const selectResult = await selectResponse.json();
     console.log("✅ 图片选择已保存");
@@ -95,7 +102,9 @@ async function testWorkspaceIntegration() {
     // 步骤 5: 验证完整流程
     // ========================================
     console.log("\n🔍 步骤 5: 最终验证");
-    const finalResponse = await fetch(`${WORKSPACE_API_BASE}/api/tasks/${taskId}`);
+    const finalResponse = await fetch(
+      `${WORKSPACE_API_BASE}/api/tasks/${taskId}`,
+    );
     const finalResult = await finalResponse.json();
 
     console.log("✅ 最终任务状态:");

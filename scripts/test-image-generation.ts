@@ -5,7 +5,9 @@ async function testImageGeneration() {
 
   try {
     // 1. 创建任务(后台自动触发图片生成)
-    console.log("Step 1: Creating task (will auto-trigger image generation)...");
+    console.log(
+      "Step 1: Creating task (will auto-trigger image generation)...",
+    );
     const taskRes = await fetch(`${IMAGE_GEN_API_BASE}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -23,12 +25,14 @@ async function testImageGeneration() {
     const maxAttempts = 30;
 
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const checkRes = await fetch(`${IMAGE_GEN_API_BASE}/tasks/${taskId}`);
       const checkData = await checkRes.json();
 
-      console.log(`  [${attempts + 1}/${maxAttempts}] Status: ${checkData.data.status}, Images: ${checkData.data.images.length}`);
+      console.log(
+        `  [${attempts + 1}/${maxAttempts}] Status: ${checkData.data.status}, Images: ${checkData.data.images.length}`,
+      );
 
       if (checkData.data.status === "IMAGES_READY") {
         console.log("\n✅ Images generation completed!");

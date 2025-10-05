@@ -91,9 +91,12 @@ async function testHistory() {
     console.log("\n🗑️  步骤 5: 测试删除任务");
 
     // 删除第三个任务
-    const deleteResponse = await fetch(`${HISTORY_API_BASE}/api/tasks/${taskIds[2]}`, {
-      method: "DELETE",
-    });
+    const deleteResponse = await fetch(
+      `${HISTORY_API_BASE}/api/tasks/${taskIds[2]}`,
+      {
+        method: "DELETE",
+      },
+    );
 
     if (deleteResponse.ok) {
       console.log("✅ 任务删除成功");

@@ -7,9 +7,9 @@
  * - 错误隔离(单个任务失败不影响其他任务)
  */
 
-import { prisma } from "./prisma";
-import { generateImageStream } from "./aliyun-image";
+import { AliyunAPIError, generateImageStream } from "./aliyun-image";
 import { IMAGE_GENERATION } from "./constants";
+import { prisma } from "./prisma";
 
 // ============================================
 // 队列配置
@@ -152,10 +152,7 @@ class TaskQueueManager {
 
         // 启动任务(不等待,允许并发执行)
         this.runTask(task).catch((error) => {
-          console.error(
-            `[TaskQueue] ❌ 任务执行器异常: ${task.id}`,
-            error,
-          );
+          console.error(`[TaskQueue] ❌ 任务执行器异常: ${task.id}`, error);
         });
       }
     } finally {
@@ -191,11 +188,7 @@ class TaskQueueManager {
       const timeoutPromise = new Promise<never>((_, reject) => {
         const timeoutId = setTimeout(() => {
           task.abortController?.abort();
-          reject(
-            new Error(
-              `任务超时 (${QUEUE_CONFIG.TASK_TIMEOUT / 1000}秒)`,
-            ),
-          );
+          reject(new Error(`任务超时 (${QUEUE_CONFIG.TASK_TIMEOUT / 1000}秒)`));
         }, QUEUE_CONFIG.TASK_TIMEOUT);
 
         // 任务中止时清除超时定时器
@@ -220,7 +213,7 @@ class TaskQueueManager {
         },
       });
 
-      const duration = task.completedAt.getTime() - task.startedAt!.getTime();
+      const duration = task.completedAt.getTime() - task.startedAt?.getTime();
       console.log(
         `[TaskQueue] ✅ 任务完成: ${task.id} | 耗时: ${(duration / 1000).toFixed(1)}秒`,
       );
@@ -240,9 +233,20 @@ class TaskQueueManager {
         task.retries++;
         task.status = "pending";
 
-        // 计算重试延迟(指数退避: 2秒 → 4秒 → 8秒)
-        const retryDelay =
-          QUEUE_CONFIG.RETRY_DELAY_BASE * Math.pow(2, task.retries - 1);
+        // 计算重试延迟
+        let retryDelay: number;
+
+        // 如果是429限流错误，使用更长的重试延迟
+        if (error instanceof AliyunAPIError && error.statusCode === 429) {
+          // 429限流使用激进的指数退避: 30秒 → 60秒 → 120秒
+          retryDelay = 30000 * 2 ** (task.retries - 1);
+          console.log(
+            `[TaskQueue] 🚦 检测到429限流，延迟 ${retryDelay / 1000}秒后重试`,
+          );
+        } else {
+          // 普通错误使用标准指数退避: 2秒 → 4秒 → 8秒
+          retryDelay = QUEUE_CONFIG.RETRY_DELAY_BASE * 2 ** (task.retries - 1);
+        }
 
         console.log(
           `[TaskQueue] 🔄 任务将在 ${retryDelay / 1000}秒后重试: ${task.id} (${task.retries}/${QUEUE_CONFIG.MAX_RETRIES})`,
@@ -270,10 +274,7 @@ class TaskQueueManager {
             },
           })
           .catch((err) => {
-            console.error(
-              `[TaskQueue] ⚠️  更新任务状态失败:`,
-              err,
-            );
+            console.error(`[TaskQueue] ⚠️  更新任务状态失败:`, err);
           });
 
         console.error(
@@ -342,31 +343,48 @@ class TaskQueueManager {
   /**
    * 判断错误是否应该重试
    */
-  private shouldRetry(task: QueueTask, error: unknown): boolean {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+  private shouldRetry(_task: QueueTask, error: unknown): boolean {
+    // 如果是阿里云API错误，根据HTTP状态码精确判断
+    if (error instanceof AliyunAPIError) {
+      const { statusCode } = error;
 
-    // 不可重试的错误
-    const nonRetryableErrors = [
-      "API密钥错误",
-      "401", // 未授权
-      "403", // 禁止访问
-      "400", // 错误请求(如prompt违规)
-      "余额不足",
-      "任务已取消",
-    ];
+      // 不可重试的HTTP状态码
+      const nonRetryableStatusCodes = [
+        400, // Bad Request - 请求参数错误（如prompt违规、格式错误）
+        401, // Unauthorized - 认证失败（API密钥错误）
+        403, // Forbidden - 权限不足或余额不足
+        404, // Not Found - 资源不存在
+      ];
 
-    // 检查是否包含不可重试的错误
-    for (const nonRetryable of nonRetryableErrors) {
-      if (errorMessage.includes(nonRetryable)) {
-        console.log(
-          `[TaskQueue] ⛔ 不可重试错误: ${errorMessage}`,
-        );
+      if (nonRetryableStatusCodes.includes(statusCode)) {
+        console.log(`[TaskQueue] ⛔ 不可重试的HTTP错误: ${statusCode}`);
+        return false;
+      }
+
+      // 可重试的状态码
+      // 429 - Too Many Requests (限流)
+      // 500 - Internal Server Error (服务器临时错误)
+      // 502 - Bad Gateway (网关错误)
+      // 503 - Service Unavailable (服务暂时不可用)
+      // 504 - Gateway Timeout (网关超时)
+      console.log(`[TaskQueue] ✅ 可重试的HTTP错误: ${statusCode}`);
+      return true;
+    }
+
+    // 非API错误，根据错误消息判断
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // 不可重试的特殊错误消息
+    const nonRetryableMessages = ["任务已取消", "API密钥错误", "余额不足"];
+
+    for (const msg of nonRetryableMessages) {
+      if (errorMessage.includes(msg)) {
+        console.log(`[TaskQueue] ⛔ 不可重试错误: ${errorMessage}`);
         return false;
       }
     }
 
-    // 可重试的错误(网络问题、临时服务错误等)
+    // 默认可重试（网络问题、临时错误等）
     return true;
   }
 
@@ -414,9 +432,7 @@ class TaskQueueManager {
     const queueIndex = this.queue.findIndex((t) => t.taskId === taskId);
     if (queueIndex !== -1) {
       const removed = this.queue.splice(queueIndex, 1)[0];
-      console.log(
-        `[TaskQueue] ❌ 任务已从队列中移除: ${removed.id}`,
-      );
+      console.log(`[TaskQueue] ❌ 任务已从队列中移除: ${removed.id}`);
       return true;
     }
 
@@ -429,9 +445,7 @@ class TaskQueueManager {
       }
     }
 
-    console.warn(
-      `[TaskQueue] ⚠️  未找到可取消的任务: ${taskId}`,
-    );
+    console.warn(`[TaskQueue] ⚠️  未找到可取消的任务: ${taskId}`);
     return false;
   }
 
