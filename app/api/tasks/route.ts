@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { MOCK_USER } from "@/lib/constants";
+import { MOCK_USER, IMAGE_GENERATION } from "@/lib/constants";
 import { TaskStatus } from "@prisma/client";
+import { generateImageStream } from "@/lib/aliyun-image";
 
 /**
  * GET /api/tasks
@@ -45,8 +46,64 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * 后台异步生成图片任务
+ */
+async function generateImagesInBackground(taskId: string, prompt: string) {
+  try {
+    // 更新任务状态为生成中
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "GENERATING_IMAGES",
+        imageGenerationStartedAt: new Date(),
+      },
+    });
+
+    let index = 0;
+
+    // 生成图片
+    for await (const imageUrl of generateImageStream(
+      prompt,
+      IMAGE_GENERATION.COUNT,
+    )) {
+      // 保存图片到数据库
+      await prisma.taskImage.create({
+        data: {
+          taskId,
+          url: imageUrl,
+          index,
+        },
+      });
+      index++;
+    }
+
+    // 更新任务状态为图片就绪
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "IMAGES_READY",
+        imageGenerationCompletedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Background image generation failed:", error);
+    // 更新任务状态为失败
+    await prisma.task
+      .update({
+        where: { id: taskId },
+        data: {
+          status: "FAILED",
+          failedAt: new Date(),
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+        },
+      })
+      .catch((err) => console.error("Failed to update task status:", err));
+  }
+}
+
+/**
  * POST /api/tasks
- * 创建新任务
+ * 创建新任务并立即触发图片生成
  */
 export async function POST(request: NextRequest) {
   try {
@@ -71,6 +128,9 @@ export async function POST(request: NextRequest) {
         model: true,
       },
     });
+
+    // 立即在后台触发图片生成(不阻塞响应)
+    generateImagesInBackground(task.id, prompt.trim());
 
     return NextResponse.json(
       {

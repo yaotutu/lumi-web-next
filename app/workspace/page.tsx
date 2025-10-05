@@ -81,6 +81,44 @@ function WorkspaceContent() {
     initializeTask();
   }, [taskId, prompt, router]);
 
+  // 轮询任务状态更新
+  useEffect(() => {
+    if (!task?.id) return;
+
+    // 只有在生成中的状态才需要轮询
+    const needsPolling =
+      task.status === "PENDING" ||
+      task.status === "GENERATING_IMAGES" ||
+      task.status === "GENERATING_MODEL";
+
+    if (!needsPolling) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/tasks/${task.id}`);
+        const data = await response.json();
+
+        if (data.success) {
+          setTask(data.data);
+
+          // 如果任务完成或失败，停止轮询
+          if (
+            data.data.status === "IMAGES_READY" ||
+            data.data.status === "MODEL_READY" ||
+            data.data.status === "FAILED" ||
+            data.data.status === "COMPLETED"
+          ) {
+            clearInterval(interval);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to poll task status:", error);
+      }
+    }, 1000); // 每秒轮询一次
+
+    return () => clearInterval(interval);
+  }, [task?.id, task?.status]);
+
   const handleGenerate3D = async (imageIndex: number) => {
     setSelectedImageIndex(imageIndex);
 

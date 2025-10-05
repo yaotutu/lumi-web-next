@@ -3,7 +3,7 @@
  * 验证任务列表加载和删除功能
  */
 
-const API_BASE = "http://localhost:3000";
+const HISTORY_API_BASE = "http://localhost:3000";
 
 async function testHistory() {
   console.log("🧪 开始测试历史记录功能\n");
@@ -19,7 +19,7 @@ async function testHistory() {
     const taskIds: string[] = [];
 
     for (const prompt of prompts) {
-      const response = await fetch(`${API_BASE}/api/tasks`, {
+      const response = await fetch(`${HISTORY_API_BASE}/api/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
@@ -31,30 +31,22 @@ async function testHistory() {
     }
 
     // ========================================
-    // 步骤 2: 为第一个任务生成图片
+    // 步骤 2: 等待第一个任务图片生成完成
     // ========================================
-    console.log("\n🎨 步骤 2: 为第一个任务生成图片");
+    console.log("\n🎨 步骤 2: 等待第一个任务图片生成完成");
+    console.log("⏳ 等待图片生成中...(后台自动执行)");
 
-    const genResponse = await fetch(`${API_BASE}/api/generate-images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: prompts[0],
-        count: 4,
-        stream: false,
-        taskId: taskIds[0],
-      }),
-    });
+    // 等待一段时间让后台任务完成
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    await genResponse.json();
-    console.log("✅ 图片生成完成");
+    console.log("✅ 图片生成应该已完成");
 
     // ========================================
     // 步骤 3: 获取任务列表
     // ========================================
     console.log("\n📋 步骤 3: 获取任务列表");
 
-    const listResponse = await fetch(`${API_BASE}/api/tasks`);
+    const listResponse = await fetch(`${HISTORY_API_BASE}/api/tasks`);
     const listResult = await listResponse.json();
 
     console.log(`✅ 获取到 ${listResult.data.length} 个任务`);
@@ -85,7 +77,7 @@ async function testHistory() {
     console.log("\n🔍 步骤 4: 测试任务筛选（只获取图片已就绪的任务）");
 
     const filterResponse = await fetch(
-      `${API_BASE}/api/tasks?status=IMAGES_READY`,
+      `${HISTORY_API_BASE}/api/tasks?status=IMAGES_READY`,
     );
     const filterResult = await filterResponse.json();
 
@@ -99,7 +91,7 @@ async function testHistory() {
     console.log("\n🗑️  步骤 5: 测试删除任务");
 
     // 删除第三个任务
-    const deleteResponse = await fetch(`${API_BASE}/api/tasks/${taskIds[2]}`, {
+    const deleteResponse = await fetch(`${HISTORY_API_BASE}/api/tasks/${taskIds[2]}`, {
       method: "DELETE",
     });
 
@@ -115,7 +107,7 @@ async function testHistory() {
     // ========================================
     console.log("\n🔄 步骤 6: 验证删除后的任务列表");
 
-    const afterDeleteResponse = await fetch(`${API_BASE}/api/tasks`);
+    const afterDeleteResponse = await fetch(`${HISTORY_API_BASE}/api/tasks`);
     const afterDeleteResult = await afterDeleteResponse.json();
 
     console.log(`✅ 当前任务数: ${afterDeleteResult.data.length}`);

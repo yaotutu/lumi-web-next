@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:3000/api";
+const TASK_API_BASE = "http://localhost:3000/api";
 
 async function testTaskAPI() {
   console.log("🧪 Testing Task Management API...\n");
@@ -8,7 +8,7 @@ async function testTaskAPI() {
   try {
     // 测试 1: 创建任务
     console.log("Test 1: Creating a task...");
-    const createRes = await fetch(`${API_BASE}/tasks`, {
+    const createRes = await fetch(`${TASK_API_BASE}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: "Test prompt for API testing" }),
@@ -20,13 +20,13 @@ async function testTaskAPI() {
 
     // 测试 2: 获取任务详情
     console.log("\nTest 2: Fetching task details...");
-    const getRes = await fetch(`${API_BASE}/tasks/${taskId}`);
+    const getRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}`);
     const getData = await getRes.json();
     console.log(`  ✅ Task fetched: ${getData.data.prompt}`);
 
     // 测试 3: 更新任务状态
     console.log("\nTest 3: Updating task status...");
-    const updateRes = await fetch(`${API_BASE}/tasks/${taskId}`, {
+    const updateRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "GENERATING_IMAGES" }),
@@ -37,7 +37,7 @@ async function testTaskAPI() {
     // 测试 4: 添加图片记录
     console.log("\nTest 4: Adding image records...");
     for (let i = 0; i < 4; i++) {
-      const imageRes = await fetch(`${API_BASE}/tasks/${taskId}/images`, {
+      const imageRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}/images`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -51,7 +51,7 @@ async function testTaskAPI() {
 
     // 测试 5: 创建模型记录
     console.log("\nTest 5: Creating model record...");
-    const modelRes = await fetch(`${API_BASE}/tasks/${taskId}/model`, {
+    const modelRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}/model`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Test Model" }),
@@ -61,13 +61,13 @@ async function testTaskAPI() {
 
     // 测试 6: 获取任务列表
     console.log("\nTest 6: Fetching task list...");
-    const listRes = await fetch(`${API_BASE}/tasks`);
+    const listRes = await fetch(`${TASK_API_BASE}/tasks`);
     const listData = await listRes.json();
     console.log(`  ✅ Tasks found: ${listData.count}`);
 
     // 测试 7: 删除任务
     console.log("\nTest 7: Deleting task...");
-    const deleteRes = await fetch(`${API_BASE}/tasks/${taskId}`, {
+    const deleteRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}`, {
       method: "DELETE",
     });
     const deleteData = await deleteRes.json();

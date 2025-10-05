@@ -54,7 +54,7 @@ export default function ImageGrid({
     }
   }, [task]);
 
-  // 流式接收图片 - 生成一张显示一张
+  // 重新生成图片 - 创建新任务
   const handleGenerate = useCallback(async () => {
     // 验证输入
     const trimmedText = inputText.trim();
@@ -75,7 +75,7 @@ export default function ImageGrid({
     setStatus("generating");
     setSelectedImage(null);
 
-    // 初始化4个图片槽位
+    // 初始化4个图片槽位为加载状态
     const slots: ImageSlot[] = Array.from(
       { length: IMAGE_GENERATION.COUNT },
       () => ({
@@ -86,84 +86,36 @@ export default function ImageGrid({
     setImageSlots(slots);
 
     try {
-      // 使用 EventSource 接收流式数据
-      const response = await fetch("/api/generate-images", {
+      // 创建新任务，后端会自动触发图片生成
+      const response = await fetch("/api/tasks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           prompt: trimmedText,
-          count: IMAGE_GENERATION.COUNT,
-          stream: true,
-          taskId: taskId, // 传递 taskId 到 API
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "图片生成失败");
+        throw new Error(errorData.error || "创建任务失败");
       }
 
-      // 处理流式响应
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      const data = await response.json();
 
-      if (!reader) {
-        throw new Error("无法读取响应流");
+      if (!data.success) {
+        throw new Error(data.error || "创建任务失败");
       }
 
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const jsonStr = line.slice(6);
-            try {
-              const data = JSON.parse(jsonStr);
-
-              if (data.type === "image") {
-                // 更新对应索引的图片槽位
-                setImageSlots((prev) => {
-                  const newSlots = [...prev];
-                  newSlots[data.index] = {
-                    url: data.url,
-                    status: "completed",
-                  };
-                  return newSlots;
-                });
-              } else if (data.type === "done") {
-                setStatus("completed");
-              } else if (data.type === "error") {
-                throw new Error(data.message);
-              }
-            } catch (parseError) {
-              console.error("解析SSE数据失败:", parseError);
-            }
-          }
-        }
-      }
+      // 任务创建成功，导航到新任务页面(轮询逻辑会自动更新任务状态)
+      window.location.href = `/workspace?taskId=${data.data.id}`;
     } catch (err) {
-      console.error("生成图片失败:", err);
-      setError(err instanceof Error ? err.message : "图片生成失败,请重试");
+      console.error("创建任务失败:", err);
+      setError(err instanceof Error ? err.message : "创建任务失败,请重试");
       setStatus("failed");
     }
   }, [inputText]);
-
-  // 如果有初始prompt且任务没有图片,自动生成图片
-  useEffect(() => {
-    if (initialPrompt && (!task || task.images.length === 0)) {
-      handleGenerate();
-    }
-  }, [initialPrompt, task]);
 
   const handleGenerate3D = () => {
     if (selectedImage === null) {

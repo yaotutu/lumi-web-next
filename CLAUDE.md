@@ -245,3 +245,8 @@ handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
 - **自动整理 imports**
 - **启用推荐规则集**
 - 提交前运行 `npm run format`
+
+
+## 重要提示
+- 每一行代码必须有注释，解释代码的作用和目的。
+- 代码注释必须使用中文。
