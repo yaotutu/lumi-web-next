@@ -14,19 +14,9 @@ export async function POST(
     const { id } = await params;
 
     // 尝试从队列中取消任务
-    const cancelled = taskQueue.cancelTask(id);
+    const cancelled = await taskQueue.cancelTask(id);
 
     if (cancelled) {
-      // 更新数据库任务状态
-      await prisma.task.update({
-        where: { id },
-        data: {
-          status: "CANCELLED",
-          failedAt: new Date(),
-          errorMessage: "Task cancelled by user",
-        },
-      });
-
       return NextResponse.json({
         success: true,
         message: "Task cancelled successfully",
