@@ -11,6 +11,7 @@ import type {
   AddImageInput,
   CreateModelInput,
 } from "@/lib/validators/task-validators";
+import { Prisma } from "@prisma/client";
 
 /**
  * 添加图片记录到任务
@@ -18,6 +19,7 @@ import type {
  * @param imageData 图片数据（已验证）
  * @returns 创建的图片记录
  * @throws AppError NOT_FOUND - 任务不存在
+ * @throws AppError INVALID_STATE - 图片记录已存在
  */
 export async function addImageToTask(
   taskId: string,
@@ -34,18 +36,33 @@ export async function addImageToTask(
     throw new AppError("NOT_FOUND", `任务不存在: ${taskId}`);
   }
 
-  // 创建图片记录
-  const image = await prisma.taskImage.create({
-    data: {
-      taskId,
-      url: imageData.url,
-      index: imageData.index,
-      aliyunTaskId: imageData.aliyunTaskId,
-      aliyunRequestId: imageData.aliyunRequestId,
-    },
-  });
+  try {
+    // 创建图片记录
+    const image = await prisma.taskImage.create({
+      data: {
+        taskId,
+        url: imageData.url,
+        index: imageData.index,
+        aliyunTaskId: imageData.aliyunTaskId,
+        aliyunRequestId: imageData.aliyunRequestId,
+      },
+    });
 
-  return image;
+    return image;
+  } catch (error) {
+    // 检查是否是唯一约束违反错误
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        // 检查是否是 taskId + index 的唯一约束违反
+        const targetFields = error.meta?.target as string[] | undefined;
+        if (targetFields?.includes("taskId") && targetFields?.includes("index")) {
+          throw new AppError("INVALID_STATE", `任务 ${taskId} 的图片索引 ${imageData.index} 已存在`);
+        }
+      }
+    }
+    // 重新抛出其他错误
+    throw error;
+  }
 }
 
 /**

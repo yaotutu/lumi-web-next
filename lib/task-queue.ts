@@ -241,14 +241,14 @@ export async function addTask(taskId: string, prompt: string): Promise<void> {
   // 等待直到有空闲槽位
   while (runningCount >= CONFIG.MAX_CONCURRENT) {
     console.log(
-      `[Task] ⏸️  达到最大并发数 (${CONFIG.MAX_CONCURRENT})，等待空闲槽位...`,
+      `[Task] ⏸️  达到最大并发数，等待空闲槽位... (当前运行中: ${runningCount}, 最大并发: ${CONFIG.MAX_CONCURRENT})`,
     );
     await sleep(500); // 每500ms检查一次
   }
 
   runningCount++;
   console.log(
-    `[Task] 📥 任务加入处理队列: ${taskId} | 当前运行中: ${runningCount}/${CONFIG.MAX_CONCURRENT}`,
+    `[Task] 📥 任务加入处理队列: ${taskId} | 并发状态: ${runningCount}/${CONFIG.MAX_CONCURRENT} (运行中/最大)`,
   );
 
   try {
@@ -256,7 +256,7 @@ export async function addTask(taskId: string, prompt: string): Promise<void> {
   } finally {
     runningCount--;
     console.log(
-      `[Task] 📤 任务处理完成: ${taskId} | 当前运行中: ${runningCount}/${CONFIG.MAX_CONCURRENT}`,
+      `[Task] 📤 任务处理完成: ${taskId} | 并发状态: ${runningCount}/${CONFIG.MAX_CONCURRENT} (运行中/最大)`,
     );
   }
 }
