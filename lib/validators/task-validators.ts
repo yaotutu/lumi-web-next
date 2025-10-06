@@ -52,7 +52,7 @@ export const listTasksQuerySchema = z.object({
     .or(z.number())
     .transform((val) => {
       const num = typeof val === "string" ? parseInt(val, 10) : val;
-      return isNaN(num) ? 10 : Math.min(Math.max(num, 1), 100);
+      return Number.isNaN(num) ? 10 : Math.min(Math.max(num, 1), 100);
     })
     .optional(),
   offset: z
@@ -60,7 +60,7 @@ export const listTasksQuerySchema = z.object({
     .or(z.number())
     .transform((val) => {
       const num = typeof val === "string" ? parseInt(val, 10) : val;
-      return isNaN(num) ? 0 : Math.max(num, 0);
+      return Number.isNaN(num) ? 0 : Math.max(num, 0);
     })
     .optional(),
 });
@@ -69,9 +69,7 @@ export const listTasksQuerySchema = z.object({
  * 添加图片记录请求验证器
  */
 export const addImageSchema = z.object({
-  url: z
-    .string()
-    .url({ message: "图片URL格式不正确" }),
+  url: z.string().url({ message: "图片URL格式不正确" }),
   index: z
     .number()
     .min(0, { message: "图片索引不能小于0" })
@@ -90,9 +88,25 @@ export const createModelSchema = z.object({
     .max(100, { message: "模型名称长度不能超过100个字符" }),
 });
 
+/**
+ * 更新模型记录请求验证器
+ * 用于更新3D模型的状态、进度、URL等信息
+ */
+export const updateModelSchema = z.object({
+  status: z.enum(["PENDING", "GENERATING", "COMPLETED", "FAILED"]).optional(),
+  progress: z
+    .number()
+    .min(0, { message: "进度不能小于0" })
+    .max(100, { message: "进度不能大于100" })
+    .optional(),
+  url: z.string().url({ message: "模型URL格式不正确" }).optional(),
+  errorMessage: z.string().optional(),
+});
+
 // 导出类型
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
 export type AddImageInput = z.infer<typeof addImageSchema>;
 export type CreateModelInput = z.infer<typeof createModelSchema>;
+export type UpdateModelInput = z.infer<typeof updateModelSchema>;

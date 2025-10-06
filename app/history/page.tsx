@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import type { TaskWithDetails } from "@/types";
 
@@ -9,10 +9,6 @@ export default function HistoryPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
 
   const fetchTasks = async () => {
     try {
@@ -28,6 +24,10 @@ export default function HistoryPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("确定要删除这个任务吗？")) return;

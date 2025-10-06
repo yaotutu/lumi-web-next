@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-
-import GalleryCard from "./GalleryCard";
 import type { GalleryCardProps } from "./GalleryCard";
+import GalleryCard from "./GalleryCard";
 
 type Collection = {
   name: string;

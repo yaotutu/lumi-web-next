@@ -2,9 +2,10 @@
  * Queue Service 测试脚本
  * 测试目标：验证队列管理功能和错误处理
  */
+
+import { MOCK_USER } from "../lib/constants";
 import * as QueueService from "../lib/services/queue-service";
 import * as TaskService from "../lib/services/task-service";
-import { MOCK_USER } from "../lib/constants";
 
 console.log("🧪 测试 Queue Service\n");
 
@@ -81,7 +82,10 @@ async function runTests() {
 
     // 尝试从队列取消
     const cancelled = await QueueService.dequeueTask(task4.id);
-    console.log("  ✅ 取消结果:", cancelled ? "成功" : "失败（任务可能已开始处理）");
+    console.log(
+      "  ✅ 取消结果:",
+      cancelled ? "成功" : "失败（任务可能已开始处理）",
+    );
 
     // ============================================
     // 测试6: 取消不存在的任务
@@ -139,7 +143,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (error) {
+      } catch (_error) {
         // 忽略删除错误（任务可能不存在）
       }
     }
@@ -157,7 +161,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (e) {
+      } catch (_e) {
         // 忽略清理错误
       }
     }

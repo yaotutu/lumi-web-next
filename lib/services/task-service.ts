@@ -3,11 +3,11 @@
  * 职责：任务的CRUD操作、状态管理、业务逻辑验证
  * 原则：函数式编程，纯函数优先，使用统一错误处理
  */
+
+import type { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { LocalStorage } from "@/lib/providers/storage";
 import { AppError } from "@/lib/utils/errors";
-import { TaskStatus } from "@prisma/client";
-import { IMAGE_GENERATION } from "@/lib/constants";
 // Service层不再进行Zod验证，验证在API路由层完成
 
 /**
@@ -130,7 +130,10 @@ export async function updateTask(
 
   // 参数已在外层API路由验证，但为了服务层的独立性，我们也进行基本验证
   // 验证选中图片索引范围（如果提供了该字段）
-  if (data.selectedImageIndex !== undefined && (data.selectedImageIndex < 0 || data.selectedImageIndex > 3)) {
+  if (
+    data.selectedImageIndex !== undefined &&
+    (data.selectedImageIndex < 0 || data.selectedImageIndex > 3)
+  ) {
     throw new AppError("VALIDATION_ERROR", "选中图片索引必须在0-3之间");
   }
 
@@ -180,11 +183,10 @@ export async function cancelTask(taskId: string) {
   // 验证状态：只能取消进行中的任务
   const cancellableStatuses: TaskStatus[] = ["PENDING", "GENERATING_IMAGES"];
   if (!cancellableStatuses.includes(task.status)) {
-    throw new AppError(
-      "INVALID_STATE",
-      `任务状态不允许取消: ${task.status}`,
-      { currentStatus: task.status, allowedStatuses: cancellableStatuses },
-    );
+    throw new AppError("INVALID_STATE", `任务状态不允许取消: ${task.status}`, {
+      currentStatus: task.status,
+      allowedStatuses: cancellableStatuses,
+    });
   }
 
   // 更新任务状态为失败，并记录取消原因

@@ -2,14 +2,15 @@
  * Zod验证测试脚本
  * 验证请求验证器是否正常工作
  */
+
+import { ZodError } from "zod";
 import {
-  createTaskSchema,
-  updateTaskSchema,
-  listTasksQuerySchema,
   addImageSchema,
   createModelSchema,
+  createTaskSchema,
+  listTasksQuerySchema,
+  updateTaskSchema,
 } from "@/lib/validators/task-validators";
-import { ZodError } from "zod";
 
 function runTest(name: string, testFn: () => void) {
   try {
@@ -93,7 +94,7 @@ runTest("任务列表查询验证 - 限制值转换", () => {
 runTest("添加图片验证 - 正常情况", () => {
   addImageSchema.parse({
     url: "https://example.com/image.png",
-    index: 1
+    index: 1,
   });
 });
 

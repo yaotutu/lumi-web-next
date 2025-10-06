@@ -1,6 +1,5 @@
-import fs from "fs";
-import path from "path";
-import { STORAGE_PATHS } from "@/lib/constants";
+import fs from "node:fs";
+import path from "node:path";
 
 const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
 
@@ -124,7 +123,7 @@ export class LocalStorage {
     try {
       const filepath = path.join(process.cwd(), "public", url);
       return fs.existsSync(filepath);
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -139,7 +138,7 @@ export class LocalStorage {
     // 创建一个简单的 1x1 PNG (透明像素)
     const mockImageBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-    return this.saveTaskImage(taskId, index, mockImageBase64);
+    return LocalStorage.saveTaskImage(taskId, index, mockImageBase64);
   }
 
   /**
@@ -163,6 +162,6 @@ export class LocalStorage {
       0x00,
       0x00, // length (placeholder)
     ]);
-    return this.saveTaskModel(taskId, mockModelBuffer, "glb");
+    return LocalStorage.saveTaskModel(taskId, mockModelBuffer, "glb");
   }
 }

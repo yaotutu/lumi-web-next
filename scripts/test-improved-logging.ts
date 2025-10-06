@@ -14,11 +14,10 @@ async function testImprovedLogging() {
 
     // 等待一段时间让任务处理完成
     console.log("\n等待任务处理完成...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     console.log("\n✅ 日志格式改进测试完成！");
     console.log("请查看开发服务器控制台输出，确认日志格式是否更清晰易懂。");
-
   } catch (error) {
     console.error("❌ 测试失败:", error);
   }

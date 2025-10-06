@@ -3,13 +3,14 @@
  * 职责：任务队列的添加、取消、状态查询
  * 原则：封装底层队列实现细节，提供统一的业务接口
  */
+
+import { prisma } from "@/lib/db/prisma";
 import {
   addTask,
   cancelTask as cancelQueueTask,
   getQueueStatus,
 } from "@/lib/task-queue";
 import { AppError } from "@/lib/utils/errors";
-import { prisma } from "@/lib/db/prisma";
 
 /**
  * 队列状态类型

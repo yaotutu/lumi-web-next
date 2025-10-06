@@ -3,9 +3,9 @@
  * 使用真实的阿里云API密钥测试队列功能
  */
 import * as dotenv from "dotenv";
+import { MOCK_USER } from "../lib/constants";
 import * as QueueService from "../lib/services/queue-service";
 import * as TaskService from "../lib/services/task-service";
-import { MOCK_USER } from "../lib/constants";
 
 // 直接加载环境变量
 dotenv.config({ path: ".env.local" });
@@ -18,8 +18,14 @@ async function runTests() {
   try {
     console.log("环境变量设置:");
     console.log("- NEXT_PUBLIC_MOCK_MODE:", process.env.NEXT_PUBLIC_MOCK_MODE);
-    console.log("- ALIYUN_IMAGE_API_KEY:", process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置");
-    console.log("- API密钥长度:", process.env.ALIYUN_IMAGE_API_KEY?.length || 0);
+    console.log(
+      "- ALIYUN_IMAGE_API_KEY:",
+      process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置",
+    );
+    console.log(
+      "- API密钥长度:",
+      process.env.ALIYUN_IMAGE_API_KEY?.length || 0,
+    );
     console.log();
 
     // 验证API密钥是否存在
@@ -43,7 +49,10 @@ async function runTests() {
     // 测试2: 添加任务到队列 - 正常流程
     // ============================================
     console.log("\n测试2: 添加任务到队列 - 正常流程");
-    const task1 = await TaskService.createTask(MOCK_USER.id, "一只可爱的小猫在花园里玩耍");
+    const task1 = await TaskService.createTask(
+      MOCK_USER.id,
+      "一只可爱的小猫在花园里玩耍",
+    );
     createdTaskIds.push(task1.id);
 
     await QueueService.enqueueTask(task1.id, task1.prompt);
@@ -77,7 +86,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (error) {
+      } catch (_error) {
         // 忽略删除错误（任务可能不存在）
       }
     }
@@ -95,7 +104,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (e) {
+      } catch (_e) {
         // 忽略清理错误
       }
     }

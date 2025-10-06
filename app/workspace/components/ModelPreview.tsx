@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MODEL_GENERATION } from "@/lib/constants";
-import GenerationProgress from "./GenerationProgress";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
+import GenerationProgress from "./GenerationProgress";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
@@ -22,10 +22,34 @@ export default function ModelPreview({
   const [progress, setProgress] = useState(0);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const startModelGeneration = useCallback(() => {
+    setStatus("generating");
+    setProgress(0);
+
+    // 模拟进度更新
+    progressIntervalRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 95) {
+          return prev;
+        }
+        return prev + Math.random() * 5;
+      });
+    }, MODEL_GENERATION.PROGRESS_INTERVAL);
+
+    // 模拟生成完成
+    setTimeout(() => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      setProgress(100);
+      setStatus("completed");
+    }, MODEL_GENERATION.DELAY);
+  }, []);
+
   // 当选择图片并触发生成时，或者任务状态改变时
   useEffect(() => {
     // 如果任务已完成模型生成
-    if (task?.status === "MODEL_READY" || task?.status === "COMPLETED") {
+    if (task?.status === "COMPLETED") {
       setStatus("completed");
       setProgress(100);
       // 清理定时器
@@ -53,31 +77,7 @@ export default function ModelPreview({
         clearInterval(progressIntervalRef.current);
       }
     };
-  }, [imageIndex, prompt, task?.status]);
-
-  const startModelGeneration = () => {
-    setStatus("generating");
-    setProgress(0);
-
-    // 模拟进度更新
-    progressIntervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) {
-          return prev;
-        }
-        return prev + Math.random() * 5;
-      });
-    }, MODEL_GENERATION.PROGRESS_INTERVAL);
-
-    // 模拟生成完成
-    setTimeout(() => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      setProgress(100);
-      setStatus("completed");
-    }, MODEL_GENERATION.DELAY);
-  };
+  }, [imageIndex, prompt, task?.status, startModelGeneration, status]);
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">

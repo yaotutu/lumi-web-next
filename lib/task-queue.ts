@@ -6,9 +6,12 @@
  * 3. 状态完全存储在数据库中
  */
 
-import { AliyunAPIError, generateImageStream } from "@/lib/providers/aliyun-image";
 import { IMAGE_GENERATION } from "@/lib/constants";
 import { prisma } from "@/lib/db/prisma";
+import {
+  AliyunAPIError,
+  generateImageStream,
+} from "@/lib/providers/aliyun-image";
 
 // ============================================
 // 配置

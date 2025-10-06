@@ -1,5 +1,5 @@
-import { listTasksQuerySchema } from "@/lib/validators/task-validators";
 import { ZodError } from "zod";
+import { listTasksQuerySchema } from "@/lib/validators/task-validators";
 
 function debugAPIRoute() {
   console.log("🔍 调试API路由参数处理...\n");
@@ -37,7 +37,6 @@ function debugAPIRoute() {
     console.log("查询参数:", queryParams3);
     const result3 = listTasksQuerySchema.parse(queryParams3);
     console.log("验证结果:", result3);
-
   } catch (error) {
     if (error instanceof ZodError) {
       console.log("验证失败:", error.issues);

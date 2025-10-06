@@ -210,7 +210,7 @@ async function runTests() {
       try {
         await TaskService.deleteTask(testTaskId);
         console.log("已清理测试任务:", testTaskId);
-      } catch (e) {
+      } catch (_e) {
         // 忽略清理错误
       }
     }

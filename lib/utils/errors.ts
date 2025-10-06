@@ -3,6 +3,7 @@
  * 功能：将业务错误转换为标准HTTP响应
  */
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { AliyunAPIError } from "@/lib/providers/aliyun-image";
 
 /**
@@ -66,7 +67,20 @@ const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
  * @returns NextResponse对象，包含统一的错误格式
  */
 export function toErrorResponse(error: unknown): NextResponse {
-  // 情况1: AppError - 应用层业务错误
+  // 情况1: ZodError - 输入验证错误（优先级最高）
+  if (error instanceof ZodError) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "输入验证失败",
+        code: "VALIDATION_ERROR",
+        details: error.issues, // Zod的详细错误信息
+      },
+      { status: 400 },
+    );
+  }
+
+  // 情况2: AppError - 应用层业务错误
   if (error instanceof AppError) {
     const status = ERROR_STATUS_MAP[error.code];
 
@@ -90,7 +104,7 @@ export function toErrorResponse(error: unknown): NextResponse {
     return NextResponse.json(responseBody, { status });
   }
 
-  // 情况2: AliyunAPIError - 阿里云API错误
+  // 情况3: AliyunAPIError - 阿里云API错误
   if (error instanceof AliyunAPIError) {
     // 429限流处理说明：
     // - 在task-queue.ts中已经实现了自动重试机制
@@ -112,7 +126,7 @@ export function toErrorResponse(error: unknown): NextResponse {
     );
   }
 
-  // 情况3: 未知错误（兜底处理）
+  // 情况4: 未知错误（兜底处理）
   console.error("未处理的错误:", error);
   return NextResponse.json(
     {
@@ -128,16 +142,25 @@ export function toErrorResponse(error: unknown): NextResponse {
  * 高阶函数：包装异步路由处理函数，自动捕获并处理错误
  * 使用方式: export const GET = withErrorHandler(async (req) => { ... });
  *
+ * 功能：
+ * - 自动捕获路由处理函数中的所有错误
+ * - 自动处理ZodError（返回400+详细验证错误）
+ * - 自动处理AppError（返回对应状态码+业务错误）
+ * - 自动处理AliyunAPIError（返回500+外部API错误）
+ * - 兜底处理未知错误（返回500+通用错误）
+ *
  * @param handler 原始路由处理函数
  * @returns 包装后的处理函数，自动捕获错误并转换为HTTP响应
  */
-export function withErrorHandler<T extends (...args: any[]) => Promise<NextResponse>>(
-  handler: T,
-): T {
+export function withErrorHandler<
+  T extends (...args: any[]) => Promise<NextResponse>,
+>(handler: T): T {
   return (async (...args: any[]) => {
     try {
       return await handler(...args);
     } catch (error) {
+      // 统一调用toErrorResponse处理所有类型的错误
+      // toErrorResponse内部会区分ZodError、AppError、AliyunAPIError等
       return toErrorResponse(error);
     }
   }) as T;

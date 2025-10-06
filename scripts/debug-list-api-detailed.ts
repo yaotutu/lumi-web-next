@@ -16,10 +16,14 @@ async function debugListAPIDetailed() {
 
     // 获取任务列表（带status参数）
     console.log("\nTest 3: 获取任务列表（带status参数）");
-    const listRes3 = await fetch("http://localhost:3001/api/tasks?status=PENDING");
+    const listRes3 = await fetch(
+      "http://localhost:3001/api/tasks?status=PENDING",
+    );
     const listData3 = await listRes3.json();
-    console.log("列表响应（带status参数）:", JSON.stringify(listData3, null, 2));
-
+    console.log(
+      "列表响应（带status参数）:",
+      JSON.stringify(listData3, null, 2),
+    );
   } catch (error) {
     console.error("❌ 调试失败:", error);
   }

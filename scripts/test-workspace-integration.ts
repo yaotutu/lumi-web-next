@@ -56,7 +56,7 @@ async function testWorkspaceIntegration() {
       }
 
       if (currentTask.status === "FAILED") {
-        throw new Error("任务失败: " + currentTask.errorMessage);
+        throw new Error(`任务失败: ${currentTask.errorMessage}`);
       }
 
       attempts++;

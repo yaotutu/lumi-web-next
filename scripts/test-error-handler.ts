@@ -2,8 +2,9 @@
  * 错误处理模块测试脚本
  * 测试目标：验证所有错误类型能正确转换为HTTP响应
  */
-import { AppError, toErrorResponse } from "../lib/utils/errors";
+
 import { AliyunAPIError } from "../lib/providers/aliyun-image";
+import { AppError, toErrorResponse } from "../lib/utils/errors";
 
 console.log("🧪 测试错误处理模块\n");
 
@@ -13,10 +14,7 @@ async function runTests() {
     // 测试1: AppError转换
     // ============================================
     console.log("测试1: AppError - VALIDATION_ERROR");
-    const validationError = new AppError(
-      "VALIDATION_ERROR",
-      "Prompt不能为空",
-    );
+    const validationError = new AppError("VALIDATION_ERROR", "Prompt不能为空");
     const response1 = toErrorResponse(validationError);
     const body1 = await response1.json();
 
@@ -36,11 +34,9 @@ async function runTests() {
     // 测试2: AppError带详情
     // ============================================
     console.log("测试2: AppError - NOT_FOUND (带详情)");
-    const notFoundError = new AppError(
-      "NOT_FOUND",
-      "任务不存在",
-      { taskId: "test-123" },
-    );
+    const notFoundError = new AppError("NOT_FOUND", "任务不存在", {
+      taskId: "test-123",
+    });
     const response2 = toErrorResponse(notFoundError);
     const body2 = await response2.json();
 

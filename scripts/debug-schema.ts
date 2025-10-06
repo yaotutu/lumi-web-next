@@ -1,5 +1,5 @@
-import { listTasksQuerySchema } from "@/lib/validators/task-validators";
 import { ZodError } from "zod";
+import { listTasksQuerySchema } from "@/lib/validators/task-validators";
 
 function debugSchema() {
   console.log("🔍 调试Zod Schema验证...\n");
@@ -22,9 +22,11 @@ function debugSchema() {
 
     // 测试组合参数
     console.log("\nTest 4: 组合参数");
-    const result4 = listTasksQuerySchema.parse({ status: "PENDING", limit: "10" });
+    const result4 = listTasksQuerySchema.parse({
+      status: "PENDING",
+      limit: "10",
+    });
     console.log("结果:", result4);
-
   } catch (error) {
     if (error instanceof ZodError) {
       console.log("验证失败:", error.issues);

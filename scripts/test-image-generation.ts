@@ -40,7 +40,7 @@ async function testImageGeneration() {
       }
 
       if (checkData.data.status === "FAILED") {
-        throw new Error("Task failed: " + checkData.data.errorMessage);
+        throw new Error(`Task failed: ${checkData.data.errorMessage}`);
       }
 
       attempts++;

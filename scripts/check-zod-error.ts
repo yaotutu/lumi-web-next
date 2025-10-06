@@ -14,8 +14,8 @@ try {
     }
 
     // 检查是否有issues属性
-    console.log("\n是否有issues属性:", 'issues' in error);
-    if ('issues' in error) {
+    console.log("\n是否有issues属性:", "issues" in error);
+    if ("issues" in error) {
       console.log("issues:", error.issues);
     }
 

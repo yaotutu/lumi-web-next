@@ -9,8 +9,14 @@ dotenv.config({ path: ".env.local" });
 console.log("🧪 测试阿里云API密钥\n");
 
 console.log("环境变量:");
-console.log("- ALIYUN_IMAGE_API_KEY:", process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置");
-console.log("- API_ENDPOINT:", process.env.ALIYUN_IMAGE_API_ENDPOINT || "使用默认值");
+console.log(
+  "- ALIYUN_IMAGE_API_KEY:",
+  process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置",
+);
+console.log(
+  "- API_ENDPOINT:",
+  process.env.ALIYUN_IMAGE_API_ENDPOINT || "使用默认值",
+);
 
 if (!process.env.ALIYUN_IMAGE_API_KEY) {
   console.error("❌ 错误: 未找到阿里云API密钥");

@@ -36,7 +36,6 @@ async function debugAPI() {
     await fetch(`http://localhost:3001/api/tasks/${taskId}`, {
       method: "DELETE",
     });
-
   } catch (error) {
     console.error("❌ 调试失败:", error);
   }

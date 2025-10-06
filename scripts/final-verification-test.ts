@@ -16,14 +16,17 @@ async function finalVerificationTest() {
     // 2. 添加几张不同的图片
     console.log("\n2. 添加不同的图片");
     for (let i = 0; i < 3; i++) {
-      const imageRes = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: `http://localhost:3001/generated/images/${taskId}/${i}.png`,
-          index: i,
-        }),
-      });
+      const imageRes = await fetch(
+        `http://localhost:3001/api/tasks/${taskId}/images`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: `http://localhost:3001/generated/images/${taskId}/${i}.png`,
+            index: i,
+          }),
+        },
+      );
       const imageData = await imageRes.json();
 
       if (imageData.success) {
@@ -35,14 +38,17 @@ async function finalVerificationTest() {
 
     // 3. 尝试添加重复索引的图片
     console.log("\n3. 尝试添加重复索引的图片");
-    const duplicateRes = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/${taskId}/1_duplicate.png`,
-        index: 1, // 重复索引
-      }),
-    });
+    const duplicateRes = await fetch(
+      `http://localhost:3001/api/tasks/${taskId}/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/${taskId}/1_duplicate.png`,
+          index: 1, // 重复索引
+        }),
+      },
+    );
     const duplicateData = await duplicateRes.json();
 
     if (!duplicateData.success && duplicateData.code === "INVALID_STATE") {
@@ -68,14 +74,17 @@ async function finalVerificationTest() {
 
     // 5. 尝试为不存在的任务添加图片
     console.log("\n5. 尝试为不存在的任务添加图片");
-    const invalidTaskRes = await fetch(`http://localhost:3001/api/tasks/invalid_task_id/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/invalid/0.png`,
-        index: 0,
-      }),
-    });
+    const invalidTaskRes = await fetch(
+      `http://localhost:3001/api/tasks/invalid_task_id/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/invalid/0.png`,
+          index: 0,
+        }),
+      },
+    );
     const invalidTaskData = await invalidTaskRes.json();
 
     if (!invalidTaskData.success && invalidTaskData.code === "NOT_FOUND") {
@@ -97,7 +106,6 @@ async function finalVerificationTest() {
     }
 
     console.log("\n🎉 所有测试完成！");
-
   } catch (error) {
     console.error("❌ 测试失败:", error);
   }

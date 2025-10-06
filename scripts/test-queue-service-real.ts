@@ -2,9 +2,10 @@
  * Queue Service 真实环境测试脚本
  * 使用真实的阿里云API密钥测试队列功能
  */
+
+import { MOCK_USER } from "../lib/constants";
 import * as QueueService from "../lib/services/queue-service";
 import * as TaskService from "../lib/services/task-service";
-import { MOCK_USER } from "../lib/constants";
 
 console.log("🧪 测试 Queue Service (真实环境)\n");
 
@@ -17,7 +18,10 @@ async function runTests() {
 
     console.log("环境变量设置:");
     console.log("- NEXT_PUBLIC_MOCK_MODE:", process.env.NEXT_PUBLIC_MOCK_MODE);
-    console.log("- ALIYUN_IMAGE_API_KEY:", process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置");
+    console.log(
+      "- ALIYUN_IMAGE_API_KEY:",
+      process.env.ALIYUN_IMAGE_API_KEY ? "已配置" : "未配置",
+    );
     console.log();
 
     // ============================================
@@ -31,7 +35,10 @@ async function runTests() {
     // 测试2: 添加任务到队列 - 正常流程
     // ============================================
     console.log("\n测试2: 添加任务到队列 - 正常流程");
-    const task1 = await TaskService.createTask(MOCK_USER.id, "一只可爱的小猫在花园里玩耍");
+    const task1 = await TaskService.createTask(
+      MOCK_USER.id,
+      "一只可爱的小猫在花园里玩耍",
+    );
     createdTaskIds.push(task1.id);
 
     await QueueService.enqueueTask(task1.id, task1.prompt);
@@ -62,8 +69,14 @@ async function runTests() {
     // 测试4: 批量添加任务
     // ============================================
     console.log("\n测试4: 批量添加任务到队列");
-    const task2 = await TaskService.createTask(MOCK_USER.id, "一个现代风格的客厅设计");
-    const task3 = await TaskService.createTask(MOCK_USER.id, "一只金毛犬在海边奔跑");
+    const task2 = await TaskService.createTask(
+      MOCK_USER.id,
+      "一个现代风格的客厅设计",
+    );
+    const task3 = await TaskService.createTask(
+      MOCK_USER.id,
+      "一只金毛犬在海边奔跑",
+    );
     createdTaskIds.push(task2.id, task3.id);
 
     await QueueService.enqueueTask(task2.id, task2.prompt);
@@ -84,8 +97,16 @@ async function runTests() {
     // 检查批量任务状态
     const task2AfterProcessing = await TaskService.getTaskById(task2.id);
     const task3AfterProcessing = await TaskService.getTaskById(task3.id);
-    console.log("  任务2状态:", task2AfterProcessing.status, `(${task2AfterProcessing.images.length}张图片)`);
-    console.log("  任务3状态:", task3AfterProcessing.status, `(${task3AfterProcessing.images.length}张图片)`);
+    console.log(
+      "  任务2状态:",
+      task2AfterProcessing.status,
+      `(${task2AfterProcessing.images.length}张图片)`,
+    );
+    console.log(
+      "  任务3状态:",
+      task3AfterProcessing.status,
+      `(${task3AfterProcessing.images.length}张图片)`,
+    );
 
     // ============================================
     // 测试6: 并发控制测试
@@ -95,7 +116,7 @@ async function runTests() {
     for (let i = 0; i < 5; i++) {
       const task = await TaskService.createTask(
         MOCK_USER.id,
-        `并发测试任务${i + 1} - 一个美丽的风景画`
+        `并发测试任务${i + 1} - 一个美丽的风景画`,
       );
       createdTaskIds.push(task.id);
       concurrentTasks.push(task);
@@ -123,7 +144,11 @@ async function runTests() {
     for (const task of concurrentTasks) {
       try {
         const taskStatus = await TaskService.getTaskById(task.id);
-        console.log(`    任务${task.id.substring(0, 8)}...状态:`, taskStatus.status, `(${taskStatus.images.length}张图片)`);
+        console.log(
+          `    任务${task.id.substring(0, 8)}...状态:`,
+          taskStatus.status,
+          `(${taskStatus.images.length}张图片)`,
+        );
       } catch (error) {
         console.log(`    任务${task.id.substring(0, 8)}...查询失败:`, error);
       }
@@ -136,7 +161,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (error) {
+      } catch (_error) {
         // 忽略删除错误（任务可能不存在）
       }
     }
@@ -154,7 +179,7 @@ async function runTests() {
     for (const taskId of createdTaskIds) {
       try {
         await TaskService.deleteTask(taskId);
-      } catch (e) {
+      } catch (_e) {
         // 忽略清理错误
       }
     }

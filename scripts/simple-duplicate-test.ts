@@ -15,31 +15,37 @@ async function simpleDuplicateTest() {
 
     // 添加第一张图片
     console.log("\n2. 添加第一张图片");
-    const imageRes1 = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/${taskId}/0.png`,
-        index: 0,
-      }),
-    });
+    const imageRes1 = await fetch(
+      `http://localhost:3001/api/tasks/${taskId}/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/${taskId}/0.png`,
+          index: 0,
+        }),
+      },
+    );
     const imageData1 = await imageRes1.json();
     console.log("第一张图片响应状态:", imageRes1.status);
     console.log("第一张图片响应:", JSON.stringify(imageData1, null, 2));
 
     // 等待一下确保数据库写入完成
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // 尝试添加重复索引的图片
     console.log("\n3. 尝试添加重复索引的图片");
-    const imageRes2 = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/${taskId}/0_duplicate.png`,
-        index: 0, // 重复索引
-      }),
-    });
+    const imageRes2 = await fetch(
+      `http://localhost:3001/api/tasks/${taskId}/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/${taskId}/0_duplicate.png`,
+          index: 0, // 重复索引
+        }),
+      },
+    );
     const imageData2 = await imageRes2.json();
     console.log("重复图片响应状态:", imageRes2.status);
     console.log("重复图片响应:", JSON.stringify(imageData2, null, 2));
@@ -57,7 +63,6 @@ async function simpleDuplicateTest() {
       method: "DELETE",
     });
     console.log("✓ 任务已清理");
-
   } catch (error) {
     console.error("❌ 测试失败:", error);
   }

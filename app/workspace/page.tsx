@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
+import QueueStatus from "@/components/ui/QueueStatus";
+import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
+import type { TaskWithDetails } from "@/types";
 import ImageGrid from "./components/ImageGrid";
 import ModelPreview from "./components/ModelPreview";
-import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
-import QueueStatus from "@/components/ui/QueueStatus";
-import type { TaskWithDetails } from "@/types";
 
 // 队列状态接口
 interface QueueStatusData {

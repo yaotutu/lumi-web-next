@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { HeroFeatureCardProps } from "./HeroFeatureCard";
 import HeroFeatureCard from "./HeroFeatureCard";
 import HeroSearchBar from "./HeroSearchBar";
-import type { HeroFeatureCardProps } from "./HeroFeatureCard";
 
 type FeatureCard = Omit<HeroFeatureCardProps, "key">;
 

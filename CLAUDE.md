@@ -247,6 +247,60 @@ handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
 - 提交前运行 `npm run format`
 
 
+## 后端架构规范
+
+### 三层架构
+
+```
+API路由层 (app/api/) → Service层 (lib/services/) → 数据访问层 (Prisma)
+```
+
+**目录结构**: `lib/services/` (业务逻辑) | `lib/providers/` (外部API) | `lib/validators/` (Zod schemas) | `lib/utils/errors.ts` (统一错误处理)
+
+### 错误处理规则
+
+**核心原则**: 所有API路由必须使用 `withErrorHandler` 包装,错误会自动转换为标准响应。
+
+**错误优先级** (从高到低):
+1. `ZodError` → 400 + 详细验证错误
+2. `AppError` → 对应状态码 + 错误代码
+3. `AliyunAPIError` → 500 + 外部API错误
+4. `Unknown` → 500 + 通用错误
+
+**错误代码** (定义在 `lib/utils/errors.ts`):
+- `VALIDATION_ERROR` (400) - 输入验证失败
+- `NOT_FOUND` (404) - 资源不存在
+- `INVALID_STATE` (409) - 状态不允许操作
+- `QUEUE_FULL` (503) - 队列已满
+- `EXTERNAL_API_ERROR` (500) - 外部API错误
+
+**使用示例**:
+```typescript
+// API路由 - 必须使用withErrorHandler包装
+export const GET = withErrorHandler(async (request: NextRequest) => {
+  const validatedData = schema.parse(body); // Zod错误自动处理
+  const result = await Service.method(); // AppError自动转换
+  return NextResponse.json({ success: true, data: result });
+});
+
+// Service层 - 抛出AppError
+if (!resource) {
+  throw new AppError("NOT_FOUND", `资源不存在: ${id}`);
+}
+```
+
+### Zod验证规则
+
+1. **验证schema放在** `lib/validators/`,导出类型供Service层使用
+2. **API层负责验证**,Service层接收已验证的数据
+3. **查询参数验证需处理null**: `searchParams.get()` 返回 `string|null`
+
+### Service层规则
+
+1. **使用纯函数**,避免类封装
+2. **完整的JSDoc注释**: `@param` / `@returns` / `@throws`
+3. **抛出AppError**: `throw new AppError("NOT_FOUND", message, details?)`
+
 ## 重要提示
 - 每一行代码必须有注释，解释代码的作用和目的。
 - 代码注释必须使用中文。

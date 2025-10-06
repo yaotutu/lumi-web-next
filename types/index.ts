@@ -1,8 +1,8 @@
 // ============================================
 // Prisma 导出的类型
 // ============================================
-export type { User, Task, TaskImage, TaskModel } from "@prisma/client";
-export { TaskStatus, ModelStatus } from "@prisma/client";
+export type { Task, TaskImage, TaskModel, User } from "@prisma/client";
+export { ModelStatus, TaskStatus } from "@prisma/client";
 
 // 扩展类型: 任务详情（包含关联数据）
 import type { Task, TaskImage, TaskModel } from "@prisma/client";

@@ -7,7 +7,6 @@ async function debugListAPI() {
     const listRes = await fetch("http://localhost:3001/api/tasks");
     const listData = await listRes.json();
     console.log("列表响应:", JSON.stringify(listData, null, 2));
-
   } catch (error) {
     console.error("❌ 调试失败:", error);
   }

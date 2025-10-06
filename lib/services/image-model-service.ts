@@ -3,6 +3,8 @@
  * 职责：处理任务相关的图片和模型记录
  * 原则：函数式编程，纯函数优先，使用统一错误处理和Zod验证
  */
+
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { AppError } from "@/lib/utils/errors";
 // Service层不再进行Zod验证，验证在API路由层完成
@@ -11,7 +13,6 @@ import type {
   AddImageInput,
   CreateModelInput,
 } from "@/lib/validators/task-validators";
-import { Prisma } from "@prisma/client";
 
 /**
  * 添加图片记录到任务
@@ -21,10 +22,7 @@ import { Prisma } from "@prisma/client";
  * @throws AppError NOT_FOUND - 任务不存在
  * @throws AppError INVALID_STATE - 图片记录已存在
  */
-export async function addImageToTask(
-  taskId: string,
-  imageData: AddImageInput,
-) {
+export async function addImageToTask(taskId: string, imageData: AddImageInput) {
   // 参数已在外层API路由验证，直接使用
 
   // 验证任务存在
@@ -55,8 +53,14 @@ export async function addImageToTask(
       if (error.code === "P2002") {
         // 检查是否是 taskId + index 的唯一约束违反
         const targetFields = error.meta?.target as string[] | undefined;
-        if (targetFields?.includes("taskId") && targetFields?.includes("index")) {
-          throw new AppError("INVALID_STATE", `任务 ${taskId} 的图片索引 ${imageData.index} 已存在`);
+        if (
+          targetFields?.includes("taskId") &&
+          targetFields?.includes("index")
+        ) {
+          throw new AppError(
+            "INVALID_STATE",
+            `任务 ${taskId} 的图片索引 ${imageData.index} 已存在`,
+          );
         }
       }
     }

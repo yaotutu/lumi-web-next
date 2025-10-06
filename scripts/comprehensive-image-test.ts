@@ -17,14 +17,17 @@ async function comprehensiveImageAPITest() {
     // 2. 添加多张图片
     console.log("\nTest 2: 添加多张图片");
     for (let i = 0; i < 3; i++) {
-      const imageRes = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: `http://localhost:3001/generated/images/${taskId}/${i}.png`,
-          index: i,
-        }),
-      });
+      const imageRes = await fetch(
+        `http://localhost:3001/api/tasks/${taskId}/images`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: `http://localhost:3001/generated/images/${taskId}/${i}.png`,
+            index: i,
+          }),
+        },
+      );
       const imageData = await imageRes.json();
 
       if (imageData.success) {
@@ -36,14 +39,17 @@ async function comprehensiveImageAPITest() {
 
     // 3. 尝试添加重复索引的图片
     console.log("\nTest 3: 尝试添加重复索引的图片");
-    const duplicateRes = await fetch(`http://localhost:3001/api/tasks/${taskId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/${taskId}/1_duplicate.png`,
-        index: 1, // 重复索引
-      }),
-    });
+    const duplicateRes = await fetch(
+      `http://localhost:3001/api/tasks/${taskId}/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/${taskId}/1_duplicate.png`,
+          index: 1, // 重复索引
+        }),
+      },
+    );
     const duplicateData = await duplicateRes.json();
 
     if (!duplicateData.success && duplicateData.code === "INVALID_STATE") {
@@ -58,7 +64,11 @@ async function comprehensiveImageAPITest() {
     const taskData = await taskRes.json();
 
     if (taskData.success && taskData.data.images.length === 3) {
-      console.log("✓ 任务图片数据正确，共", taskData.data.images.length, "张图片");
+      console.log(
+        "✓ 任务图片数据正确，共",
+        taskData.data.images.length,
+        "张图片",
+      );
       taskData.data.images.forEach((img: any, idx: number) => {
         console.log(`  图片${idx}: 索引${img.index}, URL: ${img.url}`);
       });
@@ -68,14 +78,17 @@ async function comprehensiveImageAPITest() {
 
     // 5. 尝试为不存在的任务添加图片
     console.log("\nTest 5: 尝试为不存在的任务添加图片");
-    const invalidTaskRes = await fetch(`http://localhost:3001/api/tasks/invalid_task_id/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `http://localhost:3001/generated/images/invalid/0.png`,
-        index: 0,
-      }),
-    });
+    const invalidTaskRes = await fetch(
+      `http://localhost:3001/api/tasks/invalid_task_id/images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `http://localhost:3001/generated/images/invalid/0.png`,
+          index: 0,
+        }),
+      },
+    );
     const invalidTaskData = await invalidTaskRes.json();
 
     if (!invalidTaskData.success && invalidTaskData.code === "NOT_FOUND") {
@@ -90,7 +103,6 @@ async function comprehensiveImageAPITest() {
       method: "DELETE",
     });
     console.log("✓ 测试完成，任务已清理");
-
   } catch (error) {
     console.error("❌ 测试失败:", error);
   }
