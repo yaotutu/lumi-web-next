@@ -1,4 +1,4 @@
-const TASK_API_BASE = "http://localhost:3000/api";
+const TASK_API_BASE = "http://localhost:3001/api";
 
 async function testTaskAPI() {
   console.log("🧪 Testing Task Management API...\n");
@@ -36,12 +36,12 @@ async function testTaskAPI() {
 
     // 测试 4: 添加图片记录
     console.log("\nTest 4: Adding image records...");
-    for (let i = 0; i < 4; i++) {
+    for (let i = 4; i < 8; i++) {
       const imageRes = await fetch(`${TASK_API_BASE}/tasks/${taskId}/images`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url: `/generated/images/${taskId}/${i}.png`,
+          url: `http://localhost:3001/generated/images/${taskId}/${i}.png`,
           index: i,
         }),
       });

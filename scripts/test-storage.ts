@@ -1,4 +1,4 @@
-import { LocalStorage } from "../lib/storage";
+import { LocalStorage } from "../lib/providers/storage";
 
 async function testStorage() {
   console.log("🧪 Testing LocalStorage class...\n");

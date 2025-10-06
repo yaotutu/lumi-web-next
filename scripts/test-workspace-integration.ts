@@ -3,7 +3,7 @@
  * 验证从首页创建任务 → 工作台生成图片 → 选择图片的完整流程
  */
 
-const WORKSPACE_API_BASE = "http://localhost:3000";
+const WORKSPACE_API_BASE = "http://localhost:3004";
 
 async function testWorkspaceIntegration() {
   console.log("🧪 开始测试工作台任务集成\n");
