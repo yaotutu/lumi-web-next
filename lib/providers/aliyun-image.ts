@@ -85,9 +85,11 @@ interface QwenImageResponse {
 }
 
 // 从环境变量获取API配置
-const API_KEY = process.env.ALIYUN_IMAGE_API_KEY || "";
+// 为了确保在Node.js环境中也能正确加载，提供默认值
+const API_KEY = process.env.ALIYUN_IMAGE_API_KEY || process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY || "";
 const API_ENDPOINT =
   process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+  process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
   "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
 /**
@@ -111,6 +113,13 @@ export async function generateImages(
     console.log(`[MOCK] 生成 ${count} 张图片成功`);
     return mockImages;
   }
+
+  // 从环境变量获取API配置（在运行时获取，确保最新）
+  const API_KEY = process.env.ALIYUN_IMAGE_API_KEY || process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY || "";
+  const API_ENDPOINT =
+    process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
   // 验证API密钥
   if (!API_KEY) {
@@ -228,6 +237,13 @@ export async function* generateImageStream(
     }
     return;
   }
+
+  // 从环境变量获取API配置（在运行时获取，确保最新）
+  const API_KEY = process.env.ALIYUN_IMAGE_API_KEY || process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY || "";
+  const API_ENDPOINT =
+    process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
   // 验证API密钥
   if (!API_KEY) {

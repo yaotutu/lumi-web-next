@@ -14,17 +14,27 @@
     "test:image-gen": "tsx scripts/test-image-generation.ts",
     "test:workspace": "tsx scripts/test-workspace-integration.ts",
     "test:history": "tsx scripts/test-history.ts",
-    "test:queue": "tsx scripts/test-queue.ts"
+    "test:queue": "tsx scripts/test-queue.ts",
+    "test:error-handler": "tsx scripts/test-error-handler.ts",
+    "test:task-service": "tsx scripts/test-task-service.ts",
+    "test:queue-service": "tsx scripts/test-queue-service.ts",
+    "test:queue-service-real": "tsx scripts/test-queue-service-real.ts",
+    "test:zod-validation": "tsx scripts/test-zod-validation.ts",
+    "test:status-param": "tsx scripts/test-status-param.ts",
+    "debug:zod-errors": "tsx scripts/debug-zod-errors.ts",
+    "test:list-query-validation": "tsx scripts/test-list-query-validation.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.3",
+    "dotenv": "^17.2.3",
     "next": "15.5.4",
     "prisma": "^6.16.3",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",

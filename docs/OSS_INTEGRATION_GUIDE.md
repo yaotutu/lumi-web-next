@@ -315,7 +315,7 @@ for await (const imageUrl of generateImageStream(prompt, remainingCount)) {
 创建迁移脚本 `scripts/migrate-images.ts`:
 
 ```typescript
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { saveImage } from "@/lib/image-storage";
 
 async function migrateImages() {

@@ -1,68 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { taskQueue } from "@/lib/task-queue";
-import { prisma } from "@/lib/prisma";
+import { withErrorHandler } from "@/lib/utils/errors";
+import * as TaskService from "@/lib/services/task-service";
+import * as QueueService from "@/lib/services/queue-service";
 
 /**
  * POST /api/tasks/:id/cancel
  * 取消任务
  */
-export async function POST(
+export const POST = async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const { id } = await params;
+) => {
+  const { id } = await params;
 
-    // 尝试从队列中取消任务
-    const cancelled = await taskQueue.cancelTask(id);
+  // 尝试从队列中取消任务
+  const cancelledFromQueue = await QueueService.dequeueTask(id);
 
-    if (cancelled) {
-      return NextResponse.json({
-        success: true,
-        message: "Task cancelled successfully",
-      });
-    }
+  // 取消任务（更新任务状态为失败）
+  await TaskService.cancelTask(id);
 
-    // 任务不在队列中,检查数据库状态
-    const task = await prisma.task.findUnique({
-      where: { id },
-    });
-
-    if (!task) {
-      return NextResponse.json(
-        { success: false, error: "Task not found" },
-        { status: 404 },
-      );
-    }
-
-    // 任务已完成或失败,无法取消
-    if (
-      task.status === "IMAGES_READY" ||
-      task.status === "COMPLETED" ||
-      task.status === "FAILED" ||
-      task.status === "CANCELLED"
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Task cannot be cancelled (status: ${task.status})`,
-        },
-        { status: 400 },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Task not found in queue",
-      },
-      { status: 404 },
-    );
-  } catch (error) {
-    console.error("Failed to cancel task:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to cancel task" },
-      { status: 500 },
-    );
-  }
-}
+  return NextResponse.json({
+    success: true,
+    message: "Task cancelled successfully",
+    cancelledFromQueue,
+  });
+};

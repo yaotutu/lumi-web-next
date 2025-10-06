@@ -1,35 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { MOCK_USER } from "@/lib/constants";
+import { withErrorHandler } from "@/lib/utils/errors";
+import * as TaskService from "@/lib/services/task-service";
+import * as QueueService from "@/lib/services/queue-service";
 import { TaskStatus } from "@prisma/client";
-import { taskQueue } from "@/lib/task-queue";
+import { createTaskSchema, listTasksQuerySchema } from "@/lib/validators/task-validators";
+import { ZodError } from "zod";
 
 /**
  * GET /api/tasks
  * 获取用户的任务列表
  */
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") as TaskStatus | null;
-    const limit = parseInt(searchParams.get("limit") || "20");
+export const GET = async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url);
 
-    const tasks = await prisma.task.findMany({
-      where: {
-        userId: MOCK_USER.id,
-        ...(status && { status }),
-      },
-      include: {
-        images: {
-          orderBy: { index: "asc" },
-        },
-        model: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: limit,
-    });
+  // 使用Zod验证查询参数
+  try {
+    const statusParam = searchParams.get("status");
+    const limitParam = searchParams.get("limit");
+
+    const queryParams = {
+      status: statusParam === null ? undefined : (statusParam as TaskStatus),
+      limit: limitParam === null ? undefined : limitParam,
+    };
+
+    const validatedParams = listTasksQuerySchema.parse(queryParams);
+    const { status, limit } = validatedParams;
+
+    const tasks = await TaskService.listTasks(MOCK_USER.id, { status, limit });
 
     return NextResponse.json({
       success: true,
@@ -37,98 +35,60 @@ export async function GET(request: NextRequest) {
       count: tasks.length,
     });
   } catch (error) {
-    console.error("Failed to fetch tasks:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch tasks" },
-      { status: 500 },
-    );
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "查询参数验证失败",
+          details: error.issues,
+        },
+        { status: 400 },
+      );
+    }
+    throw error;
   }
-}
+};
 
 /**
  * POST /api/tasks
  * 创建新任务并加入队列
  */
-export async function POST(request: NextRequest) {
+export const POST = async (request: NextRequest) => {
+  const body = await request.json();
+
+  // 使用Zod验证输入
   try {
-    const body = await request.json();
-    const { prompt } = body;
+    const validatedData = createTaskSchema.parse(body);
+    const { prompt } = validatedData;
 
-    // 验证输入
-    if (!prompt || typeof prompt !== "string") {
-      return NextResponse.json(
-        { success: false, error: "Prompt is required" },
-        { status: 400 },
-      );
-    }
+    // 创建任务
+    const task = await TaskService.createTask(MOCK_USER.id, prompt);
 
-    const trimmedPrompt = prompt.trim();
-    if (trimmedPrompt.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "Prompt cannot be empty" },
-        { status: 400 },
-      );
-    }
+    // 添加到任务队列
+    await QueueService.enqueueTask(task.id, task.prompt);
 
-    // 创建数据库任务记录
-    const task = await prisma.task.create({
-      data: {
-        userId: MOCK_USER.id,
-        prompt: trimmedPrompt,
-        status: "PENDING",
-      },
-      include: {
-        images: true,
-        model: true,
-      },
-    });
-
-    // 添加到任务队列(有错误捕获)
-    try {
-      const queueId = await taskQueue.addTask(task.id, trimmedPrompt);
-      console.log(`[API] 任务已加入队列: ${task.id} -> ${queueId}`);
-    } catch (queueError) {
-      // 队列添加失败(如队列已满),更新任务状态
-      await prisma.task.update({
-        where: { id: task.id },
-        data: {
-          status: "FAILED",
-          failedAt: new Date(),
-          errorMessage:
-            queueError instanceof Error
-              ? queueError.message
-              : "Failed to add to queue",
-        },
-      });
-
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            queueError instanceof Error
-              ? queueError.message
-              : "Failed to add task to queue",
-        },
-        { status: 503 }, // 503 Service Unavailable
-      );
-    }
-
-    // 获取当前队列状态
-    const queueStatus = taskQueue.getStatus();
+    // 获取队列状态
+    const queueStatus = QueueService.getStatus();
 
     return NextResponse.json(
       {
         success: true,
         data: task,
-        queue: queueStatus, // 返回队列状态给前端
+        queue: queueStatus,
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create task:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to create task" },
-      { status: 500 },
-    );
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "输入验证失败",
+          details: error.issues,
+        },
+        { status: 400 },
+      );
+    }
+    throw error;
   }
-}
+};

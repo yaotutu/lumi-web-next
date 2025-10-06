@@ -27,7 +27,7 @@ function debugSchema() {
 
   } catch (error) {
     if (error instanceof ZodError) {
-      console.log("验证失败:", error.errors);
+      console.log("验证失败:", error.issues);
     } else {
       console.error("其他错误:", error);
     }

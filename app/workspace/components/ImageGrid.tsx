@@ -45,12 +45,21 @@ export default function ImageGrid({
         },
       );
       setImageSlots(slots);
-      setStatus("completed");
+
+      // 根据任务状态设置组件状态
+      if (task.status === "IMAGES_READY") {
+        setStatus("completed");
+      } else if (task.status === "GENERATING_IMAGES") {
+        setStatus("generating");
+      }
 
       // 如果任务已有选中的图片，设置选中状态
       if (task.selectedImageIndex !== null) {
         setSelectedImage(task.selectedImageIndex);
       }
+    } else if (task?.status === "PENDING") {
+      // 如果任务在队列中，设置状态为生成中
+      setStatus("generating");
     }
   }, [task]);
 
@@ -173,7 +182,7 @@ export default function ImageGrid({
           生成结果
         </h2>
 
-        {status === "idle" ? (
+        {status === "idle" && !task ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
             <p className="text-sm">等待生成图片...</p>
           </div>

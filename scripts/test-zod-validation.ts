@@ -18,7 +18,7 @@ function runTest(name: string, testFn: () => void) {
   } catch (error) {
     if (error instanceof ZodError) {
       console.log(`❌ ${name}: 失败`);
-      console.log("  错误详情:", error.errors);
+      console.log("  错误详情:", error.issues);
     } else {
       console.log(`❌ ${name}: 失败`);
       console.log("  错误:", error);

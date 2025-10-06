@@ -1,35 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withErrorHandler } from "@/lib/utils/errors";
+import * as ImageModelService from "@/lib/services/image-model-service";
+import { addImageSchema } from "@/lib/validators/task-validators";
+import { ZodError } from "zod";
 
 /**
  * POST /api/tasks/:id/images
  * 保存任务的图片记录
  */
-export async function POST(
+export const POST = async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
+) => {
+  const { id } = await params;
+  const body = await request.json();
+
+  // 使用Zod验证输入
   try {
-    const { id } = await params;
-    const body = await request.json();
-    const { url, index, aliyunTaskId, aliyunRequestId } = body;
+    const validatedData = addImageSchema.parse(body);
 
-    if (typeof url !== "string" || typeof index !== "number") {
-      return NextResponse.json(
-        { success: false, error: "Invalid image data" },
-        { status: 400 },
-      );
-    }
-
-    const image = await prisma.taskImage.create({
-      data: {
-        taskId: id,
-        url,
-        index,
-        aliyunTaskId,
-        aliyunRequestId,
-      },
-    });
+    const image = await ImageModelService.addImageToTask(id, validatedData);
 
     return NextResponse.json(
       {
@@ -39,10 +29,16 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to save image:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to save image" },
-      { status: 500 },
-    );
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "图片数据验证失败",
+          details: error.issues,
+        },
+        { status: 400 },
+      );
+    }
+    throw error;
   }
-}
+};

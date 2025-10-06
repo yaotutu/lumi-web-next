@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { STORAGE_PATHS } from "./constants";
+import { STORAGE_PATHS } from "@/lib/constants";
 
 const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
 

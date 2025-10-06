@@ -22,9 +22,28 @@ export default function ModelPreview({
   const [progress, setProgress] = useState(0);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 当选择图片并触发生成时
+  // 当选择图片并触发生成时，或者任务状态改变时
   useEffect(() => {
-    if (imageIndex !== null && prompt) {
+    // 如果任务已完成模型生成
+    if (task?.status === "MODEL_READY" || task?.status === "COMPLETED") {
+      setStatus("completed");
+      setProgress(100);
+      // 清理定时器
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // 如果正在生成模型
+    if (task?.status === "GENERATING_MODEL" && status !== "generating") {
+      startModelGeneration();
+      return;
+    }
+
+    // 当选择图片并触发生成时
+    if (imageIndex !== null && prompt && status === "idle") {
       startModelGeneration();
     }
 
@@ -34,7 +53,7 @@ export default function ModelPreview({
         clearInterval(progressIntervalRef.current);
       }
     };
-  }, [imageIndex, prompt]);
+  }, [imageIndex, prompt, task?.status]);
 
   const startModelGeneration = () => {
     setStatus("generating");

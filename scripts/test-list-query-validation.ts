@@ -12,7 +12,7 @@ function runTest(name: string, testFn: () => void) {
   } catch (error) {
     if (error instanceof ZodError) {
       console.log(`❌ ${name}: 失败`);
-      console.log("  错误详情:", JSON.stringify(error.errors, null, 2));
+      console.log("  错误详情:", JSON.stringify(error.issues, null, 2));
     } else {
       console.log(`❌ ${name}: 失败`);
       console.log("  错误:", error);
@@ -47,7 +47,7 @@ try {
 } catch (error) {
   if (error instanceof ZodError) {
     console.log("  ❌ 失败");
-    console.log("  错误详情:", JSON.stringify(error.errors, null, 2));
+    console.log("  错误详情:", JSON.stringify(error.issues, null, 2));
   } else {
     console.log("  ❌ 失败");
     console.log("  错误:", error);
@@ -61,7 +61,7 @@ try {
 } catch (error) {
   if (error instanceof ZodError) {
     console.log("  ❌ 失败");
-    console.log("  错误详情:", JSON.stringify(error.errors, null, 2));
+    console.log("  错误详情:", JSON.stringify(error.issues, null, 2));
   } else {
     console.log("  ❌ 失败");
     console.log("  错误:", error);
@@ -75,7 +75,7 @@ try {
 } catch (error) {
   if (error instanceof ZodError) {
     console.log("  ❌ 失败");
-    console.log("  错误详情:", JSON.stringify(error.errors, null, 2));
+    console.log("  错误详情:", JSON.stringify(error.issues, null, 2));
   } else {
     console.log("  ❌ 失败");
     console.log("  错误:", error);
