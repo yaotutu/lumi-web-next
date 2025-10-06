@@ -39,28 +39,73 @@ let runningCount = 0;
 async function processTask(taskId: string, prompt: string): Promise<void> {
   console.log(`[Task] 🚀 开始处理任务: ${taskId}`);
 
-  // 更新数据库状态为"生成中"
-  await prisma.task.update({
+  // 更新数据库状态为"生成中"（首次执行时）
+  const task = await prisma.task.findUnique({
     where: { id: taskId },
-    data: {
-      status: "GENERATING_IMAGES",
-      imageGenerationStartedAt: new Date(),
-    },
+    select: { status: true },
   });
+
+  if (task?.status === "PENDING") {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "GENERATING_IMAGES",
+        imageGenerationStartedAt: new Date(),
+      },
+    });
+  }
 
   // 重试循环
   for (let retry = 0; retry <= CONFIG.MAX_RETRIES; retry++) {
     try {
-      // 生成图片
-      let index = 0;
+      // 🔄 断点续传：查询已生成的图片
+      const existingImages = await prisma.taskImage.findMany({
+        where: { taskId },
+        orderBy: { index: "asc" },
+      });
+
+      const startIndex = existingImages.length;
+
+      // 检查是否已全部生成
+      if (startIndex >= IMAGE_GENERATION.COUNT) {
+        console.log(`[Task] ✅ 图片已全部生成，无需继续: ${taskId}`);
+        await prisma.task.update({
+          where: { id: taskId },
+          data: {
+            status: "IMAGES_READY",
+            imageGenerationCompletedAt: new Date(),
+          },
+        });
+        return;
+      }
+
+      // 计算还需要生成的数量
+      const remainingCount = IMAGE_GENERATION.COUNT - startIndex;
+      console.log(
+        `[Task] 📍 断点续传: 已生成 ${startIndex}/${IMAGE_GENERATION.COUNT} 张，继续生成剩余 ${remainingCount} 张`,
+      );
+
+      // 从断点继续生成
+      let index = startIndex;
       for await (const imageUrl of generateImageStream(
         prompt,
-        IMAGE_GENERATION.COUNT,
+        remainingCount,
       )) {
+        // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
+        // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+        //
+        // TODO: 对接OSS后，需要下载图片到本地/OSS
+        // const localUrl = await downloadAndSaveImage(imageUrl, taskId, index);
+        //
+        // 参考实现：
+        // 1. 使用 LocalStorage.saveTaskImage() 保存到本地
+        // 2. 或上传到自己的OSS，返回永久URL
+        // 3. 处理Base64格式的图片数据（如果API返回base64）
+
         await prisma.taskImage.create({
           data: {
             taskId,
-            url: imageUrl,
+            url: imageUrl, // TODO: 改为 localUrl
             index,
           },
         });
@@ -265,6 +310,60 @@ export async function cancelTask(taskId: string): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================
+// TODO: 图片下载与存储（待实现）
+// ============================================
+
+/**
+ * TODO: 下载阿里云图片并保存到本地/OSS
+ *
+ * 使用场景：
+ * 当阿里云API返回图片URL后，下载图片并保存到永久存储
+ *
+ * @param aliyunUrl 阿里云返回的临时URL或Base64数据
+ * @param taskId 任务ID
+ * @param index 图片索引 (0-3)
+ * @returns 本地URL或OSS永久URL
+ *
+ * @example
+ * // 情况A: 阿里云返回HTTP URL
+ * const aliyunUrl = "https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png";
+ * const localUrl = await downloadAndSaveImage(aliyunUrl, taskId, 0);
+ * // 返回: "/generated/images/{taskId}/0.png"
+ *
+ * // 情况B: 阿里云返回Base64
+ * const base64 = "data:image/png;base64,iVBORw0KG...";
+ * const localUrl = await downloadAndSaveImage(base64, taskId, 1);
+ * // 返回: "/generated/images/{taskId}/1.png"
+ *
+ * 实现步骤：
+ * 1. 判断是URL还是Base64
+ * 2. 下载/解码图片数据
+ * 3. 调用 LocalStorage.saveTaskImage() 或上传到OSS
+ * 4. 返回可访问的永久URL
+ */
+// async function downloadAndSaveImage(
+//   aliyunUrl: string,
+//   taskId: string,
+//   index: number,
+// ): Promise<string> {
+//   // import { LocalStorage } from "./storage";
+//
+//   // 判断是Base64还是HTTP URL
+//   if (aliyunUrl.startsWith("data:image")) {
+//     // Base64格式
+//     return await LocalStorage.saveTaskImage(taskId, index, aliyunUrl);
+//   } else {
+//     // HTTP URL - 下载图片
+//     const response = await fetch(aliyunUrl);
+//     if (!response.ok) {
+//       throw new Error(`下载图片失败: ${response.status}`);
+//     }
+//     const buffer = Buffer.from(await response.arrayBuffer());
+//     return await LocalStorage.saveTaskImage(taskId, index, buffer);
+//   }
+// }
 
 // ============================================
 // 兼容旧API的导出

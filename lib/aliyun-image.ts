@@ -1,6 +1,11 @@
 /**
  * 阿里云百炼-通义千问文生图API服务
  * 文档: https://help.aliyun.com/zh/model-studio/qwen-image-api
+ *
+ * ⚠️ 重要说明：
+ * - 阿里云返回的图片URL为临时链接，有效期仅 24小时
+ * - 当前实现直接使用临时URL，未下载到本地存储
+ * - TODO: 对接OSS后，需要下载图片并保存到永久存储
  */
 
 // ============================================
@@ -286,6 +291,10 @@ export async function* generateImageStream(
       const imageContent = choice.message.content.find((c) => c.image);
       if (imageContent?.image) {
         // 立即yield返回这张图片的URL
+        // ⚠️ 返回值可能是以下格式之一：
+        // 1. HTTP URL: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+        // 2. Base64: data:image/png;base64,iVBORw0KG...
+        // 注意: URL有效期仅24小时
         yield imageContent.image;
       } else {
         throw new Error("响应中未找到图片URL");

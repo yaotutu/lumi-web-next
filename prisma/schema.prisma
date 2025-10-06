@@ -64,7 +64,10 @@ model TaskImage {
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   // 图片数据
-  url       String   // 本地路径: /generated/images/{taskId}/0.png
+  // ⚠️ 当前存储：阿里云临时URL（24小时有效期）
+  // 格式示例: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+  // TODO: 对接OSS后改为本地路径: /generated/images/{taskId}/0.png
+  url       String
   index     Int      // 0-3
 
   // 阿里云API数据(可选)
