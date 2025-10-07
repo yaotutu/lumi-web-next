@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createLogger } from "@/lib/logger";
+
+// 创建日志器
+const log = createLogger("LocalStorage");
 
 const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
 
@@ -110,7 +114,7 @@ export class LocalStorage {
         return fs.statSync(filepath).size;
       }
     } catch (error) {
-      console.error("Failed to get file size:", error);
+      log.error("getFileSize", "获取文件大小失败", error, { url });
     }
     return 0;
   }

@@ -8,6 +8,11 @@
  * - TODO: 对接OSS后，需要下载图片并保存到永久存储
  */
 
+import { createLogger } from "@/lib/logger";
+
+// 创建日志器
+const log = createLogger("AliyunImageProvider");
+
 // ============================================
 // 自定义错误类
 // ============================================
@@ -113,7 +118,7 @@ export async function generateImages(
       const mockImageIndex = i % MOCK_IMAGES.length;
       mockImages.push(MOCK_IMAGES[mockImageIndex]);
     }
-    console.log(`[MOCK] 生成 ${count} 张图片成功`);
+    log.info("generateImages", "Mock模式：生成图片成功", { count });
     return mockImages;
   }
 
@@ -183,10 +188,11 @@ export async function generateImages(
       const data: QwenImageResponse = await response.json();
 
       // 调试: 打印完整响应数据
-      console.log(
-        `图片 ${i + 1}/${count} API响应:`,
-        JSON.stringify(data, null, 2),
-      );
+      log.debug("generateImages", "API响应", {
+        imageIndex: i + 1,
+        totalCount: count,
+        response: data,
+      });
 
       // 检查响应数据结构
       if (!data || !data.output || !data.output.choices) {
@@ -206,7 +212,10 @@ export async function generateImages(
         throw new Error("响应格式不正确");
       }
     } catch (error) {
-      console.error(`生成第 ${i + 1} 张图片失败:`, error);
+      log.error("generateImages", "生成图片失败", error, {
+        imageIndex: i + 1,
+        totalCount: count,
+      });
       throw error;
     }
   }
@@ -238,7 +247,10 @@ export async function* generateImageStream(
 
       // 循环使用mock图片数据
       const mockImageIndex = i % MOCK_IMAGES.length;
-      console.log(`[MOCK] 图片 ${i + 1}/${count} 生成成功`);
+      log.info("generateImageStream", "Mock模式：生成图片", {
+        imageIndex: i + 1,
+        totalCount: count,
+      });
       yield MOCK_IMAGES[mockImageIndex];
     }
     return;
@@ -305,7 +317,10 @@ export async function* generateImageStream(
 
     const data: QwenImageResponse = await response.json();
 
-    console.log(`图片 ${i + 1}/${count} 生成成功`);
+    log.info("generateImageStream", "图片生成成功", {
+      imageIndex: i + 1,
+      totalCount: count,
+    });
 
     if (!data || !data.output || !data.output.choices) {
       throw new Error(`API响应格式错误: ${JSON.stringify(data)}`);

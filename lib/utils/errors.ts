@@ -4,7 +4,11 @@
  */
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { createLogger } from "@/lib/logger";
 import { AliyunAPIError } from "@/lib/providers/aliyun-image";
+
+// 创建日志器
+const log = createLogger("ErrorHandler");
 
 /**
  * 应用错误代码枚举
@@ -69,6 +73,11 @@ const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
 export function toErrorResponse(error: unknown): NextResponse {
   // 情况1: ZodError - 输入验证错误（优先级最高）
   if (error instanceof ZodError) {
+    log.warn("toErrorResponse", "Zod验证失败", {
+      errorCount: error.issues.length,
+      fields: error.issues.map((i) => i.path.join(".")),
+    });
+
     return NextResponse.json(
       {
         success: false,
@@ -83,6 +92,12 @@ export function toErrorResponse(error: unknown): NextResponse {
   // 情况2: AppError - 应用层业务错误
   if (error instanceof AppError) {
     const status = ERROR_STATUS_MAP[error.code];
+
+    log.error("toErrorResponse", "业务错误", error, {
+      errorCode: error.code,
+      statusCode: status,
+      details: error.details,
+    });
 
     // 构建响应体，条件性添加details字段
     const responseBody: {
@@ -111,6 +126,11 @@ export function toErrorResponse(error: unknown): NextResponse {
     // - 如果重试后仍失败才会到达这里
     // - 此时统一返回EXTERNAL_API_ERROR，前端显示"服务繁忙"
 
+    log.error("toErrorResponse", "阿里云API错误", error, {
+      statusCode: error.statusCode,
+      errorCode: "EXTERNAL_API_ERROR",
+    });
+
     // 根据阿里云API状态码决定返回的HTTP状态码
     // 4xx错误返回原状态码，5xx错误统一返回500
     const httpStatus = error.statusCode >= 500 ? 500 : error.statusCode;
@@ -127,7 +147,8 @@ export function toErrorResponse(error: unknown): NextResponse {
   }
 
   // 情况4: 未知错误（兜底处理）
-  console.error("未处理的错误:", error);
+  log.error("toErrorResponse", "未知错误", error);
+
   return NextResponse.json(
     {
       success: false,

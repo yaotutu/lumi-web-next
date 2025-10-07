@@ -8,10 +8,14 @@
 
 import { IMAGE_GENERATION } from "@/lib/constants";
 import { prisma } from "@/lib/db/prisma";
+import { createLogger, timer } from "@/lib/logger";
 import {
   AliyunAPIError,
   generateImageStream,
 } from "@/lib/providers/aliyun-image";
+
+// 创建日志器
+const log = createLogger("TaskQueue");
 
 // ============================================
 // 配置
@@ -40,7 +44,8 @@ let runningCount = 0;
  * @param prompt 生成提示词
  */
 async function processTask(taskId: string, prompt: string): Promise<void> {
-  console.log(`[Task] 🚀 开始处理任务: ${taskId}`);
+  const t = timer();
+  log.info("processTask", "开始处理任务", { taskId, promptLength: prompt.length });
 
   // 更新数据库状态为"生成中"（首次执行时）
   const task = await prisma.task.findUnique({
@@ -71,7 +76,10 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
 
       // 检查是否已全部生成
       if (startIndex >= IMAGE_GENERATION.COUNT) {
-        console.log(`[Task] ✅ 图片已全部生成，无需继续: ${taskId}`);
+        log.info("processTask", "图片已全部生成，无需继续", {
+          taskId,
+          count: IMAGE_GENERATION.COUNT
+        });
         await prisma.task.update({
           where: { id: taskId },
           data: {
@@ -84,9 +92,12 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
 
       // 计算还需要生成的数量
       const remainingCount = IMAGE_GENERATION.COUNT - startIndex;
-      console.log(
-        `[Task] 📍 断点续传: 已生成 ${startIndex}/${IMAGE_GENERATION.COUNT} 张，继续生成剩余 ${remainingCount} 张`,
-      );
+      log.info("processTask", "断点续传", {
+        taskId,
+        existingCount: startIndex,
+        totalCount: IMAGE_GENERATION.COUNT,
+        remainingCount,
+      });
 
       // 从断点继续生成
       let index = startIndex;
@@ -112,9 +123,11 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
             index,
           },
         });
-        console.log(
-          `[Task] 🖼️  图片 ${index + 1}/${IMAGE_GENERATION.COUNT} 已生成: ${taskId}`,
-        );
+        log.info("processTask", "图片生成成功", {
+          taskId,
+          imageIndex: index + 1,
+          totalCount: IMAGE_GENERATION.COUNT,
+        });
         index++;
       }
 
@@ -127,7 +140,7 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
         },
       });
 
-      console.log(`[Task] ✅ 任务完成: ${taskId}`);
+      log.info("processTask", "任务完成", { taskId, duration: t() });
       return; // 成功，退出函数
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
@@ -147,15 +160,18 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
           },
         });
 
-        console.error(`[Task] ❌ 任务失败: ${taskId} | ${errorMsg}`);
+        log.error("processTask", "任务失败", error, { taskId });
         throw error;
       }
 
       // 计算延迟时间
       const delay = calculateRetryDelay(error, retry);
-      console.log(
-        `[Task] 🔄 重试 ${retry + 1}/${CONFIG.MAX_RETRIES}: ${taskId} | 延迟 ${delay / 1000}秒`,
-      );
+      log.warn("processTask", "任务失败，准备重试", {
+        taskId,
+        retryCount: retry + 1,
+        maxRetries: CONFIG.MAX_RETRIES,
+        delaySeconds: delay / 1000,
+      });
 
       // 等待后重试
       await sleep(delay);
@@ -180,12 +196,12 @@ function canRetry(error: unknown): boolean {
     ];
 
     if (nonRetryableStatusCodes.includes(error.statusCode)) {
-      console.log(`[Task] ⛔ 不可重试的HTTP错误: ${error.statusCode}`);
+      log.debug("canRetry", "不可重试的HTTP错误", { statusCode: error.statusCode });
       return false;
     }
 
     // 429, 500, 502, 503, 504 等都可重试
-    console.log(`[Task] ✅ 可重试的HTTP错误: ${error.statusCode}`);
+    log.debug("canRetry", "可重试的HTTP错误", { statusCode: error.statusCode });
     return true;
   }
 
@@ -195,7 +211,7 @@ function canRetry(error: unknown): boolean {
 
   for (const msg of nonRetryableMessages) {
     if (errorMsg.includes(msg)) {
-      console.log(`[Task] ⛔ 不可重试错误: ${errorMsg}`);
+      log.debug("canRetry", "不可重试错误", { errorMsg });
       return false;
     }
   }
@@ -215,7 +231,10 @@ function calculateRetryDelay(error: unknown, retryCount: number): number {
   if (error instanceof AliyunAPIError && error.statusCode === 429) {
     // 429限流: 30秒 → 60秒 → 120秒
     const delay = CONFIG.RATE_LIMIT_DELAY_BASE * 2 ** retryCount;
-    console.log(`[Task] 🚦 检测到429限流，使用延迟: ${delay / 1000}秒`);
+    log.warn("calculateRetryDelay", "检测到429限流", {
+      delaySeconds: delay / 1000,
+      statusCode: 429,
+    });
     return delay;
   }
 
@@ -243,24 +262,29 @@ function sleep(ms: number): Promise<void> {
 export async function addTask(taskId: string, prompt: string): Promise<void> {
   // 等待直到有空闲槽位
   while (runningCount >= CONFIG.MAX_CONCURRENT) {
-    console.log(
-      `[Task] ⏸️  达到最大并发数，等待空闲槽位... (当前运行中: ${runningCount}, 最大并发: ${CONFIG.MAX_CONCURRENT})`,
-    );
+    log.warn("addTask", "达到最大并发数，等待空闲槽位", {
+      running: runningCount,
+      maxConcurrent: CONFIG.MAX_CONCURRENT,
+    });
     await sleep(500); // 每500ms检查一次
   }
 
   runningCount++;
-  console.log(
-    `[Task] 📥 任务加入处理队列: ${taskId} | 并发状态: ${runningCount}/${CONFIG.MAX_CONCURRENT} (运行中/最大)`,
-  );
+  log.info("addTask", "任务加入处理队列", {
+    taskId,
+    running: runningCount,
+    maxConcurrent: CONFIG.MAX_CONCURRENT,
+  });
 
   try {
     await processTask(taskId, prompt);
   } finally {
     runningCount--;
-    console.log(
-      `[Task] 📤 任务处理完成: ${taskId} | 并发状态: ${runningCount}/${CONFIG.MAX_CONCURRENT} (运行中/最大)`,
-    );
+    log.info("addTask", "任务处理完成", {
+      taskId,
+      running: runningCount,
+      maxConcurrent: CONFIG.MAX_CONCURRENT,
+    });
   }
 }
 
@@ -288,7 +312,7 @@ export async function cancelTask(taskId: string): Promise<boolean> {
     });
 
     if (!task) {
-      console.warn(`[Task] ⚠️  任务不存在: ${taskId}`);
+      log.warn("cancelTask", "任务不存在", { taskId });
       return false;
     }
 
@@ -302,14 +326,17 @@ export async function cancelTask(taskId: string): Promise<boolean> {
           errorMessage: "任务已取消",
         },
       });
-      console.log(`[Task] ❌ 任务已取消: ${taskId}`);
+      log.info("cancelTask", "任务已取消", { taskId });
       return true;
     }
 
-    console.warn(`[Task] ⚠️  任务状态不允许取消: ${taskId} (${task.status})`);
+    log.warn("cancelTask", "任务状态不允许取消", {
+      taskId,
+      currentStatus: task.status
+    });
     return false;
   } catch (error) {
-    console.error(`[Task] ❌ 取消任务失败: ${taskId}`, error);
+    log.error("cancelTask", "取消任务失败", error, { taskId });
     return false;
   }
 }
