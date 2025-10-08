@@ -10,24 +10,24 @@ export default function HistoryPage() {
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchTasks = async () => {
-    try {
-      const response = await fetch("/api/tasks");
-      const data = await response.json();
-
-      if (data.success) {
-        setTasks(data.data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch tasks:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const response = await fetch("/api/tasks");
+        const data = await response.json();
+
+        if (data.success) {
+          setTasks(data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch tasks:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchTasks();
-  }, [fetchTasks]);
+  }, []);
 
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("确定要删除这个任务吗？")) return;
