@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks     Task[]
+}
+
+// 任务表 - 核心业务实体
+model Task {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 任务输入
+  prompt      String
+
+  // 任务状态
+  status      TaskStatus @default(PENDING)
+
+  // 文生图阶段数据
+  imageGenerationStartedAt  DateTime?
+  imageGenerationCompletedAt DateTime?
+  selectedImageIndex        Int?
+
+  // 图生3D阶段数据
+  modelGenerationStartedAt  DateTime?
+  modelGenerationCompletedAt DateTime?
+
+  // 任务级别时间戳
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+  failedAt    DateTime?
+  errorMessage String?
+
+  // 关联的生成结果
+  images      TaskImage[]
+  model       TaskModel?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+// 任务图片表
+model TaskImage {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // 图片数据
+  // ⚠️ 当前存储：阿里云临时URL（24小时有效期）
+  // 格式示例: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+  // TODO: 对接OSS后改为本地路径: /generated/images/{taskId}/0.png
+  url       String
+  index     Int      // 0-3
+
+  // 阿里云API数据(可选)
+  aliyunTaskId    String?
+  aliyunRequestId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, index])
+  @@index([taskId])
+}
+
+// 3D模型表
+model TaskModel {
+  id        String   @id @default(cuid())
+  taskId    String   @unique
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // 模型基本信息
+  name      String
+  modelUrl  String?  // 本地路径: /generated/models/{taskId}.glb
+
+  // 生成状态
+  status    ModelStatus @default(PENDING)
+  progress  Int      @default(0)
+
+  // 模型元数据
+  format    String   @default("GLB")
+  fileSize  Int?
+  faceCount Int?
+  vertexCount Int?
+  quality   String   @default("高清")
+
+  // 3D生成API相关
+  apiTaskId String?
+  apiRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  failedAt  DateTime?
+  errorMessage String?
+
+  @@index([status])
+}
+
+// 枚举: 任务状态
+enum TaskStatus {
+  PENDING            // 任务已创建，等待开始生成图片
+  GENERATING_IMAGES  // 正在生成图片
+  IMAGES_READY       // 图片生成完成，等待用户选择
+  GENERATING_MODEL   // 正在生成3D模型
+  COMPLETED          // 整个任务完成
+  FAILED             // 任务失败
+  CANCELLED          // 用户取消
+}
+
+// 枚举: 3D模型状态
+enum ModelStatus {
+  PENDING      // 等待生成
+  GENERATING   // 生成中
+  COMPLETED    // 生成完成
+  FAILED       // 生成失败
+}

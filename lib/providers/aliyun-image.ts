@@ -1,10 +1,38 @@
 /**
  * 阿里云百炼-通义千问文生图API服务
  * 文档: https://help.aliyun.com/zh/model-studio/qwen-image-api
+ *
+ * ⚠️ 重要说明：
+ * - 阿里云返回的图片URL为临时链接，有效期仅 24小时
+ * - 当前实现直接使用临时URL，未下载到本地存储
+ * - TODO: 对接OSS后，需要下载图片并保存到永久存储
  */
 
+import { createLogger } from "@/lib/logger";
+
+// 创建日志器
+const log = createLogger("AliyunImageProvider");
+
+// ============================================
+// 自定义错误类
+// ============================================
+
+/**
+ * 阿里云API错误类
+ * 携带HTTP状态码，便于精确的错误处理
+ */
+export class AliyunAPIError extends Error {
+  constructor(
+    public statusCode: number, // HTTP状态码
+    message: string, // 错误描述
+  ) {
+    super(message);
+    this.name = "AliyunAPIError";
+  }
+}
+
 // 是否启用mock模式（开发阶段使用假数据）
-const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
 // Mock图片数据 - 开发阶段使用的假图片URL
 const MOCK_IMAGES = [
@@ -62,9 +90,14 @@ interface QwenImageResponse {
 }
 
 // 从环境变量获取API配置
-const API_KEY = process.env.ALIYUN_IMAGE_API_KEY || "";
-const API_ENDPOINT =
+// 为了确保在Node.js环境中也能正确加载，提供默认值
+const _API_KEY =
+  process.env.ALIYUN_IMAGE_API_KEY ||
+  process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY ||
+  "";
+const _API_ENDPOINT =
   process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+  process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
   "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
 /**
@@ -72,12 +105,12 @@ const API_ENDPOINT =
  */
 export async function generateImages(
   prompt: string,
-  count: number = 4
+  count: number = 4,
 ): Promise<string[]> {
   // 如果启用mock模式，返回mock数据
   if (MOCK_MODE) {
     // 模拟API延迟
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // 返回mock图片数据
     const mockImages = [];
@@ -85,13 +118,25 @@ export async function generateImages(
       const mockImageIndex = i % MOCK_IMAGES.length;
       mockImages.push(MOCK_IMAGES[mockImageIndex]);
     }
-    console.log(`[MOCK] 生成 ${count} 张图片成功`);
+    log.info("generateImages", "Mock模式：生成图片成功", { count });
     return mockImages;
   }
 
+  // 从环境变量获取API配置（在运行时获取，确保最新）
+  const API_KEY =
+    process.env.ALIYUN_IMAGE_API_KEY ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY ||
+    "";
+  const API_ENDPOINT =
+    process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+
   // 验证API密钥
   if (!API_KEY) {
-    throw new Error("缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY");
+    throw new Error(
+      "缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY",
+    );
   }
 
   // 注意: API一次只能生成1张图片,需要多次调用
@@ -132,15 +177,22 @@ export async function generateImages(
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`
+
+        // 抛出携带状态码的自定义错误
+        throw new AliyunAPIError(
+          response.status,
+          `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
         );
       }
 
       const data: QwenImageResponse = await response.json();
 
       // 调试: 打印完整响应数据
-      console.log(`图片 ${i + 1}/${count} API响应:`, JSON.stringify(data, null, 2));
+      log.debug("generateImages", "API响应", {
+        imageIndex: i + 1,
+        totalCount: count,
+        response: data,
+      });
 
       // 检查响应数据结构
       if (!data || !data.output || !data.output.choices) {
@@ -149,7 +201,7 @@ export async function generateImages(
 
       // 提取图片URL
       const choice = data.output.choices[0];
-      if (choice && choice.message && choice.message.content) {
+      if (choice?.message?.content) {
         const imageContent = choice.message.content.find((c) => c.image);
         if (imageContent?.image) {
           allImages.push(imageContent.image);
@@ -160,7 +212,10 @@ export async function generateImages(
         throw new Error("响应格式不正确");
       }
     } catch (error) {
-      console.error(`生成第 ${i + 1} 张图片失败:`, error);
+      log.error("generateImages", "生成图片失败", error, {
+        imageIndex: i + 1,
+        totalCount: count,
+      });
       throw error;
     }
   }
@@ -178,12 +233,13 @@ export async function generateImages(
  */
 export async function* generateImageStream(
   prompt: string,
-  count: number = 4
+  count: number = 4,
 ): AsyncGenerator<string> {
   // 如果启用mock模式，返回mock数据
   if (MOCK_MODE) {
     // 模拟API延迟
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
 
     for (let i = 0; i < count; i++) {
       // 模拟API调用延迟
@@ -191,15 +247,30 @@ export async function* generateImageStream(
 
       // 循环使用mock图片数据
       const mockImageIndex = i % MOCK_IMAGES.length;
-      console.log(`[MOCK] 图片 ${i + 1}/${count} 生成成功`);
+      log.info("generateImageStream", "Mock模式：生成图片", {
+        imageIndex: i + 1,
+        totalCount: count,
+      });
       yield MOCK_IMAGES[mockImageIndex];
     }
     return;
   }
 
+  // 从环境变量获取API配置（在运行时获取，确保最新）
+  const API_KEY =
+    process.env.ALIYUN_IMAGE_API_KEY ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY ||
+    "";
+  const API_ENDPOINT =
+    process.env.ALIYUN_IMAGE_API_ENDPOINT ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_ENDPOINT ||
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+
   // 验证API密钥
   if (!API_KEY) {
-    throw new Error("缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY");
+    throw new Error(
+      "缺少阿里云API密钥配置，请检查环境变量ALIYUN_IMAGE_API_KEY",
+    );
   }
 
   for (let i = 0; i < count; i++) {
@@ -236,24 +307,34 @@ export async function* generateImageStream(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`
+
+      // 抛出携带状态码的自定义错误
+      throw new AliyunAPIError(
+        response.status,
+        `阿里云API错误: ${response.status} - ${errorData.message || response.statusText}`,
       );
     }
 
     const data: QwenImageResponse = await response.json();
 
-    console.log(`图片 ${i + 1}/${count} 生成成功`);
+    log.info("generateImageStream", "图片生成成功", {
+      imageIndex: i + 1,
+      totalCount: count,
+    });
 
     if (!data || !data.output || !data.output.choices) {
       throw new Error(`API响应格式错误: ${JSON.stringify(data)}`);
     }
 
     const choice = data.output.choices[0];
-    if (choice && choice.message && choice.message.content) {
+    if (choice?.message?.content) {
       const imageContent = choice.message.content.find((c) => c.image);
       if (imageContent?.image) {
         // 立即yield返回这张图片的URL
+        // ⚠️ 返回值可能是以下格式之一：
+        // 1. HTTP URL: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+        // 2. Base64: data:image/png;base64,iVBORw0KG...
+        // 注意: URL有效期仅24小时
         yield imageContent.image;
       } else {
         throw new Error("响应中未找到图片URL");

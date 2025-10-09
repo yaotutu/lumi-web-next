@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-
-import GalleryCard from "./GalleryCard";
 import type { GalleryCardProps } from "./GalleryCard";
+import GalleryCard from "./GalleryCard";
 
 type Collection = {
   name: string;
@@ -40,7 +39,7 @@ const collections: Collection[] = [
   },
 ];
 
-const modelItem: Omit<GalleryCardProps, 'key'> = {
+const modelItem: Omit<GalleryCardProps, "key"> = {
   image: "/gallery/bat-bunny.webp",
   title: "Whimsical bat bunny",
   author: "AquaVortex",

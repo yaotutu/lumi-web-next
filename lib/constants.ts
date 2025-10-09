@@ -36,3 +36,32 @@ export const ERROR_MESSAGES = {
   MODEL_GENERATION_FAILED: "3D模型生成失败,请重试",
   NETWORK_ERROR: "网络错误,请检查连接",
 } as const;
+
+// Mock 用户配置（开发阶段）
+export const MOCK_USER = {
+  id: "user_dev_001",
+  email: "dev@lumi.com",
+  name: "Development User",
+} as const;
+
+// 存储路径配置
+export const STORAGE_PATHS = {
+  IMAGES_DIR: "/generated/images",
+  MODELS_DIR: "/generated/models",
+} as const;
+
+// 任务队列配置
+export const TASK_QUEUE = {
+  /** 最大并发任务数 */
+  MAX_CONCURRENT: 3,
+  /** 任务超时时间(毫秒) */
+  TASK_TIMEOUT: 120000, // 2分钟
+  /** 最大重试次数 */
+  MAX_RETRIES: 3,
+  /** 重试延迟基数(毫秒) */
+  RETRY_DELAY_BASE: 2000,
+  /** 队列最大长度 */
+  MAX_QUEUE_SIZE: 100,
+  /** 轮询间隔(毫秒) */
+  POLL_INTERVAL: 1000, // 1秒
+} as const;

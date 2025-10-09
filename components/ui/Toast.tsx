@@ -112,9 +112,7 @@ export default function Toast({
       className={`fixed right-4 top-20 z-50 flex min-w-[320px] max-w-md items-start gap-3 rounded-lg border p-4 shadow-lg backdrop-blur-md transition-all duration-300 ${
         TOAST_STYLES[type]
       } ${
-        isVisible
-          ? "translate-x-0 opacity-100"
-          : "translate-x-full opacity-0"
+        isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
       }`}
       role="alert"
     >

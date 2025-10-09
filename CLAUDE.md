@@ -155,6 +155,32 @@ MODEL_GENERATION.DELAY = 3000        // 3D生成3秒延迟
 - 所有组件使用 `"use client"` 指令(客户端交互)
 - Props 类型定义使用 `interface` 并导出
 
+### 组件目录规范
+
+**组件存放规则**：
+- **页面级组件** → `app/[page]/components/` - 仅在特定页面使用的组件
+- **全局组件** → `components/` - 跨页面共享的组件（layout、ui等）
+
+**示例**：
+```
+app/
+├── home/
+│   └── components/          # 首页专用组件
+│       ├── HeroSection.tsx
+│       └── ModelGallery.tsx
+└── workspace/
+    └── components/          # 工作台专用组件
+        ├── ImageGrid.tsx
+        └── ModelPreview.tsx
+
+components/
+├── layout/                  # 全局布局组件
+│   └── Navigation.tsx
+└── ui/                      # 全局UI组件
+    ├── Toast.tsx
+    └── Skeleton.tsx
+```
+
 ### 样式规范
 
 - **优先使用全局样式类** - `.btn-primary`、`.glass-panel` 等
@@ -165,22 +191,27 @@ MODEL_GENERATION.DELAY = 3000        // 3D生成3秒延迟
 
 ```
 components/
-  ├── layout/      # 布局组件(导航等)
-  ├── hero/        # 首页英雄区
-  ├── gallery/     # 模型画廊
-  ├── workspace/   # 工作台核心组件
-  └── ui/          # 通用UI组件
+  ├── layout/      # 全局布局组件(导航等)
+  └── ui/          # 全局UI组件(Toast、Skeleton等)
 
 lib/
-  ├── constants.ts # 全局常量
-  └── utils.ts     # 工具函数(如有)
+  ├── services/    # 业务逻辑层
+  ├── providers/   # 外部API封装
+  ├── validators/  # Zod验证schemas
+  ├── utils/       # 工具函数
+  └── constants.ts # 全局常量
 
 types/
   └── index.ts     # TypeScript 类型定义
 
 app/
   ├── page.tsx           # 首页
-  ├── workspace/page.tsx # 工作台页面
+  ├── home/
+  │   └── components/    # 首页专用组件
+  ├── workspace/
+  │   ├── page.tsx       # 工作台页面
+  │   └── components/    # 工作台专用组件
+  ├── api/               # API路由
   ├── layout.tsx         # 根布局
   └── globals.css        # 全局样式
 ```
@@ -245,3 +276,64 @@ handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
 - **自动整理 imports**
 - **启用推荐规则集**
 - 提交前运行 `npm run format`
+
+
+## 后端架构规范
+
+### 三层架构
+
+```
+API路由层 (app/api/) → Service层 (lib/services/) → 数据访问层 (Prisma)
+```
+
+**目录结构**: `lib/services/` (业务逻辑) | `lib/providers/` (外部API) | `lib/validators/` (Zod schemas) | `lib/utils/errors.ts` (统一错误处理)
+
+### 错误处理规则
+
+**核心原则**: 所有API路由必须使用 `withErrorHandler` 包装,错误会自动转换为标准响应。
+
+**错误优先级** (从高到低):
+1. `ZodError` → 400 + 详细验证错误
+2. `AppError` → 对应状态码 + 错误代码
+3. `AliyunAPIError` → 500 + 外部API错误
+4. `Unknown` → 500 + 通用错误
+
+**错误代码** (定义在 `lib/utils/errors.ts`):
+- `VALIDATION_ERROR` (400) - 输入验证失败
+- `NOT_FOUND` (404) - 资源不存在
+- `INVALID_STATE` (409) - 状态不允许操作
+- `QUEUE_FULL` (503) - 队列已满
+- `EXTERNAL_API_ERROR` (500) - 外部API错误
+
+**使用示例**:
+```typescript
+// API路由 - 必须使用withErrorHandler包装
+export const GET = withErrorHandler(async (request: NextRequest) => {
+  const validatedData = schema.parse(body); // Zod错误自动处理
+  const result = await Service.method(); // AppError自动转换
+  return NextResponse.json({ success: true, data: result });
+});
+
+// Service层 - 抛出AppError
+if (!resource) {
+  throw new AppError("NOT_FOUND", `资源不存在: ${id}`);
+}
+```
+
+### Zod验证规则
+
+1. **验证schema放在** `lib/validators/`,导出类型供Service层使用
+2. **API层负责验证**,Service层接收已验证的数据
+3. **查询参数验证需处理null**: `searchParams.get()` 返回 `string|null`
+
+### Service层规则
+
+1. **使用纯函数**,避免类封装
+2. **完整的JSDoc注释**: `@param` / `@returns` / `@throws`
+3. **抛出AppError**: `throw new AppError("NOT_FOUND", message, details?)`
+
+## 重要提示
+- 每一行代码必须有注释，解释代码的作用和目的。
+- 代码注释必须使用中文。
+- 优先使用函数式编程范式。
+- 统一使用ESM模块化语法。

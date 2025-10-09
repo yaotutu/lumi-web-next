@@ -1,38 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MODEL_GENERATION } from "@/lib/constants";
+import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
-import type { GenerationStatus } from "@/types";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
   prompt: string;
+  task?: TaskWithDetails | null;
+  taskId?: string;
 }
 
 export default function ModelPreview({
   imageIndex,
   prompt,
+  task,
+  taskId,
 }: ModelPreviewProps) {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [progress, setProgress] = useState(0);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 当选择图片并触发生成时
-  useEffect(() => {
-    if (imageIndex !== null && prompt) {
-      startModelGeneration();
-    }
-
-    // 清理定时器
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, [imageIndex, prompt]);
-
-  const startModelGeneration = () => {
+  const startModelGeneration = useCallback(() => {
     setStatus("generating");
     setProgress(0);
 
@@ -54,7 +44,40 @@ export default function ModelPreview({
       setProgress(100);
       setStatus("completed");
     }, MODEL_GENERATION.DELAY);
-  };
+  }, []);
+
+  // 当选择图片并触发生成时，或者任务状态改变时
+  useEffect(() => {
+    // 如果任务已完成模型生成
+    if (task?.status === "COMPLETED") {
+      setStatus("completed");
+      setProgress(100);
+      // 清理定时器
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // 如果正在生成模型
+    if (task?.status === "GENERATING_MODEL" && status !== "generating") {
+      startModelGeneration();
+      return;
+    }
+
+    // 当选择图片并触发生成时
+    if (imageIndex !== null && prompt && status === "idle") {
+      startModelGeneration();
+    }
+
+    // 清理定时器
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [imageIndex, prompt, task?.status, startModelGeneration, status]);
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
@@ -69,7 +92,9 @@ export default function ModelPreview({
           {status === "generating" ? (
             <div className="text-center">
               <div className="mb-4 h-12 w-12 animate-spin rounded-full border-3 border-yellow-1/20 border-t-yellow-1 mx-auto" />
-              <p className="text-sm font-medium text-foreground-muted">正在生成3D模型...</p>
+              <p className="text-sm font-medium text-foreground-muted">
+                正在生成3D模型...
+              </p>
               <p className="mt-2 text-[13px] font-semibold tabular-nums text-yellow-1">
                 {Math.round(progress)}%
               </p>
@@ -85,7 +110,9 @@ export default function ModelPreview({
           ) : (
             <div className="text-center">
               <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
-              <p className="text-sm text-foreground-subtle">3D模型将在这里显示</p>
+              <p className="text-sm text-foreground-subtle">
+                3D模型将在这里显示
+              </p>
               <p className="mt-1 text-xs text-foreground-subtle">
                 (Three.js / React Three Fiber)
               </p>
@@ -193,10 +220,7 @@ export default function ModelPreview({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="btn-primary w-full"
-            >
+            <button type="button" className="btn-primary w-full">
               下载模型
             </button>
           </>
@@ -206,9 +230,7 @@ export default function ModelPreview({
               <h3 className="mb-1.5 text-sm font-semibold text-white">
                 模型信息
               </h3>
-              <div className="text-xs text-white/60">
-                等待生成模型...
-              </div>
+              <div className="text-xs text-white/60">等待生成模型...</div>
             </div>
 
             <button

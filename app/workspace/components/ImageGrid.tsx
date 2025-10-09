@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import type { GenerationStatus } from "@/types";
+import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
   initialPrompt?: string;
-  onGenerate3D?: (imageIndex: number, prompt: string) => void;
+  onGenerate3D?: (imageIndex: number) => void;
+  task?: TaskWithDetails | null;
+  taskId?: string;
 }
 
 // 每张图片的加载状态
@@ -20,6 +22,8 @@ interface ImageSlot {
 export default function ImageGrid({
   initialPrompt = "",
   onGenerate3D,
+  task,
+  taskId,
 }: ImageGridProps) {
   const [inputText, setInputText] = useState(initialPrompt);
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
@@ -27,7 +31,39 @@ export default function ImageGrid({
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string>("");
 
-  // 流式接收图片 - 生成一张显示一张
+  // 如果任务已有图片数据，初始化图片槽位
+  useEffect(() => {
+    if (task?.images && task.images.length > 0) {
+      const slots: ImageSlot[] = Array.from(
+        { length: IMAGE_GENERATION.COUNT },
+        (_, index) => {
+          const image = task.images.find((img) => img.index === index);
+          return {
+            url: image ? image.url : null,
+            status: image ? "completed" : "pending",
+          };
+        },
+      );
+      setImageSlots(slots);
+
+      // 根据任务状态设置组件状态
+      if (task.status === "IMAGES_READY") {
+        setStatus("completed");
+      } else if (task.status === "GENERATING_IMAGES") {
+        setStatus("generating");
+      }
+
+      // 如果任务已有选中的图片，设置选中状态
+      if (task.selectedImageIndex !== null) {
+        setSelectedImage(task.selectedImageIndex);
+      }
+    } else if (task?.status === "PENDING") {
+      // 如果任务在队列中，设置状态为生成中
+      setStatus("generating");
+    }
+  }, [task]);
+
+  // 重新生成图片 - 创建新任务
   const handleGenerate = useCallback(async () => {
     // 验证输入
     const trimmedText = inputText.trim();
@@ -48,91 +84,47 @@ export default function ImageGrid({
     setStatus("generating");
     setSelectedImage(null);
 
-    // 初始化4个图片槽位
-    const slots: ImageSlot[] = Array.from({ length: IMAGE_GENERATION.COUNT }, () => ({
-      url: null,
-      status: "pending" as ImageSlotStatus,
-    }));
+    // 初始化4个图片槽位为加载状态
+    const slots: ImageSlot[] = Array.from(
+      { length: IMAGE_GENERATION.COUNT },
+      () => ({
+        url: null,
+        status: "pending" as ImageSlotStatus,
+      }),
+    );
     setImageSlots(slots);
 
     try {
-      // 使用 EventSource 接收流式数据
-      const response = await fetch("/api/generate-images", {
+      // 创建新任务，后端会自动触发图片生成
+      const response = await fetch("/api/tasks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           prompt: trimmedText,
-          count: IMAGE_GENERATION.COUNT,
-          stream: true,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "图片生成失败");
+        throw new Error(errorData.error || "创建任务失败");
       }
 
-      // 处理流式响应
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      const data = await response.json();
 
-      if (!reader) {
-        throw new Error("无法读取响应流");
+      if (!data.success) {
+        throw new Error(data.error || "创建任务失败");
       }
 
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const jsonStr = line.slice(6);
-            try {
-              const data = JSON.parse(jsonStr);
-
-              if (data.type === "image") {
-                // 更新对应索引的图片槽位
-                setImageSlots((prev) => {
-                  const newSlots = [...prev];
-                  newSlots[data.index] = {
-                    url: data.url,
-                    status: "completed",
-                  };
-                  return newSlots;
-                });
-              } else if (data.type === "done") {
-                setStatus("completed");
-              } else if (data.type === "error") {
-                throw new Error(data.message);
-              }
-            } catch (parseError) {
-              console.error("解析SSE数据失败:", parseError);
-            }
-          }
-        }
-      }
+      // 任务创建成功，导航到新任务页面(轮询逻辑会自动更新任务状态)
+      window.location.href = `/workspace?taskId=${data.data.id}`;
     } catch (err) {
-      console.error("生成图片失败:", err);
-      setError(err instanceof Error ? err.message : "图片生成失败,请重试");
+      console.error("创建任务失败:", err);
+      setError(err instanceof Error ? err.message : "创建任务失败,请重试");
       setStatus("failed");
     }
   }, [inputText]);
-
-  // 如果有初始prompt,自动生成图片
-  useEffect(() => {
-    if (initialPrompt) {
-      handleGenerate();
-    }
-  }, [initialPrompt]);
 
   const handleGenerate3D = () => {
     if (selectedImage === null) {
@@ -140,7 +132,7 @@ export default function ImageGrid({
       return;
     }
     setError("");
-    onGenerate3D?.(selectedImage, inputText);
+    onGenerate3D?.(selectedImage);
   };
 
   return (
@@ -186,11 +178,23 @@ export default function ImageGrid({
 
       {/* 生成结果区域 */}
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
-        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">生成结果</h2>
+        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">
+          生成结果
+        </h2>
 
-        {status === "idle" ? (
+        {status === "idle" && !task ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground-subtle">
             <p className="text-sm">等待生成图片...</p>
+          </div>
+        ) : task?.status === "PENDING" ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <div className="h-12 w-12 animate-pulse rounded-full border-3 border-yellow-1/30 border-t-yellow-1 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-white">任务在队列中</p>
+              <p className="mt-1 text-xs text-white/60">
+                正在等待处理,请稍候...
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -215,7 +219,8 @@ export default function ImageGrid({
                       } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
                       aria-label={`图片 ${idx + 1}`}
                     >
-                      {slot.status === "pending" || slot.status === "loading" ? (
+                      {slot.status === "pending" ||
+                      slot.status === "loading" ? (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />

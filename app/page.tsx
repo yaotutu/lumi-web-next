@@ -1,6 +1,6 @@
-import HeroSection from "./home/HeroSection";
-import ModelGallery from "@/components/gallery/ModelGallery";
 import Navigation from "@/components/layout/Navigation";
+import ModelGallery from "./home/components/ModelGallery";
+import HeroSection from "./home/components/HeroSection";
 
 export default function Home() {
   return (
