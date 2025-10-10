@@ -13,6 +13,7 @@ import {
   AliyunAPIError,
   generateImageStream,
 } from "@/lib/providers/aliyun-image";
+import { optimizePromptFor3DPrint } from "@/lib/services/prompt-optimizer";
 
 // 创建日志器
 const log = createLogger("TaskQueue");
@@ -45,7 +46,10 @@ let runningCount = 0;
  */
 async function processTask(taskId: string, prompt: string): Promise<void> {
   const t = timer();
-  log.info("processTask", "开始处理任务", { taskId, promptLength: prompt.length });
+  log.info("processTask", "开始处理任务", {
+    taskId,
+    promptLength: prompt.length,
+  });
 
   // 更新数据库状态为"生成中"（首次执行时）
   const task = await prisma.task.findUnique({
@@ -78,7 +82,7 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
       if (startIndex >= IMAGE_GENERATION.COUNT) {
         log.info("processTask", "图片已全部生成，无需继续", {
           taskId,
-          count: IMAGE_GENERATION.COUNT
+          count: IMAGE_GENERATION.COUNT,
         });
         await prisma.task.update({
           where: { id: taskId },
@@ -99,10 +103,13 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
         remainingCount,
       });
 
+      // 🤖 优化提示词(3D打印适配)
+      const optimizedPrompt = await optimizePromptFor3DPrint(prompt);
+
       // 从断点继续生成
       let index = startIndex;
       for await (const imageUrl of generateImageStream(
-        prompt,
+        optimizedPrompt,
         remainingCount,
       )) {
         // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
@@ -196,7 +203,9 @@ function canRetry(error: unknown): boolean {
     ];
 
     if (nonRetryableStatusCodes.includes(error.statusCode)) {
-      log.debug("canRetry", "不可重试的HTTP错误", { statusCode: error.statusCode });
+      log.debug("canRetry", "不可重试的HTTP错误", {
+        statusCode: error.statusCode,
+      });
       return false;
     }
 
@@ -332,7 +341,7 @@ export async function cancelTask(taskId: string): Promise<boolean> {
 
     log.warn("cancelTask", "任务状态不允许取消", {
       taskId,
-      currentStatus: task.status
+      currentStatus: task.status,
     });
     return false;
   } catch (error) {
