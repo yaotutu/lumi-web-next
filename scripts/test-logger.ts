@@ -14,7 +14,10 @@ async function testLogger() {
   // 测试1: 基本日志级别
   log.info("testBasicLevels", "这是一条普通信息");
   log.warn("testBasicLevels", "这是一条警告信息");
-  log.debug("testBasicLevels", "这是一条调试信息（需要LOG_LEVEL=debug才会显示）");
+  log.debug(
+    "testBasicLevels",
+    "这是一条调试信息（需要LOG_LEVEL=debug才会显示）",
+  );
 
   // 测试2: 带上下文的日志
   log.info("testWithContext", "创建任务", {

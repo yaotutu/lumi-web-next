@@ -144,35 +144,26 @@ function WorkspaceContent() {
   const handleGenerate3D = async (imageIndex: number) => {
     setSelectedImageIndex(imageIndex);
 
-    // 保存选中的图片索引并触发3D模型生成
+    // 保存选中的图片索引，后台会自动触发3D模型生成队列
     if (task) {
       try {
-        // 1. 保存选中的图片索引到数据库
-        await fetch(`/api/tasks/${task.id}`, {
+        // 只需要更新 selectedImageIndex，后台会自动检测并开始生成3D模型
+        const response = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ selectedImageIndex: imageIndex }),
         });
 
-        // 2. 触发3D模型生成
-        const response = await fetch(`/api/tasks/${task.id}/model`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageIndex,
-          }),
-        });
-
         const data = await response.json();
 
         if (data.success) {
-          // 模型生成任务已创建，轮询逻辑会自动更新任务状态
-          console.log("3D模型生成已开始");
+          // 后台队列会自动处理3D模型生成，前端轮询Task状态即可
+          console.log("图片选择成功，3D模型生成已加入队列");
         } else {
-          console.error("Failed to start 3D model generation:", data.error);
+          console.error("Failed to select image:", data.error);
         }
       } catch (error) {
-        console.error("Failed to generate 3D model:", error);
+        console.error("Failed to select image:", error);
       }
     }
   };

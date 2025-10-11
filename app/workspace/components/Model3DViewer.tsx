@@ -115,7 +115,7 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
         />
       </Canvas>
     );
-  }
+  },
 );
 
 // 设置显示名称,便于调试

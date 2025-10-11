@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MODEL_GENERATION } from "@/lib/constants";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
@@ -23,7 +22,6 @@ export default function ModelPreview({
   const [progress, setProgress] = useState(0);
   const [showGrid, setShowGrid] = useState(false); // 控制是否显示网格
   const [isFullscreen, setIsFullscreen] = useState(false); // 控制全屏状态
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const model3DViewerRef = useRef<Model3DViewerRef>(null); // Model3DViewer 组件引用
   const previewContainerRef = useRef<HTMLDivElement>(null); // 3D预览容器引用
 
@@ -67,62 +65,38 @@ export default function ModelPreview({
     };
   }, []);
 
-  const startModelGeneration = useCallback(() => {
-    setStatus("generating");
-    setProgress(0);
-
-    // 模拟进度更新
-    progressIntervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) {
-          return prev;
-        }
-        return prev + Math.random() * 5;
-      });
-    }, MODEL_GENERATION.PROGRESS_INTERVAL);
-
-    // 模拟生成完成
-    setTimeout(() => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      setProgress(100);
-      setStatus("completed");
-    }, MODEL_GENERATION.DELAY);
-  }, []);
-
-  // 当选择图片并触发生成时，或者任务状态改变时
+  // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
     // 如果任务已完成模型生成
-    if (task?.status === "COMPLETED") {
+    if (task?.status === "COMPLETED" && task.model) {
       setStatus("completed");
-      setProgress(100);
-      // 清理定时器
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
+      setProgress(task.model.progress || 100);
       return;
     }
 
     // 如果正在生成模型
-    if (task?.status === "GENERATING_MODEL" && status !== "generating") {
-      startModelGeneration();
+    if (task?.status === "GENERATING_MODEL" && task.model) {
+      setStatus("generating");
+      setProgress(task.model.progress || 0);
       return;
     }
 
-    // 当选择图片并触发生成时
-    if (imageIndex !== null && prompt && status === "idle") {
-      startModelGeneration();
+    // 如果任务失败
+    if (task?.status === "FAILED") {
+      setStatus("failed");
+      return;
     }
 
-    // 清理定时器
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, [imageIndex, prompt, task?.status, startModelGeneration, status]);
+    // 其他状态（等待选择图片）
+    if (
+      task?.status === "IMAGES_READY" ||
+      task?.status === "PENDING" ||
+      task?.status === "GENERATING_IMAGES"
+    ) {
+      setStatus("idle");
+      setProgress(0);
+    }
+  }, [task?.status, task?.model?.progress, task?.model?.status]);
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
@@ -152,7 +126,7 @@ export default function ModelPreview({
             // 完成:渲染 3D 模型
             <Model3DViewer
               ref={model3DViewerRef}
-              modelUrl="/demo.glb"
+              modelUrl={task?.model?.modelUrl || "/demo.glb"} // 使用真实的模型URL，降级到demo
               showGrid={showGrid}
             />
           ) : (
@@ -255,24 +229,45 @@ export default function ModelPreview({
               <div className="space-y-1 text-xs text-white/60">
                 <div className="flex justify-between">
                   <span>格式:</span>
-                  <span className="text-white/90">GLB</span>
+                  <span className="text-white/90">
+                    {task?.model?.format || "GLB"}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>大小:</span>
-                  <span className="text-white/90">2.5 MB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>面数:</span>
-                  <span className="text-white/90">50,248</span>
-                </div>
+                {task?.model?.fileSize && (
+                  <div className="flex justify-between">
+                    <span>大小:</span>
+                    <span className="text-white/90">
+                      {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
+                )}
+                {task?.model?.faceCount && (
+                  <div className="flex justify-between">
+                    <span>面数:</span>
+                    <span className="text-white/90">
+                      {task.model.faceCount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>质量:</span>
-                  <span className="text-yellow-1">高清</span>
+                  <span className="text-yellow-1">
+                    {task?.model?.quality || "高清"}
+                  </span>
                 </div>
               </div>
             </div>
 
-            <button type="button" className="btn-primary w-full">
+            <button
+              type="button"
+              className="btn-primary w-full"
+              onClick={() => {
+                if (task?.model?.modelUrl) {
+                  window.open(task.model.modelUrl, "_blank");
+                }
+              }}
+              disabled={!task?.model?.modelUrl}
+            >
               下载模型
             </button>
           </>
