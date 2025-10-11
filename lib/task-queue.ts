@@ -265,19 +265,22 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * 添加任务（带并发控制）
+ * 注意：此函数会立即返回，任务在后台异步执行
  * @param taskId 数据库任务ID
  * @param prompt 生成提示词
  */
 export async function addTask(taskId: string, prompt: string): Promise<void> {
-  // 等待直到有空闲槽位
-  while (runningCount >= CONFIG.MAX_CONCURRENT) {
-    log.warn("addTask", "达到最大并发数，等待空闲槽位", {
+  // 检查是否达到最大并发数
+  if (runningCount >= CONFIG.MAX_CONCURRENT) {
+    log.warn("addTask", "达到最大并发数，任务将排队等待", {
       running: runningCount,
       maxConcurrent: CONFIG.MAX_CONCURRENT,
     });
-    await sleep(500); // 每500ms检查一次
+    // 抛出错误，让上层处理队列已满的情况
+    throw new Error("队列已满，请稍后重试");
   }
 
+  // 立即增加计数器并启动后台任务
   runningCount++;
   log.info("addTask", "任务加入处理队列", {
     taskId,
@@ -285,16 +288,22 @@ export async function addTask(taskId: string, prompt: string): Promise<void> {
     maxConcurrent: CONFIG.MAX_CONCURRENT,
   });
 
-  try {
-    await processTask(taskId, prompt);
-  } finally {
-    runningCount--;
-    log.info("addTask", "任务处理完成", {
-      taskId,
-      running: runningCount,
-      maxConcurrent: CONFIG.MAX_CONCURRENT,
+  // 在后台异步执行任务（不等待完成）
+  processTask(taskId, prompt)
+    .catch((error) => {
+      log.error("addTask", "后台任务执行失败", error, { taskId });
+    })
+    .finally(() => {
+      runningCount--;
+      log.info("addTask", "任务处理完成", {
+        taskId,
+        running: runningCount,
+        maxConcurrent: CONFIG.MAX_CONCURRENT,
+      });
     });
-  }
+
+  // 立即返回，不等待任务完成
+  log.info("addTask", "任务已加入后台处理队列，立即返回", { taskId });
 }
 
 /**
