@@ -205,8 +205,8 @@ function WorkspaceContent() {
         </div>
       )}
 
-      {/* 左侧:输入与生成区域 */}
-      <div className="flex w-full flex-col gap-4 overflow-hidden lg:w-2/5">
+      {/* 左侧:输入与生成区域 - 自适应宽度以保持色块正方形 */}
+      <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
           initialPrompt={task.prompt}
           onGenerate3D={handleGenerate3D}
@@ -215,8 +215,8 @@ function WorkspaceContent() {
         />
       </div>
 
-      {/* 右侧:3D预览区域 */}
-      <div className="flex w-full flex-col overflow-hidden lg:w-3/5">
+      {/* 右侧:3D预览区域 - 占据剩余空间 */}
+      <div className="flex w-full flex-1 flex-col overflow-hidden">
         <ModelPreview
           imageIndex={selectedImageIndex}
           prompt={task.prompt}

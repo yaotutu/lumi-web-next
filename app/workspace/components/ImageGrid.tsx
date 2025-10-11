@@ -136,7 +136,7 @@ export default function ImageGrid({
   };
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-hidden">
+    <div className="flex h-full w-full flex-col gap-4 overflow-hidden lg:w-[600px]">
       {/* 输入与生成区域 */}
       <div className="glass-panel flex shrink-0 flex-col gap-2.5 p-4">
         <div className="relative">
@@ -176,8 +176,9 @@ export default function ImageGrid({
         </button>
       </div>
 
-      {/* 生成结果区域 */}
+      {/* 生成结果区域 - flex布局容器 */}
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
+        {/* 标题 */}
         <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">
           生成结果
         </h2>
@@ -197,76 +198,78 @@ export default function ImageGrid({
             </div>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            {/* 图片容器 - 修复尺寸问题 */}
-            <div className="flex-1 overflow-hidden">
-              <div className="grid h-full w-full grid-cols-2 gap-2.5">
-                {imageSlots.map((slot, idx) => (
-                  <div key={idx} className="relative h-full w-full">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (slot.status === "completed") {
-                          setSelectedImage(idx);
-                          if (error) setError("");
-                        }
-                      }}
-                      disabled={slot.status !== "completed"}
-                      className={`group absolute inset-0 overflow-hidden rounded-xl border-2 transition-all duration-250 ${
-                        selectedImage === idx && slot.status === "completed"
-                          ? "border-yellow-1 p-0 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
-                          : "border-white/10 p-px hover:border-white/20"
-                      } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
-                      aria-label={`图片 ${idx + 1}`}
-                    >
-                      {slot.status === "pending" ||
-                      slot.status === "loading" ? (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />
-                            <span className="text-xs text-foreground-subtle">
-                              生成中...
-                            </span>
+          <>
+            {/* 图片网格区域 - 使用grid-rows-2确保4张图片都在视口内 */}
+            <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-2 gap-2.5">
+              {imageSlots.map((slot, idx) => (
+                <div key={idx} className="relative w-full h-full">
+                  {/* 图片容器 - h-full让图片填充网格单元格 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (slot.status === "completed") {
+                        setSelectedImage(idx);
+                        if (error) setError("");
+                      }
+                    }}
+                    disabled={slot.status !== "completed"}
+                    className={`group relative h-full w-full overflow-hidden rounded-xl border-2 transition-all ${
+                      selectedImage === idx && slot.status === "completed"
+                        ? "border-yellow-1 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
+                        : "border-white/10 hover:border-white/20"
+                    } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
+                  >
+                    {/* 加载中状态 */}
+                    {slot.status === "pending" || slot.status === "loading" ? (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />
+                          <span className="text-xs text-foreground-subtle">
+                            生成中...
+                          </span>
+                        </div>
+                      </div>
+                    ) : slot.status === "completed" && slot.url ? (
+                      <>
+                        {/* 图片 - 使用object-cover等比拉伸填充正方形 */}
+                        <img
+                          src={slot.url}
+                          alt={`生成的图片 ${idx + 1}`}
+                          className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
+                        />
+                        {/* 选中标记 */}
+                        {selectedImage === idx && (
+                          <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
+                            <svg
+                              className="h-3.5 w-3.5 text-black"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2.5}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
                           </div>
-                        </div>
-                      ) : slot.status === "completed" && slot.url ? (
-                        <div className="relative h-full w-full">
-                          <img
-                            src={slot.url}
-                            alt={`生成的图片 ${idx + 1}`}
-                            className="absolute inset-0 h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
-                          />
-                          {selectedImage === idx && (
-                            <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
-                              <svg
-                                className="h-3.5 w-3.5 text-black"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2.5}
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-500/10 to-[#0d0d0d]">
-                          <span className="text-xs text-red-500">生成失败</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                        )}
+                      </>
+                    ) : (
+                      // 失败状态
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-500/10 to-[#0d0d0d]">
+                        <span className="text-xs text-red-500">生成失败</span>
+                      </div>
+                    )}
+                  </button>
+                </div>
+              ))}
             </div>
 
-            <div className="shrink-0">
+            {/* 底部按钮 - 固定高度,不参与flex */}
+            <div className="mt-3 shrink-0">
               <button
                 type="button"
                 onClick={handleGenerate3D}
@@ -276,7 +279,7 @@ export default function ImageGrid({
                 生成 3D 模型
               </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
