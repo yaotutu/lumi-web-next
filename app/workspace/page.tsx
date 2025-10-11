@@ -144,16 +144,35 @@ function WorkspaceContent() {
   const handleGenerate3D = async (imageIndex: number) => {
     setSelectedImageIndex(imageIndex);
 
-    // 保存选中的图片索引到数据库
+    // 保存选中的图片索引并触发3D模型生成
     if (task) {
       try {
+        // 1. 保存选中的图片索引到数据库
         await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ selectedImageIndex: imageIndex }),
         });
+
+        // 2. 触发3D模型生成
+        const response = await fetch(`/api/tasks/${task.id}/model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageIndex,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // 模型生成任务已创建，轮询逻辑会自动更新任务状态
+          console.log("3D模型生成已开始");
+        } else {
+          console.error("Failed to start 3D model generation:", data.error);
+        }
       } catch (error) {
-        console.error("Failed to save selected image index:", error);
+        console.error("Failed to generate 3D model:", error);
       }
     }
   };

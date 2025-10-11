@@ -274,7 +274,7 @@ export default function ImageGrid({
                 type="button"
                 onClick={handleGenerate3D}
                 disabled={selectedImage === null}
-                className="btn-secondary w-full"
+                className="btn-primary w-full"
               >
                 生成 3D 模型
               </button>
