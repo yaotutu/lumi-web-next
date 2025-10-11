@@ -53,73 +53,70 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
         }
       },
     }));
-  return (
-    // Canvas 是 React Three Fiber 的根容器
-    <Canvas
-      camera={{
-        position: [3, 3, 3], // 相机初始位置
-        fov: 50, // 视野角度
-      }}
-      style={{
-        width: "100%",
-        height: "100%",
-      }}
-    >
-      {/* 环境光照 */}
-      <ambientLight intensity={0.5} />
+    return (
+      // Canvas 是 React Three Fiber 的根容器
+      <Canvas
+        camera={{
+          position: [1, 1, 1], // 相机初始位置(更靠近模型,使模型看起来更大)
+          fov: 60, // 视野角度(增大视野角度,模型显示更大)
+        }}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        {/* 环境光照 */}
+        <ambientLight intensity={0.5} />
 
-      {/* 方向光 */}
-      <directionalLight
-        position={[10, 10, 5]}
-        intensity={1}
-        castShadow
-      />
+        {/* 方向光 */}
+        <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
 
-      {/* 聚光灯 */}
-      <spotLight
-        position={[-10, 10, -10]}
-        intensity={0.3}
-        angle={0.3}
-        penumbra={1}
-      />
-
-      {/* Suspense 用于异步加载模型 */}
-      <Suspense fallback={<LoadingFallback />}>
-        {/* 加载 GLB 模型 */}
-        <GLBModel url={modelUrl} />
-
-        {/* 环境贴图,提供更真实的反射效果 */}
-        <Environment preset="studio" />
-      </Suspense>
-
-      {/* 网格辅助线(可选) */}
-      {showGrid && (
-        <Grid
-          args={[10, 10]}
-          cellSize={0.5}
-          cellThickness={0.5}
-          cellColor="#6b6b6b"
-          sectionSize={1}
-          sectionThickness={1}
-          sectionColor="#9d4b4b"
-          fadeDistance={25}
-          fadeStrength={1}
-          followCamera={false}
+        {/* 聚光灯 */}
+        <spotLight
+          position={[-10, 10, -10]}
+          intensity={0.3}
+          angle={0.3}
+          penumbra={1}
         />
-      )}
 
-      {/* 轨道控制器,允许用户旋转、缩放、平移视角 */}
-      <OrbitControls
-        ref={controlsRef}
-        enableDamping // 启用阻尼效果,使旋转更平滑
-        dampingFactor={0.05} // 阻尼系数
-        minDistance={1} // 最小缩放距离
-        maxDistance={20} // 最大缩放距离
-        maxPolarAngle={Math.PI / 2} // 限制垂直旋转角度
-      />
-    </Canvas>
-  );
-});
+        {/* Suspense 用于异步加载模型 */}
+        <Suspense fallback={<LoadingFallback />}>
+          {/* 加载 GLB 模型 */}
+          <GLBModel url={modelUrl} />
+
+          {/* 环境贴图,提供更真实的反射效果 */}
+          <Environment preset="studio" />
+        </Suspense>
+
+        {/* 网格辅助线(可选) */}
+        {showGrid && (
+          <Grid
+            args={[10, 10]}
+            cellSize={0.5}
+            cellThickness={0.5}
+            cellColor="#6b6b6b"
+            sectionSize={1}
+            sectionThickness={1}
+            sectionColor="#9d4b4b"
+            fadeDistance={25}
+            fadeStrength={1}
+            followCamera={false}
+          />
+        )}
+
+        {/* 轨道控制器,允许用户旋转、缩放、平移视角 */}
+        <OrbitControls
+          ref={controlsRef}
+          enableDamping // 启用阻尼效果,使旋转更平滑
+          dampingFactor={0.05} // 阻尼系数
+          minDistance={0.5} // 最小缩放距离(允许更近距离查看)
+          maxDistance={10} // 最大缩放距离(调整最大距离限制)
+          maxPolarAngle={Math.PI / 2} // 限制垂直旋转角度
+        />
+      </Canvas>
+    );
+  }
+);
 
 // 设置显示名称,便于调试
 Model3DViewer.displayName = "Model3DViewer";
