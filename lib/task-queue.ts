@@ -13,7 +13,7 @@ import {
   AliyunAPIError,
   generateImageStream,
 } from "@/lib/providers/aliyun-image";
-import { optimizePromptFor3DPrint } from "@/lib/services/prompt-optimizer";
+import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
 
 // 创建日志器
 const log = createLogger("TaskQueue");
@@ -103,15 +103,28 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
         remainingCount,
       });
 
-      // 🤖 优化提示词(3D打印适配)
-      const optimizedPrompt = await optimizePromptFor3DPrint(prompt);
+      // 🤖 生成4个不同风格的提示词
+      const promptVariants = await generateMultiStylePrompts(prompt);
 
-      // 从断点继续生成
+      // 从断点继续生成（每张图片使用不同的提示词）
       let index = startIndex;
-      for await (const imageUrl of generateImageStream(
-        optimizedPrompt,
-        remainingCount,
-      )) {
+      for (let i = 0; i < remainingCount; i++) {
+        // 使用对应索引的提示词变体
+        const currentPrompt = promptVariants[index];
+
+        log.info("processTask", `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`, {
+          taskId,
+          promptPreview: currentPrompt.substring(0, 80) + "...",
+        });
+
+        // 生成单张图片（使用该提示词）
+        const generator = generateImageStream(currentPrompt, 1);
+        const { value: imageUrl } = await generator.next();
+
+        if (!imageUrl) {
+          throw new Error(`图片 ${index + 1} 生成失败：未返回URL`);
+        }
+
         // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
         // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
         //
@@ -128,13 +141,16 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
             taskId,
             url: imageUrl, // TODO: 改为 localUrl
             index,
+            prompt: currentPrompt, // 记录使用的提示词，方便调试和追踪
           },
         });
+
         log.info("processTask", "图片生成成功", {
           taskId,
           imageIndex: index + 1,
           totalCount: IMAGE_GENERATION.COUNT,
         });
+
         index++;
       }
 

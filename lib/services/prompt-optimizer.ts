@@ -4,8 +4,14 @@
  * 原则:函数式编程,带降级策略,确保业务连续性
  */
 
-import { optimizePromptWithQwen } from "@/lib/providers/qwen-openai";
-import { IMAGE_3D_PRINT_PROMPT } from "@/lib/prompts";
+import {
+  optimizePromptWithQwen,
+  generatePromptVariants,
+} from "@/lib/providers/qwen-openai";
+import {
+  IMAGE_3D_PRINT_PROMPT,
+  IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
+} from "@/lib/prompts";
 import { createLogger } from "@/lib/logger";
 
 // 创建日志器
@@ -63,5 +69,66 @@ export async function optimizePromptFor3DPrint(
     });
 
     return userInput;
+  }
+}
+
+/**
+ * 生成4个不同风格的3D打印提示词
+ * 为同一物体生成多种设计方案，增加用户选择的多样性
+ *
+ * @param userInput - 用户原始输入
+ * @returns 4个不同风格的提示词数组（失败时返回4个相同的原始输入）
+ */
+export async function generateMultiStylePrompts(
+  userInput: string,
+): Promise<string[]> {
+  try {
+    log.info("generateMultiStylePrompts", "开始生成多风格提示词", {
+      userInput,
+      inputLength: userInput.length,
+    });
+
+    // 调用通义千问生成4个不同风格的变体
+    const variants = await generatePromptVariants(
+      userInput,
+      IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
+    );
+
+    // 记录生成成功
+    log.info("generateMultiStylePrompts", "✅ 多风格提示词生成成功", {
+      original: userInput,
+      variantCount: variants.length,
+    });
+
+    // 在日志中清晰展示每个变体
+    log.info("generateMultiStylePrompts", "📝 原始输入", {
+      prompt: userInput,
+    });
+
+    variants.forEach((variant, index) => {
+      log.info("generateMultiStylePrompts", `✨ 变体 ${index + 1}/4`, {
+        prompt: variant,
+        length: variant.length,
+      });
+    });
+
+    return variants;
+  } catch (error) {
+    // 降级策略：失败时返回4个相同的原始输入
+    log.warn(
+      "generateMultiStylePrompts",
+      "⚠️ 生成多风格提示词失败，降级使用原始输入",
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userInput,
+      },
+    );
+
+    log.info("generateMultiStylePrompts", "📝 降级：使用4个相同的原始提示词", {
+      prompt: userInput,
+    });
+
+    // 返回4个相同的原始输入作为降级方案
+    return [userInput, userInput, userInput, userInput];
   }
 }
