@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack 2>&1 | npx pino-pretty --colorize --translateTime='SYS:HH:MM:ss.l' --ignore='pid,hostname' --singleLine=true --levelFirst=true --messageFormat='{msg}'",
+    "dev": "next dev --port 4000 --turbopack 2>&1 | npx pino-pretty --colorize --translateTime='SYS:HH:MM:ss.l' --ignore='pid,hostname' --singleLine=true --levelFirst=true --messageFormat='{msg}'",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "biome check",
