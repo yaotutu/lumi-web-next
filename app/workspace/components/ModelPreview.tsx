@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MODEL_GENERATION } from "@/lib/constants";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
+import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
@@ -20,76 +20,99 @@ export default function ModelPreview({
 }: ModelPreviewProps) {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [progress, setProgress] = useState(0);
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [showGrid, setShowGrid] = useState(false); // 控制是否显示网格
+  const [isFullscreen, setIsFullscreen] = useState(false); // 控制全屏状态
+  const model3DViewerRef = useRef<Model3DViewerRef>(null); // Model3DViewer 组件引用
+  const previewContainerRef = useRef<HTMLDivElement>(null); // 3D预览容器引用
 
-  const startModelGeneration = useCallback(() => {
-    setStatus("generating");
-    setProgress(0);
-
-    // 模拟进度更新
-    progressIntervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) {
-          return prev;
-        }
-        return prev + Math.random() * 5;
-      });
-    }, MODEL_GENERATION.PROGRESS_INTERVAL);
-
-    // 模拟生成完成
-    setTimeout(() => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      setProgress(100);
-      setStatus("completed");
-    }, MODEL_GENERATION.DELAY);
+  // 重置相机视角
+  const handleResetCamera = useCallback(() => {
+    if (model3DViewerRef.current) {
+      model3DViewerRef.current.resetCamera();
+    }
   }, []);
 
-  // 当选择图片并触发生成时，或者任务状态改变时
+  // 切换全屏
+  const handleToggleFullscreen = useCallback(async () => {
+    if (!previewContainerRef.current) return;
+
+    try {
+      if (!isFullscreen) {
+        // 进入全屏
+        if (previewContainerRef.current.requestFullscreen) {
+          await previewContainerRef.current.requestFullscreen();
+        }
+      } else {
+        // 退出全屏
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.error("全屏切换失败:", error);
+    }
+  }, [isFullscreen]);
+
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
     // 如果任务已完成模型生成
-    if (task?.status === "COMPLETED") {
+    if (task?.status === "COMPLETED" && task.model) {
       setStatus("completed");
-      setProgress(100);
-      // 清理定时器
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
+      setProgress(task.model.progress || 100);
       return;
     }
 
     // 如果正在生成模型
-    if (task?.status === "GENERATING_MODEL" && status !== "generating") {
-      startModelGeneration();
+    if (task?.status === "GENERATING_MODEL" && task.model) {
+      setStatus("generating");
+      setProgress(task.model.progress || 0);
       return;
     }
 
-    // 当选择图片并触发生成时
-    if (imageIndex !== null && prompt && status === "idle") {
-      startModelGeneration();
+    // 如果任务失败
+    if (task?.status === "FAILED") {
+      setStatus("failed");
+      return;
     }
 
-    // 清理定时器
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, [imageIndex, prompt, task?.status, startModelGeneration, status]);
+    // 其他状态（等待选择图片）
+    if (
+      task?.status === "IMAGES_READY" ||
+      task?.status === "PENDING" ||
+      task?.status === "GENERATING_IMAGES"
+    ) {
+      setStatus("idle");
+      setProgress(0);
+    }
+  }, [task?.status, task?.model?.progress, task?.model?.status]);
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
       {/* 3D预览区域 */}
-      <div className="relative flex flex-1 flex-col items-center justify-center border-b border-white/10 overflow-hidden">
+      <div
+        ref={previewContainerRef}
+        className="relative flex flex-1 flex-col items-center justify-center border-b border-white/10 overflow-hidden"
+      >
         <h2 className="absolute left-5 top-5 text-base font-semibold text-white">
           3D 预览
         </h2>
 
-        {/* 3D渲染区域占位 */}
+        {/* 3D渲染区域 */}
         <div className="flex h-full w-full items-center justify-center">
           {status === "generating" ? (
+            // 生成中:显示加载动画
             <div className="text-center">
               <div className="mb-4 h-12 w-12 animate-spin rounded-full border-3 border-yellow-1/20 border-t-yellow-1 mx-auto" />
               <p className="text-sm font-medium text-foreground-muted">
@@ -100,21 +123,21 @@ export default function ModelPreview({
               </p>
             </div>
           ) : status === "completed" ? (
-            <div className="text-center">
-              <div className="mb-4 text-5xl">✨</div>
-              <p className="text-sm text-foreground-muted">模型生成完成</p>
-              <p className="mt-1 text-xs text-foreground-subtle">
-                基于图片 {(imageIndex ?? 0) + 1}
-              </p>
-            </div>
+            // 完成:渲染 3D 模型
+            <Model3DViewer
+              ref={model3DViewerRef}
+              modelUrl={task?.model?.modelUrl || "/demo.glb"} // 使用真实的模型URL，降级到demo
+              showGrid={showGrid}
+            />
           ) : (
+            // 空闲状态:显示占位符
             <div className="text-center">
               <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
               <p className="text-sm text-foreground-subtle">
                 3D模型将在这里显示
               </p>
               <p className="mt-1 text-xs text-foreground-subtle">
-                (Three.js / React Three Fiber)
+                选择图片后开始生成
               </p>
             </div>
           )}
@@ -127,6 +150,7 @@ export default function ModelPreview({
             className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
             title="显示网格"
             disabled={status !== "completed"}
+            onClick={() => setShowGrid(!showGrid)}
           >
             <svg
               className="h-4 w-4"
@@ -146,6 +170,7 @@ export default function ModelPreview({
             className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
             title="重置视角"
             disabled={status !== "completed"}
+            onClick={handleResetCamera}
           >
             <svg
               className="h-4 w-4"
@@ -167,8 +192,9 @@ export default function ModelPreview({
           <button
             type="button"
             className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-            title="全屏预览"
+            title={isFullscreen ? "退出全屏" : "全屏预览"}
             disabled={status !== "completed"}
+            onClick={handleToggleFullscreen}
           >
             <svg
               className="h-4 w-4"
@@ -184,7 +210,7 @@ export default function ModelPreview({
               />
             </svg>
             <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              全屏预览
+              {isFullscreen ? "退出全屏" : "全屏预览"}
             </span>
           </button>
         </div>
@@ -203,24 +229,45 @@ export default function ModelPreview({
               <div className="space-y-1 text-xs text-white/60">
                 <div className="flex justify-between">
                   <span>格式:</span>
-                  <span className="text-white/90">GLB</span>
+                  <span className="text-white/90">
+                    {task?.model?.format || "GLB"}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>大小:</span>
-                  <span className="text-white/90">2.5 MB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>面数:</span>
-                  <span className="text-white/90">50,248</span>
-                </div>
+                {task?.model?.fileSize && (
+                  <div className="flex justify-between">
+                    <span>大小:</span>
+                    <span className="text-white/90">
+                      {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
+                )}
+                {task?.model?.faceCount && (
+                  <div className="flex justify-between">
+                    <span>面数:</span>
+                    <span className="text-white/90">
+                      {task.model.faceCount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>质量:</span>
-                  <span className="text-yellow-1">高清</span>
+                  <span className="text-yellow-1">
+                    {task?.model?.quality || "高清"}
+                  </span>
                 </div>
               </div>
             </div>
 
-            <button type="button" className="btn-primary w-full">
+            <button
+              type="button"
+              className="btn-primary w-full"
+              onClick={() => {
+                if (task?.model?.modelUrl) {
+                  window.open(task.model.modelUrl, "_blank");
+                }
+              }}
+              disabled={!task?.model?.modelUrl}
+            >
               下载模型
             </button>
           </>

@@ -13,6 +13,7 @@ import {
   AliyunAPIError,
   generateImageStream,
 } from "@/lib/providers/aliyun-image";
+import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
 
 // 创建日志器
 const log = createLogger("TaskQueue");
@@ -45,7 +46,10 @@ let runningCount = 0;
  */
 async function processTask(taskId: string, prompt: string): Promise<void> {
   const t = timer();
-  log.info("processTask", "开始处理任务", { taskId, promptLength: prompt.length });
+  log.info("processTask", "开始处理任务", {
+    taskId,
+    promptLength: prompt.length,
+  });
 
   // 更新数据库状态为"生成中"（首次执行时）
   const task = await prisma.task.findUnique({
@@ -78,7 +82,7 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
       if (startIndex >= IMAGE_GENERATION.COUNT) {
         log.info("processTask", "图片已全部生成，无需继续", {
           taskId,
-          count: IMAGE_GENERATION.COUNT
+          count: IMAGE_GENERATION.COUNT,
         });
         await prisma.task.update({
           where: { id: taskId },
@@ -99,12 +103,28 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
         remainingCount,
       });
 
-      // 从断点继续生成
+      // 🤖 生成4个不同风格的提示词
+      const promptVariants = await generateMultiStylePrompts(prompt);
+
+      // 从断点继续生成（每张图片使用不同的提示词）
       let index = startIndex;
-      for await (const imageUrl of generateImageStream(
-        prompt,
-        remainingCount,
-      )) {
+      for (let i = 0; i < remainingCount; i++) {
+        // 使用对应索引的提示词变体
+        const currentPrompt = promptVariants[index];
+
+        log.info("processTask", `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`, {
+          taskId,
+          promptPreview: currentPrompt.substring(0, 80) + "...",
+        });
+
+        // 生成单张图片（使用该提示词）
+        const generator = generateImageStream(currentPrompt, 1);
+        const { value: imageUrl } = await generator.next();
+
+        if (!imageUrl) {
+          throw new Error(`图片 ${index + 1} 生成失败：未返回URL`);
+        }
+
         // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
         // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
         //
@@ -121,13 +141,16 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
             taskId,
             url: imageUrl, // TODO: 改为 localUrl
             index,
+            prompt: currentPrompt, // 记录使用的提示词，方便调试和追踪
           },
         });
+
         log.info("processTask", "图片生成成功", {
           taskId,
           imageIndex: index + 1,
           totalCount: IMAGE_GENERATION.COUNT,
         });
+
         index++;
       }
 
@@ -196,7 +219,9 @@ function canRetry(error: unknown): boolean {
     ];
 
     if (nonRetryableStatusCodes.includes(error.statusCode)) {
-      log.debug("canRetry", "不可重试的HTTP错误", { statusCode: error.statusCode });
+      log.debug("canRetry", "不可重试的HTTP错误", {
+        statusCode: error.statusCode,
+      });
       return false;
     }
 
@@ -256,19 +281,22 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * 添加任务（带并发控制）
+ * 注意：此函数会立即返回，任务在后台异步执行
  * @param taskId 数据库任务ID
  * @param prompt 生成提示词
  */
 export async function addTask(taskId: string, prompt: string): Promise<void> {
-  // 等待直到有空闲槽位
-  while (runningCount >= CONFIG.MAX_CONCURRENT) {
-    log.warn("addTask", "达到最大并发数，等待空闲槽位", {
+  // 检查是否达到最大并发数
+  if (runningCount >= CONFIG.MAX_CONCURRENT) {
+    log.warn("addTask", "达到最大并发数，任务将排队等待", {
       running: runningCount,
       maxConcurrent: CONFIG.MAX_CONCURRENT,
     });
-    await sleep(500); // 每500ms检查一次
+    // 抛出错误，让上层处理队列已满的情况
+    throw new Error("队列已满，请稍后重试");
   }
 
+  // 立即增加计数器并启动后台任务
   runningCount++;
   log.info("addTask", "任务加入处理队列", {
     taskId,
@@ -276,16 +304,22 @@ export async function addTask(taskId: string, prompt: string): Promise<void> {
     maxConcurrent: CONFIG.MAX_CONCURRENT,
   });
 
-  try {
-    await processTask(taskId, prompt);
-  } finally {
-    runningCount--;
-    log.info("addTask", "任务处理完成", {
-      taskId,
-      running: runningCount,
-      maxConcurrent: CONFIG.MAX_CONCURRENT,
+  // 在后台异步执行任务（不等待完成）
+  processTask(taskId, prompt)
+    .catch((error) => {
+      log.error("addTask", "后台任务执行失败", error, { taskId });
+    })
+    .finally(() => {
+      runningCount--;
+      log.info("addTask", "任务处理完成", {
+        taskId,
+        running: runningCount,
+        maxConcurrent: CONFIG.MAX_CONCURRENT,
+      });
     });
-  }
+
+  // 立即返回，不等待任务完成
+  log.info("addTask", "任务已加入后台处理队列，立即返回", { taskId });
 }
 
 /**
@@ -332,7 +366,7 @@ export async function cancelTask(taskId: string): Promise<boolean> {
 
     log.warn("cancelTask", "任务状态不允许取消", {
       taskId,
-      currentStatus: task.status
+      currentStatus: task.status,
     });
     return false;
   } catch (error) {

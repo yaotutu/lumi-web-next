@@ -14,6 +14,7 @@ export default function HeroSearchBar({
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState("");
+  const [isCreating, setIsCreating] = useState(false); // 任务创建中状态
 
   // 监听标签选择事件
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function HeroSearchBar({
     };
   }, [error]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmedPrompt = prompt.trim();
 
     // 验证输入
@@ -54,11 +55,37 @@ export default function HeroSearchBar({
     }
 
     setError("");
-    router.push(`/workspace?prompt=${encodeURIComponent(trimmedPrompt)}`);
+    setIsCreating(true);
+
+    try {
+      // 调用API创建任务
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: trimmedPrompt }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data?.id) {
+        // 使用任务ID跳转到工作台
+        router.push(`/workspace?taskId=${data.data.id}`);
+      } else {
+        // 处理API错误
+        setError(data.error?.message || "创建任务失败，请重试");
+        setIsCreating(false);
+      }
+    } catch (err) {
+      // 处理网络错误
+      console.error("Failed to create task:", err);
+      setError("网络错误，请检查连接后重试");
+      setIsCreating(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    // 阻止在创建任务时重复提交
+    if (e.key === "Enter" && !isCreating) {
       handleSubmit();
     }
   };
@@ -119,24 +146,42 @@ export default function HeroSearchBar({
         <button
           type="button"
           onClick={handleSubmit}
+          disabled={isCreating}
           aria-label="提交生成请求"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-yellow-1/50 bg-gradient-to-br from-yellow-1 to-accent-yellow-dim text-black shadow-[0_8px_24px_rgba(249,207,0,0.4)] transition-all duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(249,207,0,0.5)] active:scale-95"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-yellow-1/50 bg-gradient-to-br from-yellow-1 to-accent-yellow-dim text-black shadow-[0_8px_24px_rgba(249,207,0,0.4)] transition-all duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(249,207,0,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
         >
-          <svg
-            aria-hidden="true"
-            role="presentation"
-            focusable="false"
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m14 5 7 7-7 7" />
-            <path d="M21 12H3" />
-          </svg>
+          {isCreating ? (
+            <svg
+              aria-hidden="true"
+              role="presentation"
+              focusable="false"
+              className="h-5 w-5 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+          ) : (
+            <svg
+              aria-hidden="true"
+              role="presentation"
+              focusable="false"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m14 5 7 7-7 7" />
+              <path d="M21 12H3" />
+            </svg>
+          )}
         </button>
       </div>
     </div>
