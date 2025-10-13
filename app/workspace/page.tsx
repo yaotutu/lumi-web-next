@@ -102,7 +102,7 @@ function WorkspaceContent() {
         if (taskData.success) {
           setTask(taskData.data);
 
-          // 如果任务完成或失败，停止轮询
+          // 如果任务完成或失败，停止轮询并清除队列状态
           if (
             taskData.data.status === "IMAGES_READY" ||
             taskData.data.status === "MODEL_READY" ||
@@ -111,9 +111,11 @@ function WorkspaceContent() {
           ) {
             clearInterval(interval);
             setQueueStatus(null); // 清除队列状态
+            return; // 立即返回，不再更新队列状态
           }
         }
 
+        // 只有在任务还在进行中时才更新队列状态
         if (queueData.success) {
           setQueueStatus(queueData.data);
         }
