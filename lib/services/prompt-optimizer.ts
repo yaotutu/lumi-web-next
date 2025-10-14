@@ -2,12 +2,16 @@
  * 提示词优化服务
  * 职责:将用户输入优化为适合3D打印的图片生成提示词
  * 原则:函数式编程,带降级策略,确保业务连续性
+ *
+ * 支持的LLM渠道:
+ * - SiliconFlow (DeepSeek-V3) - 优先
+ * - 阿里云通义千问 (Qwen) - 备选
  */
 
 import {
-  optimizePromptWithQwen,
+  chatCompletion,
   generatePromptVariants,
-} from "@/lib/providers/qwen-openai";
+} from "@/lib/providers/llm-provider";
 import {
   IMAGE_3D_PRINT_PROMPT,
   IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
@@ -33,18 +37,23 @@ export async function optimizePromptFor3DPrint(
       inputLength: userInput.length,
     });
 
-    // 调用通义千问优化提示词
-    const optimized = await optimizePromptWithQwen(
-      userInput,
-      IMAGE_3D_PRINT_PROMPT,
-    );
+    // 调用统一LLM接口优化提示词（自动选择最优渠道）
+    const optimized = await chatCompletion({
+      systemPrompt: IMAGE_3D_PRINT_PROMPT,
+      userPrompt: userInput,
+      temperature: 0.7,
+      responseFormat: "text",
+    });
+
+    // 清理返回内容
+    const trimmedOptimized = optimized.trim();
 
     // 记录优化成功
     log.info("optimizePromptFor3DPrint", "✅ 提示词优化成功", {
       original: userInput,
-      optimized,
+      optimized: trimmedOptimized,
       originalLength: userInput.length,
-      optimizedLength: optimized.length,
+      optimizedLength: trimmedOptimized.length,
     });
 
     // 在日志中清晰展示对比
@@ -53,10 +62,10 @@ export async function optimizePromptFor3DPrint(
     });
 
     log.info("optimizePromptFor3DPrint", "✨ 优化后提示词", {
-      prompt: optimized,
+      prompt: trimmedOptimized,
     });
 
-    return optimized;
+    return trimmedOptimized;
   } catch (error) {
     // 降级策略:失败时使用原始输入
     log.warn("optimizePromptFor3DPrint", "⚠️ 提示词优化失败,降级使用原始输入", {

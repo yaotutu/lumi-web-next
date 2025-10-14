@@ -196,9 +196,10 @@ components/
 
 lib/
   ├── services/    # 业务逻辑层
-  ├── providers/   # 外部API封装
+  ├── providers/   # 外部API封装 (图片生成、LLM、3D模型等)
   ├── validators/  # Zod验证schemas
   ├── utils/       # 工具函数
+  ├── workers/     # 后台任务处理 (图片生成、3D模型生成)
   └── constants.ts # 全局常量
 
 types/
@@ -218,9 +219,107 @@ app/
 
 ## 开发注意事项
 
+### 图片生成渠道配置
+
+项目支持**多渠道图片生成**，可根据环境变量自动选择不同的 API 服务商。
+
+#### 支持的渠道
+
+| 渠道 | 环境变量 | 特点 |
+|------|---------|------|
+| **SiliconFlow** | `SILICONFLOW_API_KEY` | 🌟 推荐：性价比高、永久URL、多模型支持 |
+| **阿里云** | `ALIYUN_IMAGE_API_KEY` | 备选：24小时临时URL |
+
+#### 渠道选择优先级
+
+```typescript
+优先级: SILICONFLOW_API_KEY > ALIYUN_IMAGE_API_KEY
+```
+
+Worker 会自动检测环境变量并选择合适的渠道：
+- 如果配置了 `SILICONFLOW_API_KEY`，优先使用 SiliconFlow
+- 否则使用阿里云（需要 `ALIYUN_IMAGE_API_KEY`）
+- 如果都未配置，启动时会抛出错误
+
+#### 配置示例
+
+```bash
+# .env.local
+
+# 方式1: 使用 SiliconFlow (推荐)
+SILICONFLOW_API_KEY=sk-your-api-key-here
+
+# 方式2: 使用阿里云 (备选)
+ALIYUN_IMAGE_API_KEY=sk-your-api-key-here
+```
+
+### 提示词优化 LLM 渠道配置
+
+项目支持**多渠道 LLM** 来优化用户输入的提示词，使其更适合 3D 打印场景。
+
+#### 支持的渠道
+
+| 渠道 | 环境变量 | 模型 | 特点 |
+|------|---------|------|------|
+| **SiliconFlow** | `SILICONFLOW_LLM_API_KEY` | `deepseek-ai/DeepSeek-V3` | 🌟 推荐：性价比高、性能强大 |
+| **阿里云通义千问** | `QWEN_API_KEY` | `qwen-max` | 备选：OpenAI 兼容模式 |
+
+#### 渠道选择优先级
+
+```typescript
+优先级: SILICONFLOW_LLM_API_KEY > QWEN_API_KEY
+```
+
+提示词优化服务会自动检测环境变量并选择合适的 LLM 渠道：
+- 如果配置了 `SILICONFLOW_LLM_API_KEY`，优先使用 SiliconFlow DeepSeek-V3
+- 否则使用阿里云通义千问（需要 `QWEN_API_KEY`）
+- 如果都未配置，启动时会抛出错误
+- **优雅降级**：如果 LLM 调用失败，自动使用用户原始输入
+
+#### 配置示例
+
+```bash
+# .env.local
+
+# 方式1: 使用 SiliconFlow (推荐)
+SILICONFLOW_LLM_API_KEY=sk-your-api-key-here
+SILICONFLOW_LLM_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_LLM_MODEL=deepseek-ai/DeepSeek-V3
+
+# 方式2: 使用阿里云通义千问 (备选)
+QWEN_API_KEY=sk-your-api-key-here
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-max
+```
+
+#### LLM Provider 架构
+
+提示词优化服务使用统一的 LLM Provider 接口 (`lib/providers/llm-provider.ts`)：
+
+```typescript
+// 自动选择最优渠道
+const provider = getLLMProvider(); // "siliconflow" | "qwen"
+
+// 统一的聊天补全接口
+const result = await chatCompletion({
+  systemPrompt: "系统提示词",
+  userPrompt: "用户输入",
+  temperature: 0.7,
+  responseFormat: "json"  // 或 "text"
+});
+
+// 生成提示词变体（用于图片生成）
+const variants = await generatePromptVariants(
+  userInput,
+  systemPrompt
+); // 返回4个不同风格的提示词
+```
+
+**降级策略**：如果提示词优化失败（API 错误、网络问题等），系统会自动使用用户原始输入，确保业务连续性。
+
 ### Mock 模式
 
-在开发阶段，为了避免频繁调用真实的阿里云 API，项目支持 Mock 模式。当启用 Mock 模式时，图片生成功能将返回预定义的假图片数据，而不是调用真实的 API。
+在开发阶段，为了避免频繁调用真实 API，项目支持 Mock 模式。当启用 Mock 模式时，图片生成功能将返回预定义的假图片数据。
 
 **启用方式**：
 在 `.env.local` 文件中设置 `NEXT_PUBLIC_MOCK_MODE=true` 即可启用 Mock 模式。
@@ -229,6 +328,8 @@ app/
 - 开发阶段节省 API 调用成本
 - 网络环境不佳时进行本地开发
 - 快速原型验证和 UI 调试
+
+**注意**: Mock 模式对所有渠道生效，无需配置具体的 API Key。
 
 ### 路径别名
 
@@ -286,7 +387,12 @@ handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
 API路由层 (app/api/) → Service层 (lib/services/) → 数据访问层 (Prisma)
 ```
 
-**目录结构**: `lib/services/` (业务逻辑) | `lib/providers/` (外部API) | `lib/validators/` (Zod schemas) | `lib/utils/errors.ts` (统一错误处理)
+**目录结构**:
+- `lib/services/` - 业务逻辑层
+- `lib/providers/` - 外部API封装 (图片生成、LLM、3D模型等)
+- `lib/workers/` - 后台任务处理 (图片生成Worker、3D模型生成Worker)
+- `lib/validators/` - Zod验证schemas
+- `lib/utils/errors.ts` - 统一错误处理
 
 ### 错误处理规则
 
@@ -386,8 +492,8 @@ while (isRunning) {
 
   // 发现任务后执行完整流程
   for (const task of tasks) {
-    - 生成4个风格变体提示词
-    - 调用阿里云API生成4张图片
+    - 生成4个风格变体提示词 (自动选择 SiliconFlow DeepSeek-V3 或 Qwen)
+    - 调用图片生成API生成4张图片 (自动选择 SiliconFlow 或阿里云)
     - 断点续传(支持失败重试)
     - 更新状态为 IMAGES_READY
   }

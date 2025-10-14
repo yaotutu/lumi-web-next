@@ -12,12 +12,66 @@
 import { IMAGE_GENERATION } from "@/lib/constants";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
-import { generateImageStream } from "@/lib/providers/aliyun-image";
+import { generateImageStream as generateImageStreamAliyun } from "@/lib/providers/aliyun-image";
+import { generateImageStream as generateImageStreamSiliconFlow } from "@/lib/providers/siliconflow-image";
 import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
 
 // 创建日志器
 const log = createLogger("ImageWorker");
+
+// ============================================
+// 图片生成渠道配置
+// ============================================
+
+/**
+ * 图片生成渠道枚举
+ */
+type ImageProvider = "aliyun" | "siliconflow";
+
+/**
+ * 获取当前使用的图片生成渠道
+ * 优先级: SILICONFLOW_API_KEY > ALIYUN_IMAGE_API_KEY
+ */
+function getImageProvider(): ImageProvider {
+  const siliconflowKey = process.env.SILICONFLOW_API_KEY;
+  const aliyunKey =
+    process.env.ALIYUN_IMAGE_API_KEY ||
+    process.env.NEXT_PUBLIC_ALIYUN_IMAGE_API_KEY;
+
+  // 如果配置了 SiliconFlow，优先使用
+  if (siliconflowKey) {
+    log.info("getImageProvider", "使用 SiliconFlow 作为图片生成渠道");
+    return "siliconflow";
+  }
+
+  // 否则使用阿里云
+  if (aliyunKey) {
+    log.info("getImageProvider", "使用阿里云作为图片生成渠道");
+    return "aliyun";
+  }
+
+  // 如果都没有配置，抛出错误
+  throw new Error(
+    "未配置图片生成渠道，请设置 SILICONFLOW_API_KEY 或 ALIYUN_IMAGE_API_KEY",
+  );
+}
+
+/**
+ * 根据渠道选择对应的图片生成函数
+ */
+function getImageGenerator(
+  provider: ImageProvider,
+): typeof generateImageStreamAliyun {
+  switch (provider) {
+    case "siliconflow":
+      return generateImageStreamSiliconFlow;
+    case "aliyun":
+      return generateImageStreamAliyun;
+    default:
+      throw new Error(`不支持的图片生成渠道: ${provider}`);
+  }
+}
 
 // ============================================
 // 配置
@@ -132,6 +186,15 @@ async function processTask(taskId: string): Promise<void> {
           remainingCount,
         });
 
+        // 🎯 获取图片生成渠道
+        const provider = getImageProvider();
+        const generateImageStream = getImageGenerator(provider);
+
+        log.info("processTask", "图片生成渠道已选择", {
+          taskId,
+          provider,
+        });
+
         // 🤖 生成4个不同风格的提示词
         const promptVariants = await generateMultiStylePrompts(task.prompt);
 
@@ -146,6 +209,7 @@ async function processTask(taskId: string): Promise<void> {
             `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`,
             {
               taskId,
+              provider,
               promptPreview: currentPrompt.substring(0, 80) + "...",
             },
           );

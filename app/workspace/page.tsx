@@ -3,20 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
-import QueueStatus from "@/components/ui/QueueStatus";
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 import type { TaskWithDetails } from "@/types";
 import ImageGrid from "./components/ImageGrid";
 import ModelPreview from "./components/ModelPreview";
-
-// 队列状态接口
-interface QueueStatusData {
-  pending: number;
-  running: number;
-  completed: number;
-  maxConcurrent: number;
-  maxQueueSize: number;
-}
 
 function WorkspaceContent() {
   const router = useRouter();
@@ -28,7 +18,6 @@ function WorkspaceContent() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null,
   );
-  const [queueStatus, setQueueStatus] = useState<QueueStatusData | null>(null);
 
   // 初始化：从 URL 参数加载任务
   useEffect(() => {
@@ -91,33 +80,22 @@ function WorkspaceContent() {
     // 立即执行一次轮询（不等待首次interval触发）
     const pollOnce = async () => {
       try {
-        // 同时获取任务状态和队列状态
-        const [taskResponse, queueResponse] = await Promise.all([
-          fetch(`/api/tasks/${task.id}`),
-          fetch("/api/queue/status"),
-        ]);
-
+        // 获取任务状态（Worker架构下不需要队列状态）
+        const taskResponse = await fetch(`/api/tasks/${task.id}`);
         const taskData = await taskResponse.json();
-        const queueData = await queueResponse.json();
 
         if (taskData.success) {
           setTask(taskData.data);
 
-          // 如果任务完成或失败，清除队列状态
+          // 如果任务完成或失败，停止轮询
           if (
             taskData.data.status === "IMAGES_READY" ||
             taskData.data.status === "MODEL_READY" ||
             taskData.data.status === "FAILED" ||
             taskData.data.status === "COMPLETED"
           ) {
-            setQueueStatus(null); // 清除队列状态
             return false; // 返回false表示应该停止轮询
           }
-        }
-
-        // 只有在任务还在进行中时才更新队列状态
-        if (queueData.success) {
-          setQueueStatus(queueData.data);
         }
 
         return true; // 返回true表示继续轮询
@@ -204,17 +182,6 @@ function WorkspaceContent() {
 
   return (
     <>
-      {/* 队列状态显示(悬浮在顶部) */}
-      {queueStatus && (
-        <div className="fixed left-1/2 top-20 z-50 -translate-x-1/2 animate-[fade-in-up_0.3s_ease-out]">
-          <QueueStatus
-            pending={queueStatus.pending}
-            running={queueStatus.running}
-            maxConcurrent={queueStatus.maxConcurrent}
-          />
-        </div>
-      )}
-
       {/* 左侧:输入与生成区域 - 自适应宽度以保持色块正方形 */}
       <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
