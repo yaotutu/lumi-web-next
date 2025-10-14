@@ -1,7 +1,7 @@
 /**
  * 图片生成Worker
  *
- * 职责：监听数据库中状态为GENERATING_IMAGES的任务，执行图片生成流程
+ * 职责：监听数据库中状态为IMAGE_GENERATING的任务，执行图片生成流程
  *
  * 架构原则：
  * - API层只负责状态变更
@@ -79,8 +79,8 @@ async function processTask(taskId: string): Promise<void> {
       return;
     }
 
-    // 验证任务状态（必须是GENERATING_IMAGES）
-    if (task.status !== "GENERATING_IMAGES") {
+    // 验证任务状态（必须是IMAGE_GENERATING）
+    if (task.status !== "IMAGE_GENERATING") {
       log.warn("processTask", "任务状态已变化，跳过处理", {
         taskId,
         currentStatus: task.status,
@@ -205,7 +205,7 @@ async function processTask(taskId: string): Promise<void> {
     await prisma.task.update({
       where: { id: taskId },
       data: {
-        status: "IMAGES_READY",
+        status: "IMAGE_COMPLETED",
         imageGenerationCompletedAt: new Date(),
       },
     });
@@ -245,17 +245,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Worker主循环：持续监听GENERATING_IMAGES状态的任务
+ * Worker主循环：持续监听IMAGE_GENERATING状态的任务
  */
 async function workerLoop(): Promise<void> {
   log.info("workerLoop", "Worker启动，开始监听任务状态");
 
   while (isRunning) {
     try {
-      // 查询所有状态为GENERATING_IMAGES且未被处理的任务
+      // 查询所有状态为IMAGE_GENERATING且未被处理的任务
       const tasks = await prisma.task.findMany({
         where: {
-          status: "GENERATING_IMAGES",
+          status: "IMAGE_GENERATING",
           id: {
             notIn: Array.from(processingTasks), // 排除正在处理的任务
           },

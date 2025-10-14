@@ -694,13 +694,13 @@ export async function register() {
 POST /api/tasks
 { prompt: "用户输入的提示词" }
   ↓
-createTaskWithStatus(userId, prompt, "GENERATING_IMAGES")  // 立即返回
+createTaskWithStatus(userId, prompt, "IMAGE_GENERATING")  // 立即返回
 
 // Worker 监听并执行
 while (isRunning) {
   // 每 2 秒查询数据库
   const tasks = await prisma.task.findMany({
-    where: { status: "GENERATING_IMAGES" },
+    where: { status: "IMAGE_GENERATING" },
     take: 3  // 最大并发3个任务
   });
 
@@ -709,7 +709,7 @@ while (isRunning) {
     - 生成4个风格变体提示词 (自动选择 SiliconFlow DeepSeek-V3 或 Qwen)
     - 调用图片生成API生成4张图片 (自动选择 SiliconFlow 或阿里云)
     - 断点续传(支持失败重试)
-    - 更新状态为 IMAGES_READY
+    - 更新状态为 IMAGE_COMPLETED
   }
 }
 ```
@@ -717,23 +717,24 @@ while (isRunning) {
 #### 2. **3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`)
 
 ```typescript
-// API 层只改状态
+// API 层只改状态（触发 Worker）
 PATCH /api/tasks/{id}
-{ status: "GENERATING_MODEL" }  // 立即返回,不执行业务逻辑
+{ selectedImageIndex: 2 }  // API 检测到选中图片，自动设置 status="MODEL_PENDING"
 
 // Worker 监听状态并执行
 while (isRunning) {
   // 每 2 秒查询数据库
   const tasks = await prisma.task.findMany({
-    where: { status: "GENERATING_MODEL" }
+    where: { status: "MODEL_PENDING" }  // 监听 MODEL_PENDING 状态
   });
 
   // 发现任务后执行完整流程
   for (const task of tasks) {
+    - 更新状态为 MODEL_GENERATING（开始处理）
     - 提交腾讯云 AI3D 任务
     - 创建本地模型记录
-    - 轮询腾讯云状态 (每 5 秒)
-    - 更新最终状态 (COMPLETED/FAILED)
+    - 轮询腾讯云状态 (每 5 秒，WAIT → RUN → DONE)
+    - 更新最终状态 (MODEL_COMPLETED/FAILED)
   }
 }
 ```
@@ -790,15 +791,15 @@ MAX_CONCURRENT: 1              // 最大并发3D任务数
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. 用户输入: "一只可爱的猫咪"
    ↓
-2. POST /api/tasks → status=GENERATING_IMAGES (立即返回)
+2. POST /api/tasks → status=IMAGE_GENERATING (立即返回)
    ↓
-3. ImageWorker: 检测到 GENERATING_IMAGES 状态
+3. ImageWorker: 检测到 IMAGE_GENERATING 状态
    ↓
 4. ImageWorker: 生成4个风格变体提示词
    ↓
-5. ImageWorker: 调用阿里云生成4张图片
+5. ImageWorker: 调用图片生成API生成4张图片 (SiliconFlow 或阿里云)
    ↓
-6. ImageWorker: status → IMAGES_READY
+6. ImageWorker: status → IMAGE_COMPLETED
    ↓
 7. 前端轮询: 获取到4张图片,用户选择一张
 ```
@@ -810,17 +811,20 @@ MAX_CONCURRENT: 1              // 最大并发3D任务数
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. 用户选择第2张图片
    ↓
-2. PATCH /api/tasks/{id} → status=GENERATING_MODEL (立即返回)
+2. PATCH /api/tasks/{id} { selectedImageIndex: 2 }
+   → API 自动设置 status=MODEL_PENDING (立即返回)
    ↓
-3. Model3DWorker: 检测到 GENERATING_MODEL 状态
+3. Model3DWorker: 检测到 MODEL_PENDING 状态
    ↓
-4. Model3DWorker: 提交腾讯云AI3D任务
+4. Model3DWorker: 更新状态为 MODEL_GENERATING
    ↓
-5. Model3DWorker: 轮询腾讯云状态
+5. Model3DWorker: 提交腾讯云AI3D任务
    ↓
-6. Model3DWorker: status → COMPLETED
+6. Model3DWorker: 轮询腾讯云状态 (WAIT → RUN → DONE)
    ↓
-7. 前端轮询: 获取到3D模型,显示预览
+7. Model3DWorker: status → MODEL_COMPLETED
+   ↓
+8. 前端轮询: 获取到3D模型,显示预览
 ```
 
 ### Worker 目录结构

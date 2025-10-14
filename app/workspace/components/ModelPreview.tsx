@@ -68,14 +68,17 @@ export default function ModelPreview({
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
     // 如果任务已完成模型生成
-    if (task?.status === "COMPLETED" && task.model) {
+    if (task?.status === "MODEL_COMPLETED" && task.model) {
       setStatus("completed");
       setProgress(task.model.progress || 100);
       return;
     }
 
-    // 如果正在生成模型
-    if (task?.status === "GENERATING_MODEL" && task.model) {
+    // 如果正在生成模型（包括等待和生成中）
+    if (
+      (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") &&
+      task.model
+    ) {
       setStatus("generating");
       setProgress(task.model.progress || 0);
       return;
@@ -89,9 +92,9 @@ export default function ModelPreview({
 
     // 其他状态（等待选择图片）
     if (
-      task?.status === "IMAGES_READY" ||
-      task?.status === "PENDING" ||
-      task?.status === "GENERATING_IMAGES"
+      task?.status === "IMAGE_COMPLETED" ||
+      task?.status === "IMAGE_PENDING" ||
+      task?.status === "IMAGE_GENERATING"
     ) {
       setStatus("idle");
       setProgress(0);

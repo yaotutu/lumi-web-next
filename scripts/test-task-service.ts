@@ -24,8 +24,8 @@ async function runTests() {
     if (task.prompt !== "测试提示词") {
       throw new Error("任务提示词不匹配");
     }
-    if (task.status !== "PENDING") {
-      throw new Error("初始状态应该是PENDING");
+    if (task.status !== "IMAGE_PENDING") {
+      throw new Error("初始状态应该是IMAGE_PENDING");
     }
     console.log("  ✅ 任务创建成功:", task.id);
 
@@ -138,14 +138,14 @@ async function runTests() {
     // ============================================
     console.log("\n测试9: 按状态筛选任务");
     const pendingTasks = await TaskService.listTasks(MOCK_USER.id, {
-      status: "PENDING",
+      status: "IMAGE_PENDING",
       limit: 10,
     });
-    const allPending = pendingTasks.every((t) => t.status === "PENDING");
+    const allPending = pendingTasks.every((t) => t.status === "IMAGE_PENDING");
     if (!allPending) {
-      throw new Error("所有任务状态应该是PENDING");
+      throw new Error("所有任务状态应该是IMAGE_PENDING");
     }
-    console.log("  ✅ 状态筛选成功，共", pendingTasks.length, "个PENDING任务");
+    console.log("  ✅ 状态筛选成功，共", pendingTasks.length, "个IMAGE_PENDING任务");
 
     // ============================================
     // 测试10: 取消任务 - 正常流程

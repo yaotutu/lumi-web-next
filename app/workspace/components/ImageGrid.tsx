@@ -47,9 +47,9 @@ export default function ImageGrid({
       setImageSlots(slots);
 
       // 根据任务状态设置组件状态
-      if (task.status === "IMAGES_READY") {
+      if (task.status === "IMAGE_COMPLETED") {
         setStatus("completed");
-      } else if (task.status === "GENERATING_IMAGES") {
+      } else if (task.status === "IMAGE_GENERATING") {
         setStatus("generating");
       }
 
@@ -57,7 +57,7 @@ export default function ImageGrid({
       if (task.selectedImageIndex !== null) {
         setSelectedImage(task.selectedImageIndex);
       }
-    } else if (task?.status === "PENDING") {
+    } else if (task?.status === "IMAGE_PENDING") {
       // 如果任务在队列中，设置状态为生成中
       setStatus("generating");
     }
@@ -191,8 +191,8 @@ export default function ImageGrid({
               输入描述后点击"重新再生"开始生成图片
             </p>
           </div>
-        ) : task?.status === "PENDING" ||
-          (task?.status === "GENERATING_IMAGES" && imageSlots.length === 0) ? (
+        ) : task?.status === "IMAGE_PENDING" ||
+          (task?.status === "IMAGE_GENERATING" && imageSlots.length === 0) ? (
           <>
             {/* 显示骨架屏网格 + 加载提示 */}
             <div className="relative grid flex-1 min-h-0 grid-cols-2 grid-rows-2 gap-2.5">
@@ -233,13 +233,13 @@ export default function ImageGrid({
                   <div className="mb-2 flex items-center justify-center gap-2">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-1" />
                     <p className="text-sm font-medium text-white">
-                      {task?.status === "PENDING"
+                      {task?.status === "IMAGE_PENDING"
                         ? "任务队列中"
                         : "AI 正在创作"}
                     </p>
                   </div>
                   <p className="text-xs text-white/60">
-                    {task?.status === "PENDING"
+                    {task?.status === "IMAGE_PENDING"
                       ? "等待处理,预计需要 10-30 秒"
                       : `正在生成 ${imageSlots.filter((s) => s.status === "completed").length}/4 张图片`}
                   </p>
@@ -329,7 +329,7 @@ export default function ImageGrid({
               ))}
 
               {/* 中央状态提示 - 只在生成中显示 */}
-              {task?.status === "GENERATING_IMAGES" && (
+              {task?.status === "IMAGE_GENERATING" && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="glass-panel px-6 py-4 text-center backdrop-blur-xl">
                     <div className="mb-2 flex items-center justify-center gap-2">

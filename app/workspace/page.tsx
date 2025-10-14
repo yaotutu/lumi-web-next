@@ -71,9 +71,10 @@ function WorkspaceContent() {
 
     // 只有在生成中的状态才需要轮询
     const needsPolling =
-      task.status === "PENDING" ||
-      task.status === "GENERATING_IMAGES" ||
-      task.status === "GENERATING_MODEL";
+      task.status === "IMAGE_PENDING" ||
+      task.status === "IMAGE_GENERATING" ||
+      task.status === "MODEL_PENDING" ||
+      task.status === "MODEL_GENERATING";
 
     if (!needsPolling) return;
 
@@ -89,10 +90,10 @@ function WorkspaceContent() {
 
           // 如果任务完成或失败，停止轮询
           if (
-            taskData.data.status === "IMAGES_READY" ||
-            taskData.data.status === "MODEL_READY" ||
+            taskData.data.status === "IMAGE_COMPLETED" ||
+            taskData.data.status === "MODEL_COMPLETED" ||
             taskData.data.status === "FAILED" ||
-            taskData.data.status === "COMPLETED"
+            taskData.data.status === "CANCELLED"
           ) {
             return false; // 返回false表示应该停止轮询
           }

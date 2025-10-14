@@ -44,17 +44,17 @@ export const PATCH = withErrorHandler(
     // 获取当前任务状态
     const currentTask = await TaskService.getTaskById(id);
 
-    // 🎯 特殊逻辑：当更新 selectedImageIndex 时，自动将状态变更为 GENERATING_MODEL
+    // 🎯 特殊逻辑：当更新 selectedImageIndex 时，自动将状态变更为 MODEL_PENDING
     // 这样Worker会监听到状态变化并开始3D模型生成
-    // 支持的状态: IMAGES_READY(首次生成) | FAILED(失败重试) | COMPLETED(重新生成)
+    // 支持的状态: IMAGE_COMPLETED(首次生成) | FAILED(失败重试) | MODEL_COMPLETED(重新生成)
     if (
       validatedData.selectedImageIndex !== undefined &&
-      (currentTask.status === "IMAGES_READY" ||
+      (currentTask.status === "IMAGE_COMPLETED" ||
         currentTask.status === "FAILED" ||
-        currentTask.status === "COMPLETED")
+        currentTask.status === "MODEL_COMPLETED")
     ) {
-      // 如果是COMPLETED状态,需要先删除旧的模型记录
-      if (currentTask.status === "COMPLETED" && currentTask.model) {
+      // 如果是MODEL_COMPLETED状态,需要先删除旧的模型记录
+      if (currentTask.status === "MODEL_COMPLETED" && currentTask.model) {
         await prisma.taskModel.delete({
           where: { id: currentTask.model.id },
         });
@@ -63,7 +63,7 @@ export const PATCH = withErrorHandler(
       // 同时更新 selectedImageIndex 和状态
       const updatedTask = await TaskService.updateTask(id, {
         ...validatedData,
-        status: "GENERATING_MODEL",
+        status: "MODEL_PENDING", // 触发 Worker 监听
         // 清除旧的完成时间和错误信息
         modelGenerationStartedAt: null,
         modelGenerationCompletedAt: null,

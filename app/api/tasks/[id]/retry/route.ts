@@ -42,13 +42,9 @@ export const POST = withErrorHandler(
 
     // 根据类型执行不同的重试逻辑
     if (type === "images") {
-      // 重试图片生成：清理旧数据，状态设为GENERATING_IMAGES
-      await TaskService.retryImageGeneration(id);
-
-      // 更新状态为GENERATING_IMAGES，触发Worker处理
-      const updatedTask = await TaskService.updateTask(id, {
-        status: "GENERATING_IMAGES",
-      });
+      // 重试图片生成：清理旧数据，状态设为IMAGE_PENDING
+      // retryImageGeneration 内部已经处理状态更新
+      const updatedTask = await TaskService.retryImageGeneration(id);
 
       return NextResponse.json({
         success: true,
@@ -57,13 +53,9 @@ export const POST = withErrorHandler(
       });
     }
 
-    // 重试3D模型生成：清理旧模型，状态设为GENERATING_MODEL
-    await TaskService.retryModelGeneration(id);
-
-    // 更新状态为GENERATING_MODEL，触发Worker处理
-    const updatedTask = await TaskService.updateTask(id, {
-      status: "GENERATING_MODEL",
-    });
+    // 重试3D模型生成：清理旧模型，状态设为MODEL_PENDING
+    // retryModelGeneration 内部已经处理状态更新
+    const updatedTask = await TaskService.retryModelGeneration(id);
 
     return NextResponse.json({
       success: true,

@@ -1,7 +1,7 @@
 /**
  * 3D模型生成Worker
  *
- * 职责：监听数据库中状态为GENERATING_MODEL的任务，执行3D模型生成流程
+ * 职责：监听数据库中状态为MODEL_PENDING的任务，执行3D模型生成流程
  *
  * 架构原则：
  * - API层只负责状态变更
@@ -9,8 +9,10 @@
  * - 解耦API请求和后台任务处理
  */
 
+import type { ModelStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
+import type { ModelTaskStatus } from "@/lib/providers/model3d";
 import { createModel3DProvider } from "@/lib/providers/model3d";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
 
@@ -33,6 +35,29 @@ const CONFIG = {
     rateLimitDelay: 30000, // 并发限制延迟30秒（与图像生成一致）
   },
 } as const;
+
+// ============================================
+// 状态映射
+// ============================================
+
+/**
+ * 将 Provider 的技术状态映射为业务状态
+ * Provider 状态（技术层）：WAIT/RUN/DONE/FAIL
+ * 业务状态（数据库层）：PENDING/GENERATING/COMPLETED/FAILED
+ */
+const PROVIDER_STATUS_MAP: Record<ModelTaskStatus, ModelStatus> = {
+  WAIT: "PENDING", // Provider: 等待处理 → 业务: 等待中
+  RUN: "GENERATING", // Provider: 运行中 → 业务: 生成中
+  DONE: "COMPLETED", // Provider: 完成 → 业务: 已完成
+  FAIL: "FAILED", // Provider: 失败 → 业务: 失败
+};
+
+/**
+ * 映射 Provider 状态为业务状态
+ */
+function mapProviderStatus(providerStatus: ModelTaskStatus): ModelStatus {
+  return PROVIDER_STATUS_MAP[providerStatus];
+}
 
 // ============================================
 // 状态管理
@@ -80,14 +105,25 @@ async function processTask(taskId: string): Promise<void> {
       return;
     }
 
-    // 验证任务状态（必须是GENERATING_MODEL）
-    if (task.status !== "GENERATING_MODEL") {
+    // 验证任务状态（必须是MODEL_PENDING）
+    if (task.status !== "MODEL_PENDING") {
       log.warn("processTask", "任务状态已变化，跳过处理", {
         taskId,
         currentStatus: task.status,
       });
       return;
     }
+
+    // 立即更新任务状态为 MODEL_GENERATING
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "MODEL_GENERATING",
+        modelGenerationStartedAt: new Date(),
+      },
+    });
+
+    log.info("processTask", "任务状态已更新为 MODEL_GENERATING", { taskId });
 
     // 验证必须已选择图片
     if (
@@ -139,12 +175,12 @@ async function processTask(taskId: string): Promise<void> {
       requestId: tencentResponse.requestId,
     });
 
-    // 3. 创建本地TaskModel记录
+    // 3. 创建本地TaskModel记录（初始状态为 PENDING）
     const model = await prisma.taskModel.create({
       data: {
         taskId,
         name: `${task.prompt.slice(0, 30)} - 3D模型`,
-        status: "GENERATING",
+        status: "PENDING", // 初始状态为 PENDING，对应 Provider 的 WAIT
         progress: 0,
         apiTaskId: tencentResponse.jobId,
         apiRequestId: tencentResponse.requestId,
@@ -154,14 +190,7 @@ async function processTask(taskId: string): Promise<void> {
     log.info("processTask", "本地模型记录创建成功", {
       taskId,
       modelId: model.id,
-    });
-
-    // 4. 更新任务时间戳
-    await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        modelGenerationStartedAt: new Date(),
-      },
+      initialStatus: "PENDING",
     });
 
     // 5. 轮询3D生成状态直到完成
@@ -244,6 +273,9 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
       elapsedSeconds: Math.floor(elapsed / 1000),
     });
 
+    // 映射 Provider 状态为业务状态
+    const businessStatus = mapProviderStatus(status.status);
+
     // 计算进度
     let progress = 0;
     if (status.status === "WAIT") progress = 0;
@@ -251,10 +283,13 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
     else if (status.status === "DONE") progress = 100;
     else if (status.status === "FAIL") progress = 0;
 
-    // 更新本地模型进度
+    // 更新本地模型状态和进度
     await prisma.taskModel.update({
       where: { taskId },
-      data: { progress },
+      data: {
+        status: businessStatus, // 同步更新业务状态
+        progress,
+      },
     });
 
     // 处理完成状态
@@ -285,11 +320,11 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         },
       });
 
-      // 更新任务状态为COMPLETED
+      // 更新任务状态为MODEL_COMPLETED
       await prisma.task.update({
         where: { id: taskId },
         data: {
-          status: "COMPLETED",
+          status: "MODEL_COMPLETED",
           modelGenerationCompletedAt: new Date(),
           completedAt: new Date(),
         },
@@ -349,17 +384,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Worker主循环：持续监听GENERATING_MODEL状态的任务
+ * Worker主循环：持续监听MODEL_PENDING状态的任务
  */
 async function workerLoop(): Promise<void> {
-  log.info("workerLoop", "Worker启动，开始监听任务状态");
+  log.info("workerLoop", "Worker启动，开始监听MODEL_PENDING状态任务");
 
   while (isRunning) {
     try {
-      // 查询所有状态为GENERATING_MODEL且未被处理的任务
+      // 查询所有状态为MODEL_PENDING且未被处理的任务
       const tasks = await prisma.task.findMany({
         where: {
-          status: "GENERATING_MODEL",
+          status: "MODEL_PENDING",
           id: {
             notIn: Array.from(processingTasks), // 排除正在处理的任务
           },

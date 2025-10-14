@@ -18,11 +18,12 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z.object({
   status: z
     .enum([
-      "PENDING",
-      "GENERATING_IMAGES",
-      "IMAGES_READY",
-      "GENERATING_MODEL",
-      "COMPLETED",
+      "IMAGE_PENDING",
+      "IMAGE_GENERATING",
+      "IMAGE_COMPLETED",
+      "MODEL_PENDING",
+      "MODEL_GENERATING",
+      "MODEL_COMPLETED",
       "FAILED",
       "CANCELLED",
     ])
@@ -38,11 +39,12 @@ export const updateTaskSchema = z.object({
 export const listTasksQuerySchema = z.object({
   status: z
     .enum([
-      "PENDING",
-      "GENERATING_IMAGES",
-      "IMAGES_READY",
-      "GENERATING_MODEL",
-      "COMPLETED",
+      "IMAGE_PENDING",
+      "IMAGE_GENERATING",
+      "IMAGE_COMPLETED",
+      "MODEL_PENDING",
+      "MODEL_GENERATING",
+      "MODEL_COMPLETED",
       "FAILED",
       "CANCELLED",
     ])

@@ -31,7 +31,7 @@ model Task {
   prompt      String
 
   // 任务状态
-  status      TaskStatus @default(PENDING)
+  status      TaskStatus @default(IMAGE_PENDING)
 
   // 文生图阶段数据
   imageGenerationStartedAt  DateTime?
@@ -119,19 +119,25 @@ model TaskModel {
 
 // 枚举: 任务状态
 enum TaskStatus {
-  PENDING            // 任务已创建，等待开始生成图片
-  GENERATING_IMAGES  // 正在生成图片
-  IMAGES_READY       // 图片生成完成，等待用户选择
-  GENERATING_MODEL   // 正在生成3D模型
-  COMPLETED          // 整个任务完成
+  // === 图片生成阶段 ===
+  IMAGE_PENDING      // 图片生成：等待开始（队列中）
+  IMAGE_GENERATING   // 图片生成：生成中
+  IMAGE_COMPLETED    // 图片生成：已完成，等待用户选择
+
+  // === 3D模型生成阶段 ===
+  MODEL_PENDING      // 模型生成：等待开始（用户已选图片）
+  MODEL_GENERATING   // 模型生成：生成中
+  MODEL_COMPLETED    // 模型生成：已完成
+
+  // === 终态 ===
   FAILED             // 任务失败
   CANCELLED          // 用户取消
 }
 
-// 枚举: 3D模型状态
+// 枚举: 3D模型状态（与 Provider 的 WAIT/RUN/DONE/FAIL 一一对应）
 enum ModelStatus {
-  PENDING      // 等待生成
-  GENERATING   // 生成中
-  COMPLETED    // 生成完成
-  FAILED       // 生成失败
+  PENDING      // 等待处理（对应 Provider 的 WAIT）
+  GENERATING   // 生成中（对应 Provider 的 RUN）
+  COMPLETED    // 生成完成（对应 Provider 的 DONE）
+  FAILED       // 生成失败（对应 Provider 的 FAIL）
 }

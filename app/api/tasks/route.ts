@@ -42,7 +42,7 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
  * POST /api/tasks
  * 创建新任务
  *
- * 职责：只负责创建任务并设置状态为GENERATING_IMAGES
+ * 职责：只负责创建任务并设置状态为IMAGE_GENERATING
  * Worker会监听状态变化并执行图片生成操作
  */
 export const POST = withErrorHandler(async (request: NextRequest) => {
@@ -52,12 +52,12 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const validatedData = createTaskSchema.parse(body);
   const { prompt } = validatedData;
 
-  // 创建任务并直接设置状态为GENERATING_IMAGES
+  // 创建任务并直接设置状态为IMAGE_GENERATING
   // Worker会自动检测并处理此状态的任务
   const task = await TaskService.createTaskWithStatus(
     MOCK_USER.id,
     prompt,
-    "GENERATING_IMAGES",
+    "IMAGE_GENERATING",
   );
 
   return NextResponse.json(

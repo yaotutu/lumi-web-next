@@ -99,7 +99,7 @@ export async function createTask(userId: string, prompt: string) {
     data: {
       userId,
       prompt: trimmedPrompt,
-      status: "PENDING",
+      status: "IMAGE_PENDING", // 默认状态为图片等待生成
     },
     include: {
       images: true,
@@ -229,7 +229,12 @@ export async function cancelTask(taskId: string) {
   const task = await getTaskById(taskId);
 
   // 验证状态：只能取消进行中的任务
-  const cancellableStatuses: TaskStatus[] = ["PENDING", "GENERATING_IMAGES"];
+  const cancellableStatuses: TaskStatus[] = [
+    "IMAGE_PENDING",
+    "IMAGE_GENERATING",
+    "MODEL_PENDING",
+    "MODEL_GENERATING",
+  ];
   if (!cancellableStatuses.includes(task.status)) {
     throw new AppError("INVALID_STATE", `任务状态不允许取消: ${task.status}`, {
       currentStatus: task.status,
@@ -285,11 +290,11 @@ export async function retryImageGeneration(taskId: string) {
       where: { taskId },
     });
 
-    // 3. 重置任务状态为PENDING
+    // 3. 重置任务状态为IMAGE_PENDING
     const resetTask = await tx.task.update({
       where: { id: taskId },
       data: {
-        status: "PENDING",
+        status: "IMAGE_PENDING", // 重置为图片等待生成
         selectedImageIndex: null,
         imageGenerationStartedAt: null,
         imageGenerationCompletedAt: null,
@@ -354,11 +359,11 @@ export async function retryModelGeneration(taskId: string) {
       where: { taskId },
     });
 
-    // 2. 重置任务状态为IMAGES_READY（保留图片记录和selectedImageIndex）
+    // 2. 重置任务状态为MODEL_PENDING（保留图片记录和selectedImageIndex）
     const resetTask = await tx.task.update({
       where: { id: taskId },
       data: {
-        status: "IMAGES_READY",
+        status: "MODEL_PENDING", // 重置为模型等待生成
         modelGenerationStartedAt: null,
         modelGenerationCompletedAt: null,
         failedAt: null,
