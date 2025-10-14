@@ -111,6 +111,48 @@ export async function createTask(userId: string, prompt: string) {
 }
 
 /**
+ * 创建新任务并指定初始状态
+ * @param userId 用户ID
+ * @param prompt 文本提示词（已验证）
+ * @param status 初始状态
+ * @returns 创建的任务对象
+ * @throws AppError VALIDATION_ERROR - 提示词验证失败
+ */
+export async function createTaskWithStatus(
+  userId: string,
+  prompt: string,
+  status: TaskStatus,
+) {
+  // 参数已在外层API路由验证，但为了服务层的独立性，我们也进行基本验证
+  const trimmedPrompt = prompt.trim();
+
+  // 验证提示词不为空
+  if (trimmedPrompt.length === 0) {
+    throw new AppError("VALIDATION_ERROR", "提示词不能为空");
+  }
+
+  // 验证提示词长度
+  if (trimmedPrompt.length > 500) {
+    throw new AppError("VALIDATION_ERROR", "提示词长度不能超过500个字符");
+  }
+
+  // 创建数据库记录
+  const task = await prisma.task.create({
+    data: {
+      userId,
+      prompt: trimmedPrompt,
+      status,
+    },
+    include: {
+      images: true,
+      model: true,
+    },
+  });
+
+  return task;
+}
+
+/**
  * 更新任务信息
  * @param taskId 任务ID
  * @param data 要更新的数据（已验证）

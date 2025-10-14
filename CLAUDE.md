@@ -332,6 +332,196 @@ if (!resource) {
 2. **完整的JSDoc注释**: `@param` / `@returns` / `@throws`
 3. **抛出AppError**: `throw new AppError("NOT_FOUND", message, details?)`
 
+## Worker 架构
+
+项目采用 **事件驱动的异步任务处理架构**,通过 Worker 机制处理耗时的后台任务。
+
+### 核心原则
+
+```
+API 层 → 只负责状态变更 (快速响应)
+Worker 层 → 监听状态变化并执行业务逻辑 (后台处理)
+```
+
+### Worker 启动机制
+
+Worker 通过 **Next.js Instrumentation Hook** 在服务端启动时自动运行:
+
+```typescript
+// instrumentation.ts (项目根目录)
+export async function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { startAllWorkers } = await import('@/lib/workers');
+    startAllWorkers();
+  }
+}
+```
+
+**特性**:
+- ✅ 仅在服务端执行,客户端不会加载
+- ✅ 在所有路由和中间件加载之前执行
+- ✅ 不依赖任何 HTTP 请求
+- ✅ 自动启动,无需手动干预
+
+### Worker 工作流程
+
+项目包含两个 Worker:
+
+#### 1. **图片生成 Worker** (`lib/workers/image-worker.ts`)
+
+```typescript
+// API 层创建任务并设置状态
+POST /api/tasks
+{ prompt: "用户输入的提示词" }
+  ↓
+createTaskWithStatus(userId, prompt, "GENERATING_IMAGES")  // 立即返回
+
+// Worker 监听并执行
+while (isRunning) {
+  // 每 2 秒查询数据库
+  const tasks = await prisma.task.findMany({
+    where: { status: "GENERATING_IMAGES" },
+    take: 3  // 最大并发3个任务
+  });
+
+  // 发现任务后执行完整流程
+  for (const task of tasks) {
+    - 生成4个风格变体提示词
+    - 调用阿里云API生成4张图片
+    - 断点续传(支持失败重试)
+    - 更新状态为 IMAGES_READY
+  }
+}
+```
+
+#### 2. **3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`)
+
+```typescript
+// API 层只改状态
+PATCH /api/tasks/{id}
+{ status: "GENERATING_MODEL" }  // 立即返回,不执行业务逻辑
+
+// Worker 监听状态并执行
+while (isRunning) {
+  // 每 2 秒查询数据库
+  const tasks = await prisma.task.findMany({
+    where: { status: "GENERATING_MODEL" }
+  });
+
+  // 发现任务后执行完整流程
+  for (const task of tasks) {
+    - 提交腾讯云 AI3D 任务
+    - 创建本地模型记录
+    - 轮询腾讯云状态 (每 5 秒)
+    - 更新最终状态 (COMPLETED/FAILED)
+  }
+}
+```
+
+### Worker 配置
+
+**图片生成 Worker** (`lib/workers/image-worker.ts`):
+```typescript
+POLL_INTERVAL: 2000      // Worker 轮询数据库间隔 (2秒)
+MAX_CONCURRENT: 3        // 最大并发图片生成任务数
+RETRY_CONFIG: {
+  maxRetries: 3,         // 最大重试3次
+  baseDelay: 2000,       // 普通错误基础延迟2秒
+  rateLimitDelay: 30000  // 限流错误延迟30秒
+}
+```
+
+**3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`):
+```typescript
+POLL_INTERVAL: 2000           // Worker 轮询数据库间隔 (2秒)
+TENCENT_POLL_INTERVAL: 5000   // 轮询腾讯云状态间隔 (5秒)
+MAX_TENCENT_POLL_TIME: 600000 // 最大轮询时间 (10分钟)
+MAX_CONCURRENT: 1              // 最大并发3D任务数
+```
+
+### Worker 监控
+
+访问 `GET /api/workers/status` 查看 Worker 状态:
+
+```json
+{
+  "success": true,
+  "data": {
+    "image": {
+      "isRunning": true,
+      "processingCount": 2,
+      "processingTaskIds": ["task-123", "task-456"]
+    },
+    "model3d": {
+      "isRunning": true,
+      "processingCount": 1,
+      "processingTaskIds": ["task-789"]
+    }
+  }
+}
+```
+
+### 完整状态流转示例
+
+#### 图片生成流程
+
+```
+用户输入提示词 → API 创建任务 → Worker 监听执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 用户输入: "一只可爱的猫咪"
+   ↓
+2. POST /api/tasks → status=GENERATING_IMAGES (立即返回)
+   ↓
+3. ImageWorker: 检测到 GENERATING_IMAGES 状态
+   ↓
+4. ImageWorker: 生成4个风格变体提示词
+   ↓
+5. ImageWorker: 调用阿里云生成4张图片
+   ↓
+6. ImageWorker: status → IMAGES_READY
+   ↓
+7. 前端轮询: 获取到4张图片,用户选择一张
+```
+
+#### 3D 模型生成流程
+
+```
+用户选择图片 → API 更新状态 → Worker 监听执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 用户选择第2张图片
+   ↓
+2. PATCH /api/tasks/{id} → status=GENERATING_MODEL (立即返回)
+   ↓
+3. Model3DWorker: 检测到 GENERATING_MODEL 状态
+   ↓
+4. Model3DWorker: 提交腾讯云AI3D任务
+   ↓
+5. Model3DWorker: 轮询腾讯云状态
+   ↓
+6. Model3DWorker: status → COMPLETED
+   ↓
+7. 前端轮询: 获取到3D模型,显示预览
+```
+
+### Worker 目录结构
+
+```
+lib/workers/
+  ├── index.ts              # Worker 统一启动入口
+  ├── image-worker.ts       # 图片生成 Worker
+  └── model3d-worker.ts     # 3D 模型生成 Worker
+
+instrumentation.ts          # Next.js 启动钩子
+```
+
+### Worker 开发规范
+
+1. **Worker 只监听状态,不暴露手动触发接口**
+2. **使用统一的重试工具** (`lib/utils/retry.ts`)
+3. **记录详细日志** (使用 `createLogger`)
+4. **防止重复处理** (使用 `Set` 跟踪处理中的任务)
+5. **完整的错误处理** (更新数据库状态为 FAILED)
+
 ## 重要提示
 - 每一行代码必须有注释，解释代码的作用和目的。
 - 代码注释必须使用中文。

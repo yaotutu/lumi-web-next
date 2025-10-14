@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// 导入全局初始化（自动启动Worker）
-import "@/lib/init";
-
 // 移除自定义字体配置,使用系统默认字体以兼容 Turbopack
 export const metadata: Metadata = {
   title: "Create Next App",

@@ -1,7 +1,6 @@
 import type { TaskStatus } from "@prisma/client";
 import { type NextRequest, NextResponse } from "next/server";
 import { MOCK_USER } from "@/lib/constants";
-import * as QueueService from "@/lib/services/queue-service";
 import * as TaskService from "@/lib/services/task-service";
 import { withErrorHandler } from "@/lib/utils/errors";
 import {
@@ -41,7 +40,10 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
 
 /**
  * POST /api/tasks
- * 创建新任务并加入队列
+ * 创建新任务
+ *
+ * 职责：只负责创建任务并设置状态为GENERATING_IMAGES
+ * Worker会监听状态变化并执行图片生成操作
  */
 export const POST = withErrorHandler(async (request: NextRequest) => {
   const body = await request.json();
@@ -50,20 +52,19 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const validatedData = createTaskSchema.parse(body);
   const { prompt } = validatedData;
 
-  // 创建任务
-  const task = await TaskService.createTask(MOCK_USER.id, prompt);
-
-  // 添加到任务队列
-  await QueueService.enqueueTask(task.id, task.prompt);
-
-  // 获取队列状态
-  const queueStatus = QueueService.getStatus();
+  // 创建任务并直接设置状态为GENERATING_IMAGES
+  // Worker会自动检测并处理此状态的任务
+  const task = await TaskService.createTaskWithStatus(
+    MOCK_USER.id,
+    prompt,
+    "GENERATING_IMAGES",
+  );
 
   return NextResponse.json(
     {
       success: true,
       data: task,
-      queue: queueStatus,
+      message: "任务已创建，图片生成已启动",
     },
     { status: 201 },
   );
