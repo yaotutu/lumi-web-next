@@ -1,0 +1,214 @@
+/**
+ * 腾讯云混元 3D 适配器
+ *
+ * 文档: https://cloud.tencent.com/document/product/ai3d
+ *
+ * 特性:
+ * - 图生 3D 快速模型生成
+ * - 支持 GLB 格式导出
+ * - 任务状态跟踪
+ */
+
+import { ai3d } from "tencentcloud-sdk-nodejs-ai3d";
+import { AppError } from "@/lib/utils/errors";
+import { ExternalAPIError } from "@/lib/utils/retry";
+import { BaseModel3DProvider } from "../base";
+import type {
+  ModelJobResponse,
+  ModelTaskStatusResponse,
+  SubmitModelJobParams,
+} from "../types";
+
+/**
+ * 腾讯云 API 错误类
+ */
+export class TencentAPIError extends ExternalAPIError {
+  constructor(
+    message: string,
+    statusCode?: number,
+    public readonly code?: string, // 腾讯云错误码
+  ) {
+    super("tencent", statusCode, message);
+    this.name = "TencentAPIError";
+  }
+}
+
+// 导入腾讯云 AI3D 客户端类型
+const Ai3dClient = ai3d.v20250513.Client;
+
+/**
+ * 腾讯云混元 3D 适配器
+ */
+export class TencentModel3DAdapter extends BaseModel3DProvider {
+  getName(): string {
+    return "TencentModel3DProvider";
+  }
+
+  /**
+   * 创建腾讯云 AI3D 客户端实例
+   */
+  private createClient() {
+    // 从环境变量读取密钥配置
+    const secretId = process.env.TENCENTCLOUD_SECRET_ID;
+    const secretKey = process.env.TENCENTCLOUD_SECRET_KEY;
+    const region = process.env.TENCENTCLOUD_REGION || "ap-guangzhou";
+
+    // 验证必需的环境变量
+    if (!secretId || !secretKey) {
+      throw new AppError(
+        "EXTERNAL_API_ERROR",
+        "腾讯云密钥配置缺失: TENCENTCLOUD_SECRET_ID 或 TENCENTCLOUD_SECRET_KEY 未设置",
+      );
+    }
+
+    // 客户端配置
+    const clientConfig = {
+      credential: {
+        secretId,
+        secretKey,
+      },
+      region,
+      profile: {
+        httpProfile: {
+          endpoint: "ai3d.tencentcloudapi.com",
+        },
+      },
+    };
+
+    return new Ai3dClient(clientConfig);
+  }
+
+  /**
+   * 提交图生 3D 模型任务
+   */
+  protected async submitModelGenerationJobImpl(
+    params: SubmitModelJobParams,
+  ): Promise<ModelJobResponse> {
+    try {
+      // 创建客户端实例
+      const client = this.createClient();
+
+      // 构建 API 请求参数
+      const apiParams = {
+        ImageUrl: params.imageUrl, // 图片 URL（必填）
+        ResultFormat: "GLB", // 生成 GLB 格式模型
+        EnablePBR: false, // 不启用 PBR 材质
+      };
+
+      // 调用腾讯云 API - 提交图生 3D 快速任务
+      const response = await client.SubmitHunyuanTo3DRapidJob(apiParams);
+
+      // 验证响应数据
+      if (!response.JobId) {
+        throw new AppError(
+          "EXTERNAL_API_ERROR",
+          "腾讯云 API 返回数据异常: 缺少 JobId",
+          { response },
+        );
+      }
+
+      // 返回格式化响应
+      return {
+        jobId: response.JobId,
+        requestId: response.RequestId || "",
+      };
+    } catch (error) {
+      // 捕获并转换腾讯云 SDK 错误
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      // 处理腾讯云 SDK 原生错误
+      const tencentError = error as { code?: string; message?: string };
+      const errorMsg = tencentError.message || "未知错误";
+
+      // 判断错误类型并设置合适的 HTTP 状态码
+      let statusCode: number | undefined;
+
+      // 并发限制错误 - 等同于 HTTP 429
+      if (
+        errorMsg.includes("任务上限") ||
+        errorMsg.includes("并发") ||
+        errorMsg.includes("限流")
+      ) {
+        statusCode = 429;
+      }
+      // 认证错误 - 等同于 HTTP 401
+      else if (
+        errorMsg.includes("认证失败") ||
+        errorMsg.includes("签名错误") ||
+        errorMsg.includes("SecretId")
+      ) {
+        statusCode = 401;
+      }
+      // 权限/余额错误 - 等同于 HTTP 403
+      else if (errorMsg.includes("权限") || errorMsg.includes("余额")) {
+        statusCode = 403;
+      }
+
+      // 抛出结构化的 TencentAPIError
+      throw new TencentAPIError(
+        `腾讯云图生 3D 任务提交失败: ${errorMsg}`,
+        statusCode,
+        tencentError.code,
+      );
+    }
+  }
+
+  /**
+   * 查询腾讯云 3D 模型生成任务状态
+   */
+  protected async queryModelTaskStatusImpl(
+    jobId: string,
+  ): Promise<ModelTaskStatusResponse> {
+    try {
+      // 创建客户端实例
+      const client = this.createClient();
+
+      // 调用腾讯云 API - 查询快速任务状态
+      const response = await client.QueryHunyuanTo3DRapidJob({
+        JobId: jobId,
+      });
+
+      // 验证响应数据
+      if (!response.Status) {
+        throw new AppError(
+          "EXTERNAL_API_ERROR",
+          "腾讯云 API 返回数据异常: 缺少 Status 字段",
+          { response },
+        );
+      }
+
+      // 返回格式化响应
+      return {
+        jobId,
+        status: response.Status as "WAIT" | "RUN" | "DONE" | "FAIL",
+        errorCode: response.ErrorCode,
+        errorMessage: response.ErrorMessage,
+        resultFiles: response.ResultFile3Ds?.map((file) => ({
+          type: file.Type,
+          url: file.Url,
+          previewImageUrl: file.PreviewImageUrl,
+        })),
+        requestId: response.RequestId || "",
+      };
+    } catch (error) {
+      // 捕获并转换腾讯云 SDK 错误
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      // 处理腾讯云 SDK 原生错误
+      const tencentError = error as { code?: string; message?: string };
+      const errorMsg = tencentError.message || "未知错误";
+
+      // 状态查询失败通常是网络或临时性错误，可重试
+      // 不设置特殊状态码，使用默认的可重试错误处理
+      throw new TencentAPIError(
+        `腾讯云任务状态查询失败: ${errorMsg}`,
+        undefined,
+        tencentError.code,
+      );
+    }
+  }
+}

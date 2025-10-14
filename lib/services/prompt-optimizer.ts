@@ -8,10 +8,7 @@
  * - 阿里云通义千问 (Qwen) - 备选
  */
 
-import {
-  chatCompletion,
-  generatePromptVariants,
-} from "@/lib/providers/llm-provider";
+import { createLLMProvider } from "@/lib/providers/llm";
 import {
   IMAGE_3D_PRINT_PROMPT,
   IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
@@ -37,8 +34,11 @@ export async function optimizePromptFor3DPrint(
       inputLength: userInput.length,
     });
 
-    // 调用统一LLM接口优化提示词（自动选择最优渠道）
-    const optimized = await chatCompletion({
+    // 创建 LLM Provider 实例（自动选择渠道）
+    const llmProvider = createLLMProvider();
+
+    // 调用统一LLM接口优化提示词
+    const optimized = await llmProvider.chatCompletion({
       systemPrompt: IMAGE_3D_PRINT_PROMPT,
       userPrompt: userInput,
       temperature: 0.7,
@@ -97,8 +97,11 @@ export async function generateMultiStylePrompts(
       inputLength: userInput.length,
     });
 
-    // 调用通义千问生成4个不同风格的变体
-    const variants = await generatePromptVariants(
+    // 创建 LLM Provider 实例（自动选择渠道）
+    const llmProvider = createLLMProvider();
+
+    // 调用LLM生成4个不同风格的变体
+    const variants = await llmProvider.generatePromptVariants(
       userInput,
       IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
     );

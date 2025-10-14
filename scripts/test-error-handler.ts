@@ -3,7 +3,7 @@
  * 测试目标：验证所有错误类型能正确转换为HTTP响应
  */
 
-import { AliyunAPIError } from "../lib/providers/aliyun-image";
+import { AliyunAPIError } from "../lib/providers/image";
 import { AppError, toErrorResponse } from "../lib/utils/errors";
 
 console.log("🧪 测试错误处理模块\n");

@@ -6,7 +6,7 @@
 
 import type { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { LocalStorage } from "@/lib/providers/storage";
+import { createStorageProvider } from "@/lib/providers/storage";
 import { AppError } from "@/lib/utils/errors";
 // Service层不再进行Zod验证，验证在API路由层完成
 
@@ -206,8 +206,9 @@ export async function deleteTask(taskId: string) {
   // 验证任务存在
   await getTaskById(taskId);
 
-  // 删除本地文件资源（图片和模型）
-  await LocalStorage.deleteTaskResources(taskId);
+  // 删除文件资源（图片和模型）
+  const storageProvider = createStorageProvider();
+  await storageProvider.deleteTaskResources(taskId);
 
   // 删除数据库记录（级联删除images和model）
   await prisma.task.delete({

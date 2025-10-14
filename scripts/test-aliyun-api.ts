@@ -2,7 +2,7 @@
  * 测试阿里云API调用
  */
 import * as dotenv from "dotenv";
-import { generateImages } from "../lib/providers/aliyun-image";
+import { createImageProvider } from "../lib/providers/image";
 
 // 直接加载环境变量
 dotenv.config({ path: ".env.local" });
@@ -13,8 +13,12 @@ async function runTest() {
   try {
     console.log("开始调用阿里云API生成图片...");
 
+    // 使用新的统一 provider
+    const imageProvider = createImageProvider();
+    console.log("使用的渠道:", imageProvider.getName());
+
     // 使用一个简单的提示词测试API
-    const images = await generateImages("一只可爱的小猫", 1);
+    const images = await imageProvider.generateImages("一只可爱的小猫", 1);
 
     console.log("✅ API调用成功!");
     console.log("生成的图片URL:", images[0]);

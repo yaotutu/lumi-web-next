@@ -11,10 +11,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
-import {
-  submitModelGenerationJob,
-  queryModelTaskStatus,
-} from "@/lib/providers/tencent-ai3d";
+import { createModel3DProvider } from "@/lib/providers/model3d";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
 
 // 创建日志器
@@ -123,20 +120,23 @@ async function processTask(taskId: string): Promise<void> {
       imageUrl: selectedImage.url,
     });
 
-    // 2. 提交腾讯云3D生成任务（使用统一的重试工具）
+    // 2. 提交3D生成任务（使用统一的重试工具）
+    const model3DProvider = createModel3DProvider();
     const tencentResponse = await retryWithBackoff(
       async () => {
-        return await submitModelGenerationJob({ imageUrl: selectedImage.url });
+        return await model3DProvider.submitModelGenerationJob({
+          imageUrl: selectedImage.url,
+        });
       },
       CONFIG.RETRY_CONFIG,
       taskId,
-      "提交腾讯云3D任务",
+      "提交3D生成任务",
     );
 
-    log.info("processTask", "腾讯云任务提交成功", {
+    log.info("processTask", "3D任务提交成功", {
       taskId,
-      jobId: tencentResponse.JobId,
-      requestId: tencentResponse.RequestId,
+      jobId: tencentResponse.jobId,
+      requestId: tencentResponse.requestId,
     });
 
     // 3. 创建本地TaskModel记录
@@ -146,8 +146,8 @@ async function processTask(taskId: string): Promise<void> {
         name: `${task.prompt.slice(0, 30)} - 3D模型`,
         status: "GENERATING",
         progress: 0,
-        apiTaskId: tencentResponse.JobId,
-        apiRequestId: tencentResponse.RequestId,
+        apiTaskId: tencentResponse.jobId,
+        apiRequestId: tencentResponse.requestId,
       },
     });
 
@@ -164,8 +164,8 @@ async function processTask(taskId: string): Promise<void> {
       },
     });
 
-    // 5. 轮询腾讯云状态直到完成
-    await pollTencentCloudStatus(taskId, tencentResponse.JobId);
+    // 5. 轮询3D生成状态直到完成
+    await pollModel3DStatus(taskId, tencentResponse.jobId);
 
     log.info("processTask", "3D模型生成完成", {
       taskId,
@@ -207,16 +207,14 @@ async function processTask(taskId: string): Promise<void> {
 }
 
 /**
- * 轮询腾讯云任务状态直到完成
+ * 轮询3D模型生成任务状态直到完成
  */
-async function pollTencentCloudStatus(
-  taskId: string,
-  jobId: string,
-): Promise<void> {
+async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
   const startTime = Date.now();
   let pollCount = 0;
+  const model3DProvider = createModel3DProvider();
 
-  log.info("pollTencentCloudStatus", "开始轮询腾讯云状态", {
+  log.info("pollModel3DStatus", "开始轮询3D生成状态", {
     taskId,
     jobId,
   });
@@ -235,23 +233,23 @@ async function pollTencentCloudStatus(
     // 等待后查询（避免首次立即查询）
     await sleep(CONFIG.TENCENT_POLL_INTERVAL);
 
-    // 查询腾讯云状态
-    const tencentStatus = await queryModelTaskStatus(jobId);
+    // 查询3D生成状态
+    const status = await model3DProvider.queryModelTaskStatus(jobId);
 
-    log.info("pollTencentCloudStatus", "腾讯云状态查询", {
+    log.info("pollModel3DStatus", "3D生成状态查询", {
       taskId,
       jobId,
-      status: tencentStatus.Status,
+      status: status.status,
       pollCount,
       elapsedSeconds: Math.floor(elapsed / 1000),
     });
 
     // 计算进度
     let progress = 0;
-    if (tencentStatus.Status === "WAIT") progress = 0;
-    else if (tencentStatus.Status === "RUN") progress = 50;
-    else if (tencentStatus.Status === "DONE") progress = 100;
-    else if (tencentStatus.Status === "FAIL") progress = 0;
+    if (status.status === "WAIT") progress = 0;
+    else if (status.status === "RUN") progress = 50;
+    else if (status.status === "DONE") progress = 100;
+    else if (status.status === "FAIL") progress = 0;
 
     // 更新本地模型进度
     await prisma.taskModel.update({
@@ -260,20 +258,20 @@ async function pollTencentCloudStatus(
     });
 
     // 处理完成状态
-    if (tencentStatus.Status === "DONE") {
+    if (status.status === "DONE") {
       // 提取GLB文件URL
-      const glbFile = tencentStatus.ResultFile3Ds?.find(
-        (file) => file.Type?.toUpperCase() === "GLB",
+      const glbFile = status.resultFiles?.find(
+        (file) => file.type?.toUpperCase() === "GLB",
       );
 
-      if (!glbFile?.Url) {
-        throw new Error("腾讯云返回的结果中没有GLB文件");
+      if (!glbFile?.url) {
+        throw new Error("3D生成返回的结果中没有GLB文件");
       }
 
-      log.info("pollTencentCloudStatus", "3D模型生成成功", {
+      log.info("pollModel3DStatus", "3D模型生成成功", {
         taskId,
         jobId,
-        modelUrl: glbFile.Url,
+        modelUrl: glbFile.url,
       });
 
       // 更新模型状态为COMPLETED
@@ -282,7 +280,7 @@ async function pollTencentCloudStatus(
         data: {
           status: "COMPLETED",
           progress: 100,
-          modelUrl: glbFile.Url,
+          modelUrl: glbFile.url,
           completedAt: new Date(),
         },
       });
@@ -297,19 +295,18 @@ async function pollTencentCloudStatus(
         },
       });
 
-      log.info("pollTencentCloudStatus", "任务完成", { taskId, jobId });
+      log.info("pollModel3DStatus", "任务完成", { taskId, jobId });
       return;
     }
 
     // 处理失败状态
-    if (tencentStatus.Status === "FAIL") {
-      const errorMsg =
-        tencentStatus.ErrorMessage || "3D模型生成失败（腾讯云返回失败状态）";
+    if (status.status === "FAIL") {
+      const errorMsg = status.errorMessage || "3D模型生成失败（返回失败状态）";
 
-      log.error("pollTencentCloudStatus", "腾讯云任务失败", null, {
+      log.error("pollModel3DStatus", "3D生成任务失败", null, {
         taskId,
         jobId,
-        errorCode: tencentStatus.ErrorCode,
+        errorCode: status.errorCode,
         errorMessage: errorMsg,
       });
 

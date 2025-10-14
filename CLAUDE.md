@@ -389,7 +389,10 @@ API路由层 (app/api/) → Service层 (lib/services/) → 数据访问层 (Pris
 
 **目录结构**:
 - `lib/services/` - 业务逻辑层
-- `lib/providers/` - 外部API封装 (图片生成、LLM、3D模型等)
+- `lib/providers/` - 外部API封装（采用适配器模式）
+  - `image/` - 图片生成服务（统一接口，多渠道适配器）
+  - `llm/` - LLM服务（提示词优化）
+  - `model3d/` - 3D模型生成服务
 - `lib/workers/` - 后台任务处理 (图片生成Worker、3D模型生成Worker)
 - `lib/validators/` - Zod验证schemas
 - `lib/utils/errors.ts` - 统一错误处理
@@ -437,6 +440,217 @@ if (!resource) {
 1. **使用纯函数**,避免类封装
 2. **完整的JSDoc注释**: `@param` / `@returns` / `@throws`
 3. **抛出AppError**: `throw new AppError("NOT_FOUND", message, details?)`
+
+### Provider 架构（适配器模式）
+
+项目使用**适配器模式**管理外部 API 调用，实现统一接口和多渠道支持。
+
+#### 图片生成 Provider (`lib/providers/image/`)
+
+**目录结构**:
+```
+lib/providers/image/
+├── types.ts              # 统一接口定义
+├── base.ts               # 抽象基类（公共逻辑）
+├── factory.ts            # 工厂函数（自动选择渠道）
+├── adapters/             # 渠道适配器
+│   ├── aliyun.ts        # 阿里云适配器
+│   ├── siliconflow.ts   # SiliconFlow 适配器
+│   └── mock.ts          # Mock 适配器（开发用）
+└── index.ts              # 统一导出
+```
+
+**使用方式**:
+```typescript
+import { createImageProvider } from '@/lib/providers/image';
+
+// 自动根据环境变量选择渠道
+const imageProvider = createImageProvider();
+
+// 批量生成
+const images = await imageProvider.generateImages(prompt, 4);
+
+// 流式生成
+const stream = imageProvider.generateImageStream(prompt, 4);
+for await (const imageUrl of stream) {
+  console.log('生成图片:', imageUrl);
+}
+```
+
+**核心特性**:
+- ✅ 统一接口：所有适配器实现相同的 `ImageGenerationProvider` 接口
+- ✅ 自动选择：工厂函数根据环境变量自动选择渠道
+- ✅ Mock 模式：开发时自动使用 Mock 数据，无需配置 API Key
+- ✅ 类型安全：完整的 TypeScript 类型定义
+- ✅ 易于扩展：新增渠道只需添加新适配器
+
+**渠道优先级**:
+```
+1. Mock 模式 (NEXT_PUBLIC_MOCK_MODE=true)
+2. SiliconFlow (SILICONFLOW_API_KEY)
+3. 阿里云 (ALIYUN_IMAGE_API_KEY)
+```
+
+#### LLM Provider (`lib/providers/llm/`)
+
+**目录结构**:
+```
+lib/providers/llm/
+├── types.ts              # 统一接口定义
+├── base.ts               # 抽象基类（公共逻辑、Mock 模式）
+├── factory.ts            # 工厂函数（自动选择渠道）
+├── adapters/             # 渠道适配器
+│   ├── qwen.ts          # 阿里云通义千问适配器
+│   ├── siliconflow.ts   # SiliconFlow DeepSeek-V3 适配器
+│   └── mock.ts          # Mock 适配器（开发用）
+└── index.ts              # 统一导出
+```
+
+**使用方式**:
+```typescript
+import { createLLMProvider } from '@/lib/providers/llm';
+
+// 自动根据环境变量选择渠道
+const llmProvider = createLLMProvider();
+
+// 聊天补全
+const response = await llmProvider.chatCompletion({
+  systemPrompt: "你是一个有帮助的助手",
+  userPrompt: "请介绍一下你自己",
+  temperature: 0.7,
+  responseFormat: "text"
+});
+
+// 生成提示词变体（用于图片生成）
+const variants = await llmProvider.generatePromptVariants(
+  "一只可爱的小猫",
+  "生成4个不同风格的提示词变体"
+);
+```
+
+**核心特性**:
+- ✅ 统一接口：所有适配器实现相同的 `LLMProvider` 接口
+- ✅ OpenAI 兼容：Qwen 和 SiliconFlow 都使用 OpenAI SDK
+- ✅ Mock 模式：开发时自动使用 Mock 数据
+- ✅ 优雅降级：LLM 调用失败时自动使用原始输入
+- ✅ 类型安全：完整的 TypeScript 类型定义
+
+**渠道优先级**:
+```
+1. Mock 模式 (NEXT_PUBLIC_MOCK_MODE=true)
+2. SiliconFlow (SILICONFLOW_LLM_API_KEY)
+3. 阿里云通义千问 (QWEN_API_KEY)
+```
+
+#### Model3D Provider (`lib/providers/model3d/`)
+
+**目录结构**:
+```
+lib/providers/model3d/
+├── types.ts              # 统一接口定义
+├── base.ts               # 抽象基类（公共逻辑、Mock 模式）
+├── factory.ts            # 工厂函数（自动选择渠道）
+├── adapters/             # 渠道适配器
+│   ├── tencent.ts       # 腾讯云混元 3D 适配器
+│   └── mock.ts          # Mock 适配器（开发用）
+└── index.ts              # 统一导出
+```
+
+**使用方式**:
+```typescript
+import { createModel3DProvider } from '@/lib/providers/model3d';
+
+// 自动根据环境变量选择渠道
+const model3DProvider = createModel3DProvider();
+
+// 提交任务
+const { jobId } = await model3DProvider.submitModelGenerationJob({
+  imageUrl: "https://example.com/image.jpg",
+  prompt: "optional prompt"
+});
+
+// 查询状态
+const status = await model3DProvider.queryModelTaskStatus(jobId);
+console.log('任务状态:', status.status); // WAIT | RUN | DONE | FAIL
+```
+
+**核心特性**:
+- ✅ 统一接口：所有适配器实现相同的 `Model3DProvider` 接口
+- ✅ 任务跟踪：提供完整的任务状态查询
+- ✅ Mock 模式：开发时模拟任务从 WAIT → RUN → DONE 的状态变化
+- ✅ 错误处理：统一的 `TencentAPIError` 错误类型
+- ✅ 易于扩展：支持添加其他 3D 生成服务
+
+**渠道优先级**:
+```
+1. Mock 模式 (NEXT_PUBLIC_MOCK_MODE=true)
+2. 腾讯云混元 3D (TENCENTCLOUD_SECRET_ID + TENCENTCLOUD_SECRET_KEY)
+```
+
+#### Storage Provider (`lib/providers/storage/`)
+
+**目录结构**:
+```
+lib/providers/storage/
+├── types.ts              # 统一接口定义
+├── base.ts               # 抽象基类（公共逻辑）
+├── factory.ts            # 工厂函数（自动选择存储方式）
+├── adapters/             # 存储适配器
+│   ├── local.ts         # 本地文件系统适配器
+│   ├── aliyun-oss.ts    # 阿里云 OSS 适配器（TODO）
+│   └── tencent-cos.ts   # 腾讯云 COS 适配器（TODO）
+└── index.ts              # 统一导出
+```
+
+**使用方式**:
+```typescript
+import { createStorageProvider } from '@/lib/providers/storage';
+
+// 自动根据环境变量选择存储方式
+const storageProvider = createStorageProvider();
+
+// 保存图片
+const imageUrl = await storageProvider.saveTaskImage({
+  taskId: "task-123",
+  index: 0,
+  imageData: buffer
+});
+
+// 保存模型
+const modelUrl = await storageProvider.saveTaskModel({
+  taskId: "task-123",
+  modelData: buffer,
+  format: "glb"
+});
+
+// 检查文件
+const exists = await storageProvider.fileExists(imageUrl);
+
+// 获取文件信息
+const info = await storageProvider.getFileInfo(imageUrl);
+
+// 删除任务资源
+await storageProvider.deleteTaskResources("task-123");
+```
+
+**核心特性**:
+- ✅ 统一接口：所有适配器实现相同的 `StorageProvider` 接口
+- ✅ 多种存储：支持本地文件系统、阿里云 OSS、腾讯云 COS
+- ✅ 自动选择：根据环境变量自动选择最佳存储方式
+- ✅ Mock 数据：提供 `saveMockImage` 和 `saveMockModel` 方法
+- ✅ 易于迁移：切换存储方式无需修改业务代码
+
+**存储方式优先级**:
+```
+1. 阿里云 OSS (ALIYUN_OSS_ACCESS_KEY_ID + ALIYUN_OSS_ACCESS_KEY_SECRET)
+2. 腾讯云 COS (TENCENT_COS_SECRET_ID + TENCENT_COS_SECRET_KEY)
+3. 本地文件系统 (默认，存储到 public/generated/)
+```
+
+**注意**:
+- 本地文件系统适合开发和小规模部署
+- 生产环境建议使用 OSS/COS
+- OSS/COS 适配器需要安装对应的 SDK（当前为占位实现）
 
 ## Worker 架构
 
