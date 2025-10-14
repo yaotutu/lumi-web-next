@@ -145,7 +145,11 @@ async function runTests() {
     if (!allPending) {
       throw new Error("所有任务状态应该是IMAGE_PENDING");
     }
-    console.log("  ✅ 状态筛选成功，共", pendingTasks.length, "个IMAGE_PENDING任务");
+    console.log(
+      "  ✅ 状态筛选成功，共",
+      pendingTasks.length,
+      "个IMAGE_PENDING任务",
+    );
 
     // ============================================
     // 测试10: 取消任务 - 正常流程

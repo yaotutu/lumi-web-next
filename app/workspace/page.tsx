@@ -62,6 +62,7 @@ function WorkspaceContent() {
     };
 
     initializeTask();
+    // router 在组件生命周期内稳定，不需要添加到依赖数组
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
@@ -123,8 +124,16 @@ function WorkspaceContent() {
   const handleGenerate3D = async (imageIndex: number) => {
     setSelectedImageIndex(imageIndex);
 
-    // 保存选中的图片索引，后台会自动触发3D模型生成队列
+    // 立即更新本地任务状态，给用户即时反馈
     if (task) {
+      // 乐观更新：立即将状态设置为 MODEL_PENDING，让 ModelPreview 显示生成中状态
+      setTask({
+        ...task,
+        selectedImageIndex: imageIndex,
+        status: "MODEL_PENDING",
+        modelGenerationStartedAt: new Date(),
+      });
+
       try {
         // 只需要更新 selectedImageIndex，后台会自动检测并开始生成3D模型
         const response = await fetch(`/api/tasks/${task.id}`, {
@@ -138,11 +147,17 @@ function WorkspaceContent() {
         if (data.success) {
           // 后台队列会自动处理3D模型生成，前端轮询Task状态即可
           console.log("图片选择成功，3D模型生成已加入队列");
+          // 立即更新任务数据
+          setTask(data.data);
         } else {
           console.error("Failed to select image:", data.error);
+          // 回滚乐观更新
+          setTask({ ...task, selectedImageIndex: imageIndex });
         }
       } catch (error) {
         console.error("Failed to select image:", error);
+        // 回滚乐观更新
+        setTask({ ...task, selectedImageIndex: imageIndex });
       }
     }
   };

@@ -13,8 +13,7 @@ interface ModelPreviewProps {
 }
 
 export default function ModelPreview({
-  imageIndex,
-  prompt,
+  // imageIndex 和 prompt 暂未使用，但保留以供未来扩展
   task,
   taskId,
 }: ModelPreviewProps) {
@@ -76,7 +75,8 @@ export default function ModelPreview({
 
     // 如果正在生成模型（包括等待和生成中）
     if (
-      (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") &&
+      (task?.status === "MODEL_PENDING" ||
+        task?.status === "MODEL_GENERATING") &&
       task.model
     ) {
       setStatus("generating");
@@ -99,7 +99,7 @@ export default function ModelPreview({
       setStatus("idle");
       setProgress(0);
     }
-  }, [task?.status, task?.model?.progress, task?.model?.status]);
+  }, [task?.status, task?.model?.progress, task?.model?.status, task?.model]);
 
   // 生成代理URL，用于绕过CORS限制
   const getProxiedModelUrl = (modelUrl: string | undefined | null): string => {
@@ -252,54 +252,77 @@ export default function ModelPreview({
           <GenerationProgress progress={Math.round(progress)} />
         ) : status === "completed" ? (
           <>
-            <div className="mb-3">
-              <h3 className="mb-1.5 text-sm font-semibold text-white">
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-white">
                 模型信息
               </h3>
-              <div className="space-y-1 text-xs text-white/60">
+              <div className="space-y-1.5 text-xs text-white/60">
                 <div className="flex justify-between">
                   <span>格式:</span>
-                  <span className="text-white/90">
+                  <span className="text-white/90 font-medium">
                     {task?.model?.format || "GLB"}
                   </span>
                 </div>
                 {task?.model?.fileSize && (
                   <div className="flex justify-between">
-                    <span>大小:</span>
-                    <span className="text-white/90">
+                    <span>文件大小:</span>
+                    <span className="text-white/90 font-medium">
                       {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
                     </span>
                   </div>
                 )}
-                {task?.model?.faceCount && (
-                  <div className="flex justify-between">
-                    <span>面数:</span>
-                    <span className="text-white/90">
-                      {task.model.faceCount.toLocaleString()}
-                    </span>
-                  </div>
-                )}
+                {task?.model?.faceCount !== null &&
+                  task?.model?.faceCount !== undefined && (
+                    <div className="flex justify-between">
+                      <span>面数:</span>
+                      <span className="text-white/90 font-medium">
+                        {task.model.faceCount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                {task?.model?.vertexCount !== null &&
+                  task?.model?.vertexCount !== undefined && (
+                    <div className="flex justify-between">
+                      <span>顶点数:</span>
+                      <span className="text-white/90 font-medium">
+                        {task.model.vertexCount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                 <div className="flex justify-between">
                   <span>质量:</span>
-                  <span className="text-yellow-1">
+                  <span className="text-yellow-1 font-medium">
                     {task?.model?.quality || "高清"}
                   </span>
                 </div>
               </div>
             </div>
 
-            <button
-              type="button"
-              className="btn-primary w-full"
-              onClick={() => {
-                if (task?.model?.modelUrl) {
-                  window.open(task.model.modelUrl, "_blank");
-                }
-              }}
-              disabled={!task?.model?.modelUrl}
-            >
-              下载模型
-            </button>
+            {/* 按钮组 - 并排显示，使用统一的按钮样式 */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                onClick={() => {
+                  if (task?.model?.modelUrl) {
+                    window.open(task.model.modelUrl, "_blank");
+                  }
+                }}
+                disabled={!task?.model?.modelUrl}
+              >
+                下载模型
+              </button>
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                onClick={() => {
+                  // TODO: 实现一键打印功能
+                  alert("一键打印功能即将上线！");
+                }}
+              >
+                一键打印
+              </button>
+            </div>
           </>
         ) : status === "failed" ? (
           <>
