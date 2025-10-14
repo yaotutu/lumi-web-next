@@ -105,7 +105,9 @@ export async function generatePromptVariants(
       log.error("generatePromptVariants", "JSON解析失败", parseError, {
         content,
       });
-      throw new Error(`JSON解析失败: ${parseError instanceof Error ? parseError.message : "未知错误"}`);
+      throw new Error(
+        `JSON解析失败: ${parseError instanceof Error ? parseError.message : "未知错误"}`,
+      );
     }
 
     // 验证返回的变体数量

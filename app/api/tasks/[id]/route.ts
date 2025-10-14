@@ -44,10 +44,16 @@ export const PATCH = withErrorHandler(
     const task = await TaskService.updateTask(id, validatedData);
 
     // 🎯 关键逻辑：如果更新了 selectedImageIndex，自动触发3D模型生成
+    // 允许从 IMAGES_READY 或 FAILED 状态触发（支持失败重试）
     if (
       validatedData.selectedImageIndex !== undefined &&
-      task.status === "IMAGES_READY"
+      (task.status === "IMAGES_READY" || task.status === "FAILED")
     ) {
+      // 如果是FAILED状态,先重置为IMAGES_READY
+      if (task.status === "FAILED") {
+        await TaskService.updateTask(id, { status: "IMAGES_READY" });
+      }
+
       // 异步触发3D模型生成任务（不等待完成）
       addModel3DTask(id).catch((error) => {
         console.error("启动3D模型生成任务失败:", error);

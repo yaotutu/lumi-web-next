@@ -112,10 +112,14 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
         // 使用对应索引的提示词变体
         const currentPrompt = promptVariants[index];
 
-        log.info("processTask", `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`, {
-          taskId,
-          promptPreview: currentPrompt.substring(0, 80) + "...",
-        });
+        log.info(
+          "processTask",
+          `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`,
+          {
+            taskId,
+            promptPreview: currentPrompt.substring(0, 80) + "...",
+          },
+        );
 
         // 生成单张图片（使用该提示词）
         const generator = generateImageStream(currentPrompt, 1);

@@ -201,3 +201,130 @@ export async function cancelTask(taskId: string) {
 
   return task;
 }
+
+/**
+ * 重试图片生成
+ * 将失败的任务重置为PENDING状态，清理旧的图片记录
+ * @param taskId 任务ID
+ * @returns 重置后的任务对象
+ * @throws AppError NOT_FOUND - 任务不存在
+ * @throws AppError INVALID_STATE - 任务状态不允许重试
+ */
+export async function retryImageGeneration(taskId: string) {
+  // 获取任务当前状态
+  const task = await getTaskById(taskId);
+
+  // 验证状态：只能重试失败的任务
+  if (task.status !== "FAILED") {
+    throw new AppError(
+      "INVALID_STATE",
+      `只有失败的任务才能重试图片生成，当前状态: ${task.status}`,
+      {
+        currentStatus: task.status,
+      },
+    );
+  }
+
+  // 事务：清理旧数据 + 重置任务状态
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    // 1. 删除旧的图片记录
+    await tx.taskImage.deleteMany({
+      where: { taskId },
+    });
+
+    // 2. 删除旧的模型记录（如果有）
+    await tx.taskModel.deleteMany({
+      where: { taskId },
+    });
+
+    // 3. 重置任务状态为PENDING
+    const resetTask = await tx.task.update({
+      where: { id: taskId },
+      data: {
+        status: "PENDING",
+        selectedImageIndex: null,
+        imageGenerationStartedAt: null,
+        imageGenerationCompletedAt: null,
+        modelGenerationStartedAt: null,
+        modelGenerationCompletedAt: null,
+        failedAt: null,
+        errorMessage: null,
+        completedAt: null,
+      },
+      include: {
+        images: true,
+        model: true,
+      },
+    });
+
+    return resetTask;
+  });
+
+  return updatedTask;
+}
+
+/**
+ * 重试3D模型生成
+ * 将失败的任务重置为IMAGES_READY状态，清理旧的模型记录
+ * @param taskId 任务ID
+ * @returns 重置后的任务对象
+ * @throws AppError NOT_FOUND - 任务不存在
+ * @throws AppError INVALID_STATE - 任务状态不允许重试或图片未生成
+ */
+export async function retryModelGeneration(taskId: string) {
+  // 获取任务当前状态
+  const task = await getTaskById(taskId);
+
+  // 验证状态：只能重试失败的任务
+  if (task.status !== "FAILED") {
+    throw new AppError(
+      "INVALID_STATE",
+      `只有失败的任务才能重试模型生成，当前状态: ${task.status}`,
+      {
+        currentStatus: task.status,
+      },
+    );
+  }
+
+  // 验证必须有图片记录
+  if (!task.images || task.images.length === 0) {
+    throw new AppError("INVALID_STATE", "任务没有图片记录，无法重试3D模型生成");
+  }
+
+  // 验证必须已选择图片
+  if (
+    task.selectedImageIndex === null ||
+    task.selectedImageIndex === undefined
+  ) {
+    throw new AppError("INVALID_STATE", "任务未选择图片，无法重试3D模型生成");
+  }
+
+  // 事务：清理旧模型 + 重置任务状态
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    // 1. 删除旧的模型记录
+    await tx.taskModel.deleteMany({
+      where: { taskId },
+    });
+
+    // 2. 重置任务状态为IMAGES_READY（保留图片记录和selectedImageIndex）
+    const resetTask = await tx.task.update({
+      where: { id: taskId },
+      data: {
+        status: "IMAGES_READY",
+        modelGenerationStartedAt: null,
+        modelGenerationCompletedAt: null,
+        failedAt: null,
+        errorMessage: null,
+        completedAt: null,
+      },
+      include: {
+        images: true,
+        model: true,
+      },
+    });
+
+    return resetTask;
+  });
+
+  return updatedTask;
+}

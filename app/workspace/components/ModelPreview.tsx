@@ -98,6 +98,22 @@ export default function ModelPreview({
     }
   }, [task?.status, task?.model?.progress, task?.model?.status]);
 
+  // 生成代理URL，用于绕过CORS限制
+  const getProxiedModelUrl = (modelUrl: string | undefined | null): string => {
+    if (!modelUrl) return "/demo.glb";
+
+    // 如果是本地文件（以/开头），直接返回
+    if (modelUrl.startsWith("/")) return modelUrl;
+
+    // 如果是腾讯云COS URL，使用代理
+    if (modelUrl.includes("tencentcos.cn")) {
+      return `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
+    }
+
+    // 其他URL直接返回（可能有CORS问题）
+    return modelUrl;
+  };
+
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
       {/* 3D预览区域 */}
@@ -123,12 +139,23 @@ export default function ModelPreview({
               </p>
             </div>
           ) : status === "completed" ? (
-            // 完成:渲染 3D 模型
+            // 完成:渲染 3D 模型（使用代理URL绕过CORS）
             <Model3DViewer
               ref={model3DViewerRef}
-              modelUrl={task?.model?.modelUrl || "/demo.glb"} // 使用真实的模型URL，降级到demo
+              modelUrl={getProxiedModelUrl(task?.model?.modelUrl)} // 使用代理URL，解决CORS问题
               showGrid={showGrid}
             />
+          ) : status === "failed" ? (
+            // 失败状态:显示错误信息
+            <div className="text-center max-w-md px-6">
+              <div className="mb-4 text-5xl">❌</div>
+              <p className="text-sm font-medium text-white mb-2">
+                3D模型生成失败
+              </p>
+              <p className="text-xs text-foreground-subtle mb-4">
+                {task?.errorMessage || "生成过程中遇到错误，请重试"}
+              </p>
+            </div>
           ) : (
             // 空闲状态:显示占位符
             <div className="text-center">
@@ -269,6 +296,47 @@ export default function ModelPreview({
               disabled={!task?.model?.modelUrl}
             >
               下载模型
+            </button>
+          </>
+        ) : status === "failed" ? (
+          <>
+            <div className="mb-3">
+              <h3 className="mb-1.5 text-sm font-semibold text-white">
+                生成失败
+              </h3>
+              <div className="text-xs text-white/60 mb-3">
+                {task?.errorMessage || "生成过程中遇到错误"}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn-primary w-full"
+              onClick={async () => {
+                if (!taskId) return;
+                try {
+                  // 调用重试API
+                  const response = await fetch(`/api/tasks/${taskId}/retry`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type: "model" }),
+                  });
+
+                  const data = await response.json();
+                  if (data.success) {
+                    // 重试成功,刷新页面以获取最新任务状态
+                    window.location.reload();
+                  } else {
+                    console.error("重试失败:", data.error);
+                    alert(`重试失败: ${data.error?.message || "未知错误"}`);
+                  }
+                } catch (error) {
+                  console.error("重试请求失败:", error);
+                  alert("重试请求失败,请检查网络连接");
+                }
+              }}
+            >
+              重新生成3D模型
             </button>
           </>
         ) : (

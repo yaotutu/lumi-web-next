@@ -46,16 +46,16 @@ interface TencentModelTaskStatus {
  * @returns 配置好的客户端实例
  */
 function createTencentAi3dClient() {
-  // 从环境变量读取密钥配置
-  const secretId = process.env.TENCENT_SECRET_ID;
-  const secretKey = process.env.TENCENT_SECRET_KEY;
-  const region = process.env.TENCENT_REGION || "ap-guangzhou";
+  // 从环境变量读取密钥配置（使用腾讯云官方推荐的环境变量名）
+  const secretId = process.env.TENCENTCLOUD_SECRET_ID;
+  const secretKey = process.env.TENCENTCLOUD_SECRET_KEY;
+  const region = process.env.TENCENTCLOUD_REGION || "ap-guangzhou";
 
   // 验证必需的环境变量
   if (!secretId || !secretKey) {
     throw new AppError(
       "EXTERNAL_API_ERROR",
-      "腾讯云密钥配置缺失: TENCENT_SECRET_ID 或 TENCENT_SECRET_KEY 未设置",
+      "腾讯云密钥配置缺失: TENCENTCLOUD_SECRET_ID 或 TENCENTCLOUD_SECRET_KEY 未设置",
     );
   }
 

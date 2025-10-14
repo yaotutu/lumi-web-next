@@ -75,7 +75,7 @@ async function processModel3DTask(taskId: string): Promise<void> {
       return;
     }
 
-    // 验证任务状态必须是IMAGES_READY
+    // 验证任务状态必须是IMAGES_READY（支持FAILED状态重试）
     if (task.status !== "IMAGES_READY") {
       log.warn("processModel3DTask", "任务状态不是IMAGES_READY，跳过", {
         taskId,

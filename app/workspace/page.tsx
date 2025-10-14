@@ -88,7 +88,8 @@ function WorkspaceContent() {
 
     if (!needsPolling) return;
 
-    const interval = setInterval(async () => {
+    // 立即执行一次轮询（不等待首次interval触发）
+    const pollOnce = async () => {
       try {
         // 同时获取任务状态和队列状态
         const [taskResponse, queueResponse] = await Promise.all([
@@ -102,16 +103,15 @@ function WorkspaceContent() {
         if (taskData.success) {
           setTask(taskData.data);
 
-          // 如果任务完成或失败，停止轮询并清除队列状态
+          // 如果任务完成或失败，清除队列状态
           if (
             taskData.data.status === "IMAGES_READY" ||
             taskData.data.status === "MODEL_READY" ||
             taskData.data.status === "FAILED" ||
             taskData.data.status === "COMPLETED"
           ) {
-            clearInterval(interval);
             setQueueStatus(null); // 清除队列状态
-            return; // 立即返回，不再更新队列状态
+            return false; // 返回false表示应该停止轮询
           }
         }
 
@@ -119,8 +119,22 @@ function WorkspaceContent() {
         if (queueData.success) {
           setQueueStatus(queueData.data);
         }
+
+        return true; // 返回true表示继续轮询
       } catch (error) {
         console.error("Failed to poll status:", error);
+        return true; // 出错时继续轮询
+      }
+    };
+
+    // 立即执行一次
+    pollOnce();
+
+    // 设置定时器持续轮询
+    const interval = setInterval(async () => {
+      const shouldContinue = await pollOnce();
+      if (!shouldContinue) {
+        clearInterval(interval);
       }
     }, 1000); // 每秒轮询一次
 

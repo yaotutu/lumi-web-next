@@ -186,14 +186,13 @@ export default function ImageGrid({
         {status === "idle" && !task ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
             <div className="mb-2 text-4xl opacity-60">🎨</div>
-            <p className="text-sm font-medium text-white/90">
-              准备开始创作
-            </p>
+            <p className="text-sm font-medium text-white/90">准备开始创作</p>
             <p className="text-xs text-white/50">
               输入描述后点击"重新再生"开始生成图片
             </p>
           </div>
-        ) : task?.status === "PENDING" || (task?.status === "GENERATING_IMAGES" && imageSlots.length === 0) ? (
+        ) : task?.status === "PENDING" ||
+          (task?.status === "GENERATING_IMAGES" && imageSlots.length === 0) ? (
           <>
             {/* 显示骨架屏网格 + 加载提示 */}
             <div className="relative grid flex-1 min-h-0 grid-cols-2 grid-rows-2 gap-2.5">
@@ -214,9 +213,7 @@ export default function ImageGrid({
                           animationDelay: `${idx * 0.2}s`,
                         }}
                       />
-                      <span className="text-xs text-white/40">
-                        {idx + 1}/4
-                      </span>
+                      <span className="text-xs text-white/40">{idx + 1}/4</span>
                     </div>
                   </div>
 
@@ -236,14 +233,15 @@ export default function ImageGrid({
                   <div className="mb-2 flex items-center justify-center gap-2">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-1" />
                     <p className="text-sm font-medium text-white">
-                      {task?.status === "PENDING" ? "任务队列中" : "AI 正在创作"}
+                      {task?.status === "PENDING"
+                        ? "任务队列中"
+                        : "AI 正在创作"}
                     </p>
                   </div>
                   <p className="text-xs text-white/60">
                     {task?.status === "PENDING"
                       ? "等待处理,预计需要 10-30 秒"
-                      : `正在生成 ${imageSlots.filter(s => s.status === 'completed').length}/4 张图片`
-                    }
+                      : `正在生成 ${imageSlots.filter((s) => s.status === "completed").length}/4 张图片`}
                   </p>
                 </div>
               </div>
@@ -341,7 +339,12 @@ export default function ImageGrid({
                       </p>
                     </div>
                     <p className="text-xs text-white/60">
-                      正在生成 {imageSlots.filter(s => s.status === 'completed').length}/4 张图片
+                      正在生成{" "}
+                      {
+                        imageSlots.filter((s) => s.status === "completed")
+                          .length
+                      }
+                      /4 张图片
                     </p>
                   </div>
                 </div>

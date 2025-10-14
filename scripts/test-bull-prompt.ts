@@ -23,18 +23,22 @@ async function testBull() {
 
       // 检查问题关键词
       const issues = [];
-      if (variant.includes('火焰') && !variant.includes('避免')) issues.push('❌ 包含火焰');
-      if (variant.includes('尖锐') && !variant.includes('避免')) issues.push('❌ 包含尖锐');
-      if (variant.includes('牙齿') && !variant.includes('无')) issues.push('❌ 包含牙齿');
-      if (variant.includes('爪')) issues.push('❌ 包含爪子');
-      if (variant.includes('嵌入')) issues.push('❌ 包含嵌入设计');
-      if (variant.includes('装甲') && !variant.includes('避免')) issues.push('❌ 包含装甲');
-      if (variant.includes('缝隙')) issues.push('❌ 包含缝隙');
+      if (variant.includes("火焰") && !variant.includes("避免"))
+        issues.push("❌ 包含火焰");
+      if (variant.includes("尖锐") && !variant.includes("避免"))
+        issues.push("❌ 包含尖锐");
+      if (variant.includes("牙齿") && !variant.includes("无"))
+        issues.push("❌ 包含牙齿");
+      if (variant.includes("爪")) issues.push("❌ 包含爪子");
+      if (variant.includes("嵌入")) issues.push("❌ 包含嵌入设计");
+      if (variant.includes("装甲") && !variant.includes("避免"))
+        issues.push("❌ 包含装甲");
+      if (variant.includes("缝隙")) issues.push("❌ 包含缝隙");
 
       if (issues.length > 0) {
-        console.log('⚠️  潜在问题:', issues.join(', '));
+        console.log("⚠️  潜在问题:", issues.join(", "));
       } else {
-        console.log('✅ 无明显3D打印问题');
+        console.log("✅ 无明显3D打印问题");
       }
       console.log();
     });

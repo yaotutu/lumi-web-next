@@ -6,12 +6,7 @@
 import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
 
 // 测试用例
-const testCases = [
-  "一只猫",
-  "一个花瓶",
-  "一个机器人",
-  "一只狗",
-];
+const testCases = ["一只猫", "一个花瓶", "一个机器人", "一只狗"];
 
 async function testMultiStylePrompts() {
   console.log("🧪 开始测试多风格提示词生成功能\n");
