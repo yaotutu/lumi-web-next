@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as TaskService from "@/lib/services/task-service";
-import { addImageTask } from "@/lib/image-queue";
-import { addModel3DTask } from "@/lib/model3d-queue";
+import * as QueueService from "@/lib/services/queue-service";
 import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
@@ -40,13 +39,11 @@ export const POST = withErrorHandler(
 
     // 根据类型执行不同的重试逻辑
     if (type === "images") {
-      // 重试图片生成
+      // 重试图片生成：重置任务为PENDING状态
       const task = await TaskService.retryImageGeneration(id);
 
-      // 重新加入图片生成队列
-      addImageTask(id).catch((error) => {
-        console.error("重新加入图片生成队列失败:", error);
-      });
+      // 加入图片生成队列（自动开始处理）
+      await QueueService.enqueueTask(id, task.prompt);
 
       return NextResponse.json({
         success: true,
@@ -55,17 +52,19 @@ export const POST = withErrorHandler(
       });
     }
 
-    // 重试3D模型生成
+    // 重试3D模型生成：重置任务为IMAGES_READY状态
+    // 注意：3D模型生成使用Worker架构，只需要更新状态为GENERATING_MODEL即可
+    // Worker会自动监听状态变化并开始处理
     const task = await TaskService.retryModelGeneration(id);
 
-    // 重新加入3D模型生成队列
-    addModel3DTask(id).catch((error) => {
-      console.error("重新加入3D模型生成队列失败:", error);
+    // 将状态更新为GENERATING_MODEL，触发Worker处理
+    const updatedTask = await TaskService.updateTask(id, {
+      status: "GENERATING_MODEL",
     });
 
     return NextResponse.json({
       success: true,
-      data: task,
+      data: updatedTask,
       message: "3D模型生成已重新启动",
     });
   },

@@ -5,6 +5,22 @@
 
 import { ai3d } from "tencentcloud-sdk-nodejs-ai3d";
 import { AppError } from "@/lib/utils/errors";
+import { ExternalAPIError } from "@/lib/utils/retry";
+
+/**
+ * 腾讯云API错误类
+ * 继承统一的ExternalAPIError，用于结构化错误表示
+ */
+export class TencentAPIError extends ExternalAPIError {
+  constructor(
+    message: string,
+    statusCode?: number,
+    public readonly code?: string, // 腾讯云错误码
+  ) {
+    super("tencent", statusCode, message);
+    this.name = "TencentAPIError";
+  }
+}
 
 // 导入腾讯云AI3D客户端类型
 const Ai3dClient = ai3d.v20250513.Client;
@@ -122,13 +138,37 @@ export async function submitModelGenerationJob(
 
     // 处理腾讯云SDK原生错误
     const tencentError = error as { code?: string; message?: string };
-    throw new AppError(
-      "EXTERNAL_API_ERROR",
-      `腾讯云图生3D任务提交失败: ${tencentError.message || "未知错误"}`,
-      {
-        code: tencentError.code,
-        originalError: tencentError,
-      },
+    const errorMsg = tencentError.message || "未知错误";
+
+    // 判断错误类型并设置合适的HTTP状态码
+    let statusCode: number | undefined;
+
+    // 并发限制错误 - 等同于HTTP 429
+    if (
+      errorMsg.includes("任务上限") ||
+      errorMsg.includes("并发") ||
+      errorMsg.includes("限流")
+    ) {
+      statusCode = 429;
+    }
+    // 认证错误 - 等同于HTTP 401
+    else if (
+      errorMsg.includes("认证失败") ||
+      errorMsg.includes("签名错误") ||
+      errorMsg.includes("SecretId")
+    ) {
+      statusCode = 401;
+    }
+    // 权限/余额错误 - 等同于HTTP 403
+    else if (errorMsg.includes("权限") || errorMsg.includes("余额")) {
+      statusCode = 403;
+    }
+
+    // 抛出结构化的TencentAPIError
+    throw new TencentAPIError(
+      `腾讯云图生3D任务提交失败: ${errorMsg}`,
+      statusCode,
+      tencentError.code,
     );
   }
 }
@@ -177,14 +217,14 @@ export async function queryModelTaskStatus(
 
     // 处理腾讯云SDK原生错误
     const tencentError = error as { code?: string; message?: string };
-    throw new AppError(
-      "EXTERNAL_API_ERROR",
-      `腾讯云任务状态查询失败: ${tencentError.message || "未知错误"}`,
-      {
-        jobId,
-        code: tencentError.code,
-        originalError: tencentError,
-      },
+    const errorMsg = tencentError.message || "未知错误";
+
+    // 状态查询失败通常是网络或临时性错误，可重试
+    // 不设置特殊状态码，使用默认的可重试错误处理
+    throw new TencentAPIError(
+      `腾讯云任务状态查询失败: ${errorMsg}`,
+      undefined,
+      tencentError.code,
     );
   }
 }

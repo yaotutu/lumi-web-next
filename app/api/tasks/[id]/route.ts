@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as TaskService from "@/lib/services/task-service";
-import { addModel3DTask } from "@/lib/model3d-queue";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { updateTaskSchema } from "@/lib/validators/task-validators";
+import { prisma } from "@/lib/db/prisma";
 
 /**
  * GET /api/tasks/:id
@@ -27,7 +27,8 @@ export const GET = withErrorHandler(
  * PATCH /api/tasks/:id
  * 更新任务信息
  *
- * 特殊逻辑：当更新 selectedImageIndex 时，自动触发3D模型生成队列
+ * 职责：只负责更新任务状态和数据
+ * Worker会监听状态变化并执行对应操作
  */
 export const PATCH = withErrorHandler(
   async (
@@ -40,25 +41,46 @@ export const PATCH = withErrorHandler(
     // 使用Zod验证输入（错误会被withErrorHandler自动捕获）
     const validatedData = updateTaskSchema.parse(body);
 
-    // 调用Service层更新任务
-    const task = await TaskService.updateTask(id, validatedData);
+    // 获取当前任务状态
+    const currentTask = await TaskService.getTaskById(id);
 
-    // 🎯 关键逻辑：如果更新了 selectedImageIndex，自动触发3D模型生成
-    // 允许从 IMAGES_READY 或 FAILED 状态触发（支持失败重试）
+    // 🎯 特殊逻辑：当更新 selectedImageIndex 时，自动将状态变更为 GENERATING_MODEL
+    // 这样Worker会监听到状态变化并开始3D模型生成
+    // 支持的状态: IMAGES_READY(首次生成) | FAILED(失败重试) | COMPLETED(重新生成)
     if (
       validatedData.selectedImageIndex !== undefined &&
-      (task.status === "IMAGES_READY" || task.status === "FAILED")
+      (currentTask.status === "IMAGES_READY" ||
+        currentTask.status === "FAILED" ||
+        currentTask.status === "COMPLETED")
     ) {
-      // 如果是FAILED状态,先重置为IMAGES_READY
-      if (task.status === "FAILED") {
-        await TaskService.updateTask(id, { status: "IMAGES_READY" });
+      // 如果是COMPLETED状态,需要先删除旧的模型记录
+      if (currentTask.status === "COMPLETED" && currentTask.model) {
+        await prisma.taskModel.delete({
+          where: { id: currentTask.model.id },
+        });
       }
 
-      // 异步触发3D模型生成任务（不等待完成）
-      addModel3DTask(id).catch((error) => {
-        console.error("启动3D模型生成任务失败:", error);
+      // 同时更新 selectedImageIndex 和状态
+      const updatedTask = await TaskService.updateTask(id, {
+        ...validatedData,
+        status: "GENERATING_MODEL",
+        // 清除旧的完成时间和错误信息
+        modelGenerationStartedAt: null,
+        modelGenerationCompletedAt: null,
+        completedAt: null,
+        failedAt: null,
+        errorMessage: null,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updatedTask,
+        message: "图片已选择，3D模型生成已启动",
       });
     }
+
+    // 其他情况：正常更新任务
+    const task = await TaskService.updateTask(id, validatedData);
 
     return NextResponse.json({
       success: true,

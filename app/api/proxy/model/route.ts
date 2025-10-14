@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
     let isAllowed = false;
     try {
       const url = new URL(modelUrl);
-      isAllowed = allowedDomains.some((domain) => url.hostname.includes(domain));
+      isAllowed = allowedDomains.some((domain) =>
+        url.hostname.includes(domain),
+      );
     } catch {
       return NextResponse.json(
         { error: "Invalid URL format" },

@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createLogger } from "@/lib/logger";
-import { AliyunAPIError } from "@/lib/providers/aliyun-image";
+import { ExternalAPIError } from "@/lib/utils/retry";
 
 // 创建日志器
 const log = createLogger("ErrorHandler");
@@ -119,27 +119,34 @@ export function toErrorResponse(error: unknown): NextResponse {
     return NextResponse.json(responseBody, { status });
   }
 
-  // 情况3: AliyunAPIError - 阿里云API错误
-  if (error instanceof AliyunAPIError) {
-    // 429限流处理说明：
-    // - 在task-queue.ts中已经实现了自动重试机制
+  // 情况3: ExternalAPIError - 外部API错误（阿里云、腾讯云等）
+  if (error instanceof ExternalAPIError) {
+    // 429限流/并发限制处理说明：
+    // - 在task-queue.ts和model3d-worker.ts中已经实现了自动重试机制
     // - 如果重试后仍失败才会到达这里
     // - 此时统一返回EXTERNAL_API_ERROR，前端显示"服务繁忙"
 
-    log.error("toErrorResponse", "阿里云API错误", error, {
+    log.error("toErrorResponse", `${error.provider}API错误`, error, {
+      provider: error.provider,
       statusCode: error.statusCode,
       errorCode: "EXTERNAL_API_ERROR",
     });
 
-    // 根据阿里云API状态码决定返回的HTTP状态码
+    // 根据API状态码决定返回的HTTP状态码
     // 4xx错误返回原状态码，5xx错误统一返回500
-    const httpStatus = error.statusCode >= 500 ? 500 : error.statusCode;
+    // 如果没有statusCode，默认返回500
+    const httpStatus = error.statusCode
+      ? error.statusCode >= 500
+        ? 500
+        : error.statusCode
+      : 500;
 
     return NextResponse.json(
       {
         success: false,
         error: error.message,
         code: "EXTERNAL_API_ERROR",
+        provider: error.provider, // 标识提供商
         statusCode: error.statusCode, // 保留原始状态码用于调试
       },
       { status: httpStatus },
@@ -181,7 +188,7 @@ export function withErrorHandler<
       return await handler(...args);
     } catch (error) {
       // 统一调用toErrorResponse处理所有类型的错误
-      // toErrorResponse内部会区分ZodError、AppError、AliyunAPIError等
+      // toErrorResponse内部会区分ZodError、AppError、ExternalAPIError等
       return toErrorResponse(error);
     }
   }) as T;

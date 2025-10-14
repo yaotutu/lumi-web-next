@@ -9,6 +9,7 @@
  */
 
 import { createLogger } from "@/lib/logger";
+import { ExternalAPIError } from "@/lib/utils/retry";
 
 // 创建日志器
 const log = createLogger("AliyunImageProvider");
@@ -19,14 +20,14 @@ const log = createLogger("AliyunImageProvider");
 
 /**
  * 阿里云API错误类
- * 携带HTTP状态码，便于精确的错误处理
+ * 继承统一的ExternalAPIError，用于结构化错误表示
  */
-export class AliyunAPIError extends Error {
+export class AliyunAPIError extends ExternalAPIError {
   constructor(
-    public statusCode: number, // HTTP状态码
+    statusCode: number, // HTTP状态码
     message: string, // 错误描述
   ) {
-    super(message);
+    super("aliyun", statusCode, message);
     this.name = "AliyunAPIError";
   }
 }

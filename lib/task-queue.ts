@@ -9,11 +9,9 @@
 import { IMAGE_GENERATION } from "@/lib/constants";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
-import {
-  AliyunAPIError,
-  generateImageStream,
-} from "@/lib/providers/aliyun-image";
+import { generateImageStream } from "@/lib/providers/aliyun-image";
 import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
+import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
 
 // 创建日志器
 const log = createLogger("TaskQueue");
@@ -23,9 +21,13 @@ const log = createLogger("TaskQueue");
 // ============================================
 const CONFIG = {
   MAX_CONCURRENT: 3, // 最大并发任务数
-  MAX_RETRIES: 3, // 最大重试次数
-  RETRY_DELAY_BASE: 2000, // 普通错误重试延迟基数（毫秒）
-  RATE_LIMIT_DELAY_BASE: 30000, // 429限流重试延迟基数（毫秒）
+  // 重试配置（使用统一的重试工具）
+  RETRY_CONFIG: {
+    ...DEFAULT_RETRY_CONFIG,
+    maxRetries: 3, // 最大重试3次
+    baseDelay: 2000, // 普通错误基础延迟2秒
+    rateLimitDelay: 30000, // 限流错误延迟30秒
+  },
 } as const;
 
 // ============================================
@@ -67,23 +69,99 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
     });
   }
 
-  // 重试循环
-  for (let retry = 0; retry <= CONFIG.MAX_RETRIES; retry++) {
-    try {
-      // 🔄 断点续传：查询已生成的图片
-      const existingImages = await prisma.taskImage.findMany({
-        where: { taskId },
-        orderBy: { index: "asc" },
-      });
-
-      const startIndex = existingImages.length;
-
-      // 检查是否已全部生成
-      if (startIndex >= IMAGE_GENERATION.COUNT) {
-        log.info("processTask", "图片已全部生成，无需继续", {
-          taskId,
-          count: IMAGE_GENERATION.COUNT,
+  // 使用统一的重试工具处理整个生成流程
+  try {
+    await retryWithBackoff(
+      async () => {
+        // 🔄 断点续传：查询已生成的图片
+        const existingImages = await prisma.taskImage.findMany({
+          where: { taskId },
+          orderBy: { index: "asc" },
         });
+
+        const startIndex = existingImages.length;
+
+        // 检查是否已全部生成
+        if (startIndex >= IMAGE_GENERATION.COUNT) {
+          log.info("processTask", "图片已全部生成，无需继续", {
+            taskId,
+            count: IMAGE_GENERATION.COUNT,
+          });
+          await prisma.task.update({
+            where: { id: taskId },
+            data: {
+              status: "IMAGES_READY",
+              imageGenerationCompletedAt: new Date(),
+            },
+          });
+          return;
+        }
+
+        // 计算还需要生成的数量
+        const remainingCount = IMAGE_GENERATION.COUNT - startIndex;
+        log.info("processTask", "断点续传", {
+          taskId,
+          existingCount: startIndex,
+          totalCount: IMAGE_GENERATION.COUNT,
+          remainingCount,
+        });
+
+        // 🤖 生成4个不同风格的提示词
+        const promptVariants = await generateMultiStylePrompts(prompt);
+
+        // 从断点继续生成（每张图片使用不同的提示词）
+        let index = startIndex;
+        for (let i = 0; i < remainingCount; i++) {
+          // 使用对应索引的提示词变体
+          const currentPrompt = promptVariants[index];
+
+          log.info(
+            "processTask",
+            `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`,
+            {
+              taskId,
+              promptPreview: currentPrompt.substring(0, 80) + "...",
+            },
+          );
+
+          // 生成单张图片（使用该提示词）
+          const generator = generateImageStream(currentPrompt, 1);
+          const { value: imageUrl } = await generator.next();
+
+          if (!imageUrl) {
+            throw new Error(`图片 ${index + 1} 生成失败：未返回URL`);
+          }
+
+          // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
+          // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
+          //
+          // TODO: 对接OSS后，需要下载图片到本地/OSS
+          // const localUrl = await downloadAndSaveImage(imageUrl, taskId, index);
+          //
+          // 参考实现：
+          // 1. 使用 LocalStorage.saveTaskImage() 保存到本地
+          // 2. 或上传到自己的OSS，返回永久URL
+          // 3. 处理Base64格式的图片数据（如果API返回base64）
+
+          await prisma.taskImage.create({
+            data: {
+              taskId,
+              url: imageUrl, // TODO: 改为 localUrl
+              index,
+              prompt: currentPrompt, // 记录使用的提示词，方便调试和追踪
+            },
+          });
+
+          log.info("processTask", "图片生成成功", {
+            taskId,
+            imageIndex: index + 1,
+            totalCount: IMAGE_GENERATION.COUNT,
+          });
+
+          index++;
+        }
+
+        // 成功 - 更新数据库状态
         await prisma.task.update({
           where: { id: taskId },
           data: {
@@ -91,192 +169,29 @@ async function processTask(taskId: string, prompt: string): Promise<void> {
             imageGenerationCompletedAt: new Date(),
           },
         });
-        return;
-      }
 
-      // 计算还需要生成的数量
-      const remainingCount = IMAGE_GENERATION.COUNT - startIndex;
-      log.info("processTask", "断点续传", {
-        taskId,
-        existingCount: startIndex,
-        totalCount: IMAGE_GENERATION.COUNT,
-        remainingCount,
-      });
+        log.info("processTask", "任务完成", { taskId, duration: t() });
+      },
+      CONFIG.RETRY_CONFIG,
+      taskId,
+      "图像生成",
+    );
+  } catch (error) {
+    // 重试失败后，标记任务为失败
+    const errorMsg = error instanceof Error ? error.message : "未知错误";
+    log.error("processTask", "任务失败", error, { taskId });
 
-      // 🤖 生成4个不同风格的提示词
-      const promptVariants = await generateMultiStylePrompts(prompt);
-
-      // 从断点继续生成（每张图片使用不同的提示词）
-      let index = startIndex;
-      for (let i = 0; i < remainingCount; i++) {
-        // 使用对应索引的提示词变体
-        const currentPrompt = promptVariants[index];
-
-        log.info(
-          "processTask",
-          `开始生成图片 ${index + 1}/${IMAGE_GENERATION.COUNT}`,
-          {
-            taskId,
-            promptPreview: currentPrompt.substring(0, 80) + "...",
-          },
-        );
-
-        // 生成单张图片（使用该提示词）
-        const generator = generateImageStream(currentPrompt, 1);
-        const { value: imageUrl } = await generator.next();
-
-        if (!imageUrl) {
-          throw new Error(`图片 ${index + 1} 生成失败：未返回URL`);
-        }
-
-        // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
-        // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
-        //
-        // TODO: 对接OSS后，需要下载图片到本地/OSS
-        // const localUrl = await downloadAndSaveImage(imageUrl, taskId, index);
-        //
-        // 参考实现：
-        // 1. 使用 LocalStorage.saveTaskImage() 保存到本地
-        // 2. 或上传到自己的OSS，返回永久URL
-        // 3. 处理Base64格式的图片数据（如果API返回base64）
-
-        await prisma.taskImage.create({
-          data: {
-            taskId,
-            url: imageUrl, // TODO: 改为 localUrl
-            index,
-            prompt: currentPrompt, // 记录使用的提示词，方便调试和追踪
-          },
-        });
-
-        log.info("processTask", "图片生成成功", {
-          taskId,
-          imageIndex: index + 1,
-          totalCount: IMAGE_GENERATION.COUNT,
-        });
-
-        index++;
-      }
-
-      // 成功 - 更新数据库状态
-      await prisma.task.update({
-        where: { id: taskId },
-        data: {
-          status: "IMAGES_READY",
-          imageGenerationCompletedAt: new Date(),
-        },
-      });
-
-      log.info("processTask", "任务完成", { taskId, duration: t() });
-      return; // 成功，退出函数
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-
-      // 判断是否应该重试
-      const shouldRetry = canRetry(error);
-      const isLastRetry = retry === CONFIG.MAX_RETRIES;
-
-      if (!shouldRetry || isLastRetry) {
-        // 不可重试或已达上限 - 标记为失败
-        await prisma.task.update({
-          where: { id: taskId },
-          data: {
-            status: "FAILED",
-            failedAt: new Date(),
-            errorMessage: errorMsg,
-          },
-        });
-
-        log.error("processTask", "任务失败", error, { taskId });
-        throw error;
-      }
-
-      // 计算延迟时间
-      const delay = calculateRetryDelay(error, retry);
-      log.warn("processTask", "任务失败，准备重试", {
-        taskId,
-        retryCount: retry + 1,
-        maxRetries: CONFIG.MAX_RETRIES,
-        delaySeconds: delay / 1000,
-      });
-
-      // 等待后重试
-      await sleep(delay);
-    }
-  }
-}
-
-/**
- * 判断错误是否可以重试
- * @param error 错误对象
- * @returns 是否可以重试
- */
-function canRetry(error: unknown): boolean {
-  // 如果是阿里云API错误，根据状态码判断
-  if (error instanceof AliyunAPIError) {
-    // 不可重试的状态码
-    const nonRetryableStatusCodes = [
-      400, // Bad Request - 请求参数错误
-      401, // Unauthorized - 认证失败
-      403, // Forbidden - 权限不足或余额不足
-      404, // Not Found - 资源不存在
-    ];
-
-    if (nonRetryableStatusCodes.includes(error.statusCode)) {
-      log.debug("canRetry", "不可重试的HTTP错误", {
-        statusCode: error.statusCode,
-      });
-      return false;
-    }
-
-    // 429, 500, 502, 503, 504 等都可重试
-    log.debug("canRetry", "可重试的HTTP错误", { statusCode: error.statusCode });
-    return true;
-  }
-
-  // 非API错误，检查特殊错误消息
-  const errorMsg = error instanceof Error ? error.message : String(error);
-  const nonRetryableMessages = ["任务已取消", "API密钥错误", "余额不足"];
-
-  for (const msg of nonRetryableMessages) {
-    if (errorMsg.includes(msg)) {
-      log.debug("canRetry", "不可重试错误", { errorMsg });
-      return false;
-    }
-  }
-
-  // 默认可重试
-  return true;
-}
-
-/**
- * 计算重试延迟（429使用更长延迟）
- * @param error 错误对象
- * @param retryCount 当前重试次数（从0开始）
- * @returns 延迟时间（毫秒）
- */
-function calculateRetryDelay(error: unknown, retryCount: number): number {
-  // 如果是429限流错误，使用更长的延迟
-  if (error instanceof AliyunAPIError && error.statusCode === 429) {
-    // 429限流: 30秒 → 60秒 → 120秒
-    const delay = CONFIG.RATE_LIMIT_DELAY_BASE * 2 ** retryCount;
-    log.warn("calculateRetryDelay", "检测到429限流", {
-      delaySeconds: delay / 1000,
-      statusCode: 429,
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "FAILED",
+        failedAt: new Date(),
+        errorMessage: errorMsg,
+      },
     });
-    return delay;
+
+    throw error;
   }
-
-  // 普通错误: 2秒 → 4秒 → 8秒
-  return CONFIG.RETRY_DELAY_BASE * 2 ** retryCount;
-}
-
-/**
- * 延迟函数
- * @param ms 延迟时间（毫秒）
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ============================================

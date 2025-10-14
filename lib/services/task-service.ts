@@ -123,6 +123,11 @@ export async function updateTask(
   data: {
     selectedImageIndex?: number;
     status?: TaskStatus;
+    modelGenerationStartedAt?: Date | null;
+    modelGenerationCompletedAt?: Date | null;
+    completedAt?: Date | null;
+    failedAt?: Date | null;
+    errorMessage?: string | null;
   },
 ) {
   // 验证任务存在
