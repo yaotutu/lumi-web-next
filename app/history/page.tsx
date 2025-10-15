@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import type { TaskWithDetails } from "@/types";
+import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -106,10 +107,10 @@ export default function HistoryPage() {
                   <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-white/5 to-[#0d0d0d]">
                     {task.images.length > 0 ? (
                       <img
-                        src={
+                        src={getProxiedImageUrl(
                           task.images[task.selectedImageIndex ?? 0]?.url ||
-                          task.images[0].url
-                        }
+                            task.images[0].url,
+                        )}
                         alt="Task thumbnail"
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
                       />

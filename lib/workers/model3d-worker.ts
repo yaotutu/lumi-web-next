@@ -15,6 +15,7 @@ import { createLogger, timer } from "@/lib/logger";
 import type { ModelTaskStatus } from "@/lib/providers/model3d";
 import { createModel3DProvider } from "@/lib/providers/model3d";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
+import { downloadAndUploadModel } from "@/lib/utils/image-storage";
 
 // 创建日志器
 const log = createLogger("Model3DWorker");
@@ -303,19 +304,37 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         throw new Error("3D生成返回的结果中没有GLB文件");
       }
 
-      log.info("pollModel3DStatus", "3D模型生成成功", {
+      log.info(
+        "pollModel3DStatus",
+        "3D模型生成成功，准备下载并上传到存储服务",
+        {
+          taskId,
+          jobId,
+          remoteModelUrlPreview: glbFile.url.substring(0, 80) + "...",
+        },
+      );
+
+      // 🎯 下载模型并上传到配置的存储服务（本地/OSS/COS）
+      // 返回永久可访问的 URL
+      const storageUrl = await downloadAndUploadModel(
+        glbFile.url,
+        taskId,
+        "glb",
+      );
+
+      log.info("pollModel3DStatus", "模型上传成功", {
         taskId,
         jobId,
-        modelUrl: glbFile.url,
+        storageUrl,
       });
 
-      // 更新模型状态为COMPLETED
+      // 更新模型状态为COMPLETED（存储持久化的 URL，而不是临时 URL）
       await prisma.taskModel.update({
         where: { taskId },
         data: {
           status: "COMPLETED",
           progress: 100,
-          modelUrl: glbFile.url,
+          modelUrl: storageUrl, // 持久化的存储 URL
           completedAt: new Date(),
         },
       });

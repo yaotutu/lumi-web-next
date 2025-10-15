@@ -1,40 +1,42 @@
 /**
- * 3D模型文件代理接口
+ * 图片代理接口
  * 作用：解决腾讯云COS的CORS跨域问题
  *
  * 工作原理：
- * 1. 接收前端请求（带有腾讯云模型URL作为查询参数）
+ * 1. 接收前端请求（带有腾讯云图片URL作为查询参数）
  * 2. 后端服务器fetch腾讯云URL（服务端请求无CORS限制）
- * 3. 将获取的GLB文件流式传输给前端
+ * 3. 将获取的图片流式传输给前端
  * 4. 设置正确的Content-Type和CORS头
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
-    // 从查询参数获取模型URL
-    const modelUrl = request.nextUrl.searchParams.get("url");
+    // 从查询参数获取图片URL
+    const imageUrl = request.nextUrl.searchParams.get("url");
 
     // 验证URL参数
-    if (!modelUrl) {
+    if (!imageUrl) {
       return NextResponse.json(
-        { error: "Missing model URL parameter" },
+        { error: "Missing image URL parameter" },
         { status: 400 },
       );
     }
 
     // 验证URL是腾讯云COS域名（安全检查，防止代理被滥用）
     // 支持两种格式：
-    // 1. 腾讯云混元 3D：xxx.tencentcos.cn
+    // 1. 图片生成 API 的临时 URL：xxx.aliyuncs.com, xxx.siliconflow.cn 等
     // 2. 我们自己的 COS：xxx.myqcloud.com
     let isAllowed = false;
     try {
-      const url = new URL(modelUrl);
-      // 检查是否包含腾讯云相关域名
+      const url = new URL(imageUrl);
+      // 检查是否包含允许的域名
       isAllowed =
-        url.hostname.includes(".tencentcos.cn") ||
-        url.hostname.includes(".myqcloud.com");
+        url.hostname.includes(".myqcloud.com") || // 腾讯云 COS
+        url.hostname.includes(".aliyuncs.com") || // 阿里云 OSS（阿里云图片生成）
+        url.hostname.includes(".siliconflow.cn"); // SiliconFlow（图片生成）
     } catch {
       return NextResponse.json(
         { error: "Invalid URL format" },
@@ -46,26 +48,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "URL not from allowed domain (must be .tencentcos.cn or .myqcloud.com)",
+            "URL not from allowed domain (must be .myqcloud.com, .aliyuncs.com, or .siliconflow.cn)",
         },
         { status: 403 },
       );
     }
 
-    // 从腾讯云获取模型文件
-    const response = await fetch(modelUrl);
+    // 从源获取图片文件
+    const response = await fetch(imageUrl);
 
     // 检查响应状态
     if (!response.ok) {
-      console.error("Failed to fetch model from Tencent COS:", {
+      console.error("Failed to fetch image:", {
+        url: imageUrl,
         status: response.status,
         statusText: response.statusText,
       });
       return NextResponse.json(
-        { error: "Failed to fetch model file" },
+        { error: "Failed to fetch image file" },
         { status: response.status },
       );
     }
+
+    // 获取原始 Content-Type，如果没有则默认为 image/png
+    const contentType = response.headers.get("content-type") || "image/png";
 
     // 获取文件数据
     const arrayBuffer = await response.arrayBuffer();
@@ -75,16 +81,16 @@ export async function GET(request: NextRequest) {
     return new NextResponse(buffer, {
       status: 200,
       headers: {
-        "Content-Type": "model/gltf-binary", // GLB文件的MIME类型
+        "Content-Type": contentType, // 使用原始的 Content-Type
         "Content-Length": buffer.length.toString(),
-        "Cache-Control": "public, max-age=31536000", // 缓存1年（模型文件不会变）
+        "Cache-Control": "public, max-age=31536000", // 缓存1年（图片文件不会变）
         "Access-Control-Allow-Origin": "*", // 允许跨域
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
       },
     });
   } catch (error) {
-    console.error("Model proxy error:", error);
+    console.error("Image proxy error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

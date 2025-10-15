@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
+import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
@@ -100,22 +101,6 @@ export default function ModelPreview({
       setProgress(0);
     }
   }, [task?.status, task?.model?.progress, task?.model?.status, task?.model]);
-
-  // 生成代理URL，用于绕过CORS限制
-  const getProxiedModelUrl = (modelUrl: string | undefined | null): string => {
-    if (!modelUrl) return "/demo.glb";
-
-    // 如果是本地文件（以/开头），直接返回
-    if (modelUrl.startsWith("/")) return modelUrl;
-
-    // 如果是腾讯云COS URL，使用代理
-    if (modelUrl.includes("tencentcos.cn")) {
-      return `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
-    }
-
-    // 其他URL直接返回（可能有CORS问题）
-    return modelUrl;
-  };
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">

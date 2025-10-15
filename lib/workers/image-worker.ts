@@ -15,6 +15,7 @@ import { createLogger, timer } from "@/lib/logger";
 import { createImageProvider } from "@/lib/providers/image";
 import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
+import { downloadAndUploadImage } from "@/lib/utils/image-storage";
 
 // 创建日志器
 const log = createLogger("ImageWorker");
@@ -161,27 +162,34 @@ async function processTask(taskId: string): Promise<void> {
 
           // 生成单张图片（使用该提示词）
           const generator = imageProvider.generateImageStream(currentPrompt, 1);
-          const { value: imageUrl } = await generator.next();
+          const { value: remoteImageUrl } = await generator.next();
 
-          if (!imageUrl) {
+          if (!remoteImageUrl) {
             throw new Error(`图片 ${index + 1} 生成失败：未返回URL`);
           }
 
-          // ⚠️ 当前实现：直接存储阿里云返回的临时URL（24小时有效期）
-          // imageUrl 格式: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
-          //
-          // TODO: 对接OSS后，需要下载图片到本地/OSS
-          // const localUrl = await downloadAndSaveImage(imageUrl, taskId, index);
-          //
-          // 参考实现：
-          // 1. 使用 LocalStorage.saveTaskImage() 保存到本地
-          // 2. 或上传到自己的OSS，返回永久URL
-          // 3. 处理Base64格式的图片数据（如果API返回base64）
+          log.info(
+            "processTask",
+            `图片 ${index + 1} 生成成功，准备下载并上传到存储服务`,
+            {
+              taskId,
+              remoteUrlPreview: remoteImageUrl.substring(0, 80) + "...",
+            },
+          );
 
+          // 🎯 下载图片并上传到配置的存储服务（本地/OSS/COS）
+          // 返回永久可访问的 URL
+          const storageUrl = await downloadAndUploadImage(
+            remoteImageUrl,
+            taskId,
+            index,
+          );
+
+          // 存储到数据库（存储的是持久化的 URL，而不是临时 URL）
           await prisma.taskImage.create({
             data: {
               taskId,
-              url: imageUrl, // TODO: 改为 localUrl
+              url: storageUrl, // 持久化的存储 URL
               index,
               prompt: currentPrompt, // 记录使用的提示词，方便调试和追踪
             },
