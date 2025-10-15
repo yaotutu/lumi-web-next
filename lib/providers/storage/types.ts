@@ -33,6 +33,16 @@ export interface SaveModelParams {
 }
 
 /**
+ * 保存通用文件参数
+ */
+export interface SaveFileParams {
+  taskId: string; // 任务 ID
+  fileName: string; // 文件名（包含扩展名）
+  fileData: Buffer; // 文件 Buffer
+  contentType?: string; // MIME 类型（可选）
+}
+
+/**
  * 文件信息
  */
 export interface FileInfo {
@@ -60,6 +70,13 @@ export interface StorageProvider {
    * @returns 可访问的 URL 路径
    */
   saveTaskModel(params: SaveModelParams): Promise<string>;
+
+  /**
+   * 保存通用文件（MTL、纹理等）
+   * @param params 保存参数
+   * @returns 可访问的 URL 路径
+   */
+  saveFile(params: SaveFileParams): Promise<string>;
 
   /**
    * 删除任务的所有资源

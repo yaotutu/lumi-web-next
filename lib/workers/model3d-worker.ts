@@ -23,6 +23,17 @@ const log = createLogger("Model3DWorker");
 // ============================================
 // 配置
 // ============================================
+
+/**
+ * 3D 模型导出格式配置
+ * - OBJ: 通用格式，支持材质和纹理（当前使用）
+ * - GLB: glTF 二进制格式，适合 Web 展示
+ *
+ * TODO: 后期支持通过参数动态选择格式
+ */
+const MODEL_FORMAT = "OBJ" as const; // 当前硬编码为 OBJ
+const SUPPORTED_FORMATS = ["OBJ", "GLB"] as const; // 未来支持的格式
+
 const CONFIG = {
   POLL_INTERVAL: 2000, // Worker轮询数据库间隔（2秒）
   TENCENT_POLL_INTERVAL: 5000, // 轮询腾讯云状态间隔（5秒）
@@ -295,13 +306,23 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
 
     // 处理完成状态
     if (status.status === "DONE") {
-      // 提取GLB文件URL
-      const glbFile = status.resultFiles?.find(
-        (file) => file.type?.toUpperCase() === "GLB",
+      // 🔍 调试：打印所有返回的文件
+      log.info("pollModel3DStatus", "腾讯云返回的所有文件", {
+        taskId,
+        jobId,
+        resultFiles: status.resultFiles?.map((f) => ({
+          type: f.type,
+          url: f.url?.substring(0, 100),
+        })),
+      });
+
+      // 提取模型文件URL（根据配置的格式查找）
+      const modelFile = status.resultFiles?.find(
+        (file) => file.type?.toUpperCase() === MODEL_FORMAT,
       );
 
-      if (!glbFile?.url) {
-        throw new Error("3D生成返回的结果中没有GLB文件");
+      if (!modelFile?.url) {
+        throw new Error(`3D生成返回的结果中没有${MODEL_FORMAT}文件`);
       }
 
       log.info(
@@ -310,16 +331,17 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         {
           taskId,
           jobId,
-          remoteModelUrlPreview: glbFile.url.substring(0, 80) + "...",
+          format: MODEL_FORMAT,
+          remoteModelUrlPreview: modelFile.url.substring(0, 80) + "...",
         },
       );
 
       // 🎯 下载模型并上传到配置的存储服务（本地/OSS/COS）
       // 返回永久可访问的 URL
       const storageUrl = await downloadAndUploadModel(
-        glbFile.url,
+        modelFile.url,
         taskId,
-        "glb",
+        MODEL_FORMAT.toLowerCase(), // 转为小写作为文件扩展名
       );
 
       log.info("pollModel3DStatus", "模型上传成功", {
@@ -334,6 +356,7 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         data: {
           status: "COMPLETED",
           progress: 100,
+          format: MODEL_FORMAT, // 明确设置模型格式
           modelUrl: storageUrl, // 持久化的存储 URL
           completedAt: new Date(),
         },

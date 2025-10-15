@@ -245,7 +245,7 @@ export default function ModelPreview({
                 <div className="flex justify-between">
                   <span>格式:</span>
                   <span className="text-white/90 font-medium">
-                    {task?.model?.format || "GLB"}
+                    {task?.model?.format || "OBJ"}
                   </span>
                 </div>
                 {task?.model?.fileSize && (

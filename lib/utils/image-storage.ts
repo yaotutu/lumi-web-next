@@ -137,7 +137,7 @@ export async function downloadAndUploadImages(
  *
  * @param remoteUrl 远程模型 URL（如：腾讯云返回的临时 URL）
  * @param taskId 任务 ID
- * @param format 模型格式（默认 'glb'）
+ * @param format 模型格式（'glb' 或 'obj'）
  * @returns 存储后的 URL（本地路径或 COS URL）
  *
  * @throws 如果下载或上传失败
@@ -183,7 +183,17 @@ export async function downloadAndUploadModel(
       sizeMB: (modelBuffer.length / 1024 / 1024).toFixed(2),
     });
 
-    // 2. 上传到存储服务
+    // 2. 检查是否是 ZIP 文件（OBJ 格式通常是 ZIP 压缩包）
+    const isZip = modelBuffer[0] === 0x50 && modelBuffer[1] === 0x4b; // "PK" 魔数
+
+    if (format === "obj" && isZip) {
+      log.info("downloadAndUploadModel", "检测到 OBJ ZIP 压缩包，开始解压", {
+        taskId,
+      });
+      return await handleObjZipArchive(taskId, modelBuffer);
+    }
+
+    // 3. 非 ZIP 文件，直接上传（GLB 等二进制格式）
     const storageProvider = createStorageProvider();
 
     log.info("downloadAndUploadModel", "正在上传到存储服务", {
@@ -208,6 +218,92 @@ export async function downloadAndUploadModel(
     log.error("downloadAndUploadModel", "下载或上传模型失败", error, {
       taskId,
       remoteUrl,
+    });
+    throw error;
+  }
+}
+
+/**
+ * 处理 OBJ ZIP 压缩包
+ * 解压并上传 OBJ、MTL、纹理文件到存储服务
+ *
+ * @param taskId 任务 ID
+ * @param zipBuffer ZIP 文件的 Buffer
+ * @returns OBJ 文件的存储 URL
+ */
+async function handleObjZipArchive(
+  taskId: string,
+  zipBuffer: Buffer,
+): Promise<string> {
+  const JSZip = (await import("jszip")).default;
+  const storageProvider = createStorageProvider();
+
+  try {
+    // 1. 解压 ZIP 文件
+    log.info("handleObjZipArchive", "正在解压 ZIP 文件", { taskId });
+    const zip = await JSZip.loadAsync(zipBuffer);
+
+    // 2. 查找 OBJ 文件
+    let objFileName = "";
+    let objFileUrl = "";
+
+    const files = Object.keys(zip.files);
+    log.info("handleObjZipArchive", "ZIP 包含的文件", {
+      taskId,
+      files,
+    });
+
+    // 3. 遍历所有文件，上传到存储服务
+    for (const fileName of files) {
+      const file = zip.files[fileName];
+
+      // 跳过目录
+      if (file.dir) continue;
+
+      // 获取文件内容
+      const fileBuffer = await file.async("nodebuffer");
+      const extension = fileName.split(".").pop()?.toLowerCase() || "";
+
+      log.info("handleObjZipArchive", `处理文件: ${fileName}`, {
+        taskId,
+        size: fileBuffer.length,
+        extension,
+      });
+
+      // 所有文件都上传到同一目录，保持相对路径关系
+      const fileUrl = await storageProvider.saveFile({
+        taskId,
+        fileName,
+        fileData: fileBuffer,
+      });
+
+      log.info("handleObjZipArchive", `文件已上传: ${fileName}`, {
+        taskId,
+        extension,
+        url: fileUrl,
+      });
+
+      // 记录 OBJ 文件的 URL
+      if (extension === "obj") {
+        objFileName = fileName;
+        objFileUrl = fileUrl;
+      }
+    }
+
+    if (!objFileUrl) {
+      throw new Error("ZIP 压缩包中没有找到 .obj 文件");
+    }
+
+    log.info("handleObjZipArchive", "OBJ ZIP 解压和上传完成", {
+      taskId,
+      objFileUrl,
+      totalFiles: files.length,
+    });
+
+    return objFileUrl;
+  } catch (error) {
+    log.error("handleObjZipArchive", "处理 OBJ ZIP 压缩包失败", error, {
+      taskId,
     });
     throw error;
   }

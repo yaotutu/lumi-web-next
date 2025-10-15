@@ -1,9 +1,11 @@
 "use client";
 
 import { Suspense, useRef, useImperativeHandle, forwardRef } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, Grid } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import * as THREE from "three";
 
 // GLB 模型组件
 function GLBModel({ url }: { url: string }) {
@@ -14,6 +16,83 @@ function GLBModel({ url }: { url: string }) {
     // 渲染加载的场景
     <primitive object={scene} />
   );
+}
+
+// OBJ 模型组件
+function OBJModel({ url }: { url: string }) {
+  // 加载 OBJ 模型
+  const obj = useLoader(OBJLoader, url);
+
+  // 为 OBJ 模型的所有子网格添加默认材质和处理几何体
+  obj.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry) {
+      const geometry = child.geometry;
+
+      // 检查顶点位置数据是否有效
+      const positionAttribute = geometry.getAttribute('position');
+      if (!positionAttribute) {
+        console.error('OBJ 模型缺少顶点位置数据');
+        return;
+      }
+
+      // 检查是否有 NaN 值
+      let hasNaN = false;
+      const positions = positionAttribute.array;
+      for (let i = 0; i < positions.length; i++) {
+        if (isNaN(positions[i])) {
+          hasNaN = true;
+          break;
+        }
+      }
+
+      if (hasNaN) {
+        console.error('OBJ 模型包含无效的顶点数据 (NaN)');
+        return;
+      }
+
+      // 数据有效，继续处理
+      try {
+        // 计算几何体的法线（提升渲染质量）
+        geometry.computeVertexNormals();
+
+        // 居中几何体（避免模型偏离视野）
+        geometry.center();
+      } catch (error) {
+        console.error('处理 OBJ 几何体时出错:', error);
+      }
+
+      // 为所有网格设置标准材质（OBJ 文件通常不包含材质信息）
+      child.material = new THREE.MeshStandardMaterial({
+        color: 0xffffff, // 白色
+        metalness: 0.2,
+        roughness: 0.8,
+        side: THREE.DoubleSide, // 双面渲染
+      });
+
+      // 启用阴影
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  return (
+    // 渲染加载的 OBJ 对象
+    <primitive object={obj} scale={1} />
+  );
+}
+
+// 通用模型加载组件（根据文件扩展名选择加载器）
+function Model({ url }: { url: string }) {
+  // 从 URL 提取文件扩展名
+  const extension = url.split('.').pop()?.toLowerCase() || '';
+
+  // 根据扩展名选择合适的加载器
+  if (extension === 'obj') {
+    return <OBJModel url={url} />;
+  }
+
+  // 默认使用 GLB 加载器（支持 .glb 和 .gltf）
+  return <GLBModel url={url} />;
 }
 
 // 加载中占位组件
@@ -81,8 +160,8 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
 
         {/* Suspense 用于异步加载模型 */}
         <Suspense fallback={<LoadingFallback />}>
-          {/* 加载 GLB 模型 */}
-          <GLBModel url={modelUrl} />
+          {/* 加载 3D 模型（自动识别格式：OBJ/GLB/GLTF） */}
+          <Model url={modelUrl} />
 
           {/* 环境贴图,提供更真实的反射效果 */}
           <Environment preset="studio" />

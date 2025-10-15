@@ -91,14 +91,14 @@ model TaskModel {
 
   // 模型基本信息
   name      String
-  modelUrl  String?  // 本地路径: /generated/models/{taskId}.glb
+  modelUrl  String?  // 本地路径: /generated/models/{taskId}.obj (或 .glb)
 
   // 生成状态
   status    ModelStatus @default(PENDING)
   progress  Int      @default(0)
 
   // 模型元数据
-  format    String   @default("GLB")
+  format    String   @default("OBJ")
   fileSize  Int?
   faceCount Int?
   vertexCount Int?

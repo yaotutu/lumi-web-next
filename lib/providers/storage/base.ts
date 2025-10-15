@@ -12,6 +12,7 @@ import type {
   FileInfo,
   SaveImageParams,
   SaveModelParams,
+  SaveFileParams,
   StorageProvider,
 } from "./types";
 
@@ -47,6 +48,11 @@ export abstract class BaseStorageProvider implements StorageProvider {
   protected abstract saveTaskModelImpl(
     params: SaveModelParams,
   ): Promise<string>;
+
+  /**
+   * 保存通用文件的具体实现（子类实现）
+   */
+  protected abstract saveFileImpl(params: SaveFileParams): Promise<string>;
 
   /**
    * 删除资源的具体实现（子类实现）
@@ -114,6 +120,35 @@ export abstract class BaseStorageProvider implements StorageProvider {
     } catch (error) {
       this.log.error("saveTaskModel", "模型保存失败", error, {
         taskId: params.taskId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 保存通用文件 - 公共实现
+   */
+  async saveFile(params: SaveFileParams): Promise<string> {
+    this.log.info("saveFile", "开始保存文件", {
+      taskId: params.taskId,
+      fileName: params.fileName,
+      dataSize: params.fileData.length,
+    });
+
+    try {
+      const url = await this.saveFileImpl(params);
+
+      this.log.info("saveFile", "文件保存成功", {
+        taskId: params.taskId,
+        fileName: params.fileName,
+        url,
+      });
+
+      return url;
+    } catch (error) {
+      this.log.error("saveFile", "文件保存失败", error, {
+        taskId: params.taskId,
+        fileName: params.fileName,
       });
       throw error;
     }

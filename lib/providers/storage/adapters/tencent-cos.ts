@@ -108,6 +108,24 @@ export class TencentCOSAdapter extends BaseStorageProvider {
   }
 
   /**
+   * 保存通用文件到 COS (MTL、纹理等)
+   */
+  protected async saveFileImpl(params: SaveFileParams): Promise<string> {
+    // 构建文件路径: models/{taskId}/{fileName}
+    const key = `models/${params.taskId}/${params.fileName}`;
+
+    // 根据文件扩展名猜测 Content-Type
+    const extension = params.fileName.split('.').pop()?.toLowerCase() || '';
+    const contentType = params.contentType || this.guessContentType(extension);
+
+    // 上传到 COS
+    await this.putObject(key, params.fileData, contentType);
+
+    // 返回可访问的 URL
+    return this.getObjectUrl(key);
+  }
+
+  /**
    * 删除任务的所有资源
    */
   protected async deleteTaskResourcesImpl(taskId: string): Promise<void> {
@@ -117,7 +135,7 @@ export class TencentCOSAdapter extends BaseStorageProvider {
 
     // 列出任务的所有模型（尝试常见格式）
     const modelKeys: string[] = [];
-    for (const format of ["glb", "gltf", "fbx"]) {
+    for (const format of ["obj", "glb", "gltf", "fbx"]) {
       const modelKey = `models/${taskId}.${format}`;
       const exists = await this.objectExists(modelKey);
       if (exists) {
@@ -335,5 +353,30 @@ export class TencentCOSAdapter extends BaseStorageProvider {
     };
 
     return contentTypes[format.toLowerCase()] || "application/octet-stream";
+  }
+
+  /**
+   * 根据文件扩展名猜测 Content-Type
+   */
+  private guessContentType(extension: string): string {
+    const contentTypes: Record<string, string> = {
+      // 模型文件
+      obj: "text/plain",
+      mtl: "text/plain",
+      glb: "model/gltf-binary",
+      gltf: "model/gltf+json",
+      fbx: "application/octet-stream",
+      // 图片文件
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      webp: "image/webp",
+      // 其他
+      txt: "text/plain",
+      json: "application/json",
+    };
+
+    return contentTypes[extension] || "application/octet-stream";
   }
 }

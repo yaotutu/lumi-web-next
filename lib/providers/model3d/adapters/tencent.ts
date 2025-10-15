@@ -5,7 +5,7 @@
  *
  * 特性:
  * - 图生 3D 快速模型生成
- * - 支持 GLB 格式导出
+ * - 支持 GLB / OBJ 格式导出
  * - 任务状态跟踪
  */
 
@@ -18,6 +18,24 @@ import type {
   ModelTaskStatusResponse,
   SubmitModelJobParams,
 } from "../types";
+
+// ============================================
+// 配置常量
+// ============================================
+
+/**
+ * 3D 模型导出格式
+ * - OBJ: 通用格式，支持材质和纹理（当前使用）
+ * - GLB: glTF 二进制格式，适合 Web 展示
+ *
+ * TODO: 后期支持通过参数动态选择格式
+ */
+const RESULT_FORMAT = "OBJ" as const; // 当前硬编码为 OBJ
+
+/**
+ * 支持的模型格式列表（用于结果文件匹配）
+ */
+const SUPPORTED_FORMATS = ["OBJ", "GLB"] as const;
 
 /**
  * 腾讯云 API 错误类
@@ -91,9 +109,15 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
       // 构建 API 请求参数
       const apiParams = {
         ImageUrl: params.imageUrl, // 图片 URL（必填）
-        ResultFormat: "GLB", // 生成 GLB 格式模型
+        ResultFormat: RESULT_FORMAT, // 模型导出格式（OBJ/GLB）
         EnablePBR: false, // 不启用 PBR 材质
       };
+
+      this.log.info("submitModelGenerationJobImpl", "提交3D生成任务", {
+        imageUrl: params.imageUrl.substring(0, 80) + "...",
+        resultFormat: RESULT_FORMAT,
+        enablePBR: false,
+      });
 
       // 调用腾讯云 API - 提交图生 3D 快速任务
       const response = await client.SubmitHunyuanTo3DRapidJob(apiParams);
