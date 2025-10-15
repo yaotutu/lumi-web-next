@@ -253,7 +253,7 @@ async function handleObjZipArchive(
       files,
     });
 
-    // 3. 遍历所有文件，上传到存储服务
+    // 3. 遍历所有文件，统一命名并上传到存储服务
     for (const fileName of files) {
       const file = zip.files[fileName];
 
@@ -270,22 +270,41 @@ async function handleObjZipArchive(
         extension,
       });
 
-      // 所有文件都上传到同一目录，保持相对路径关系
+      // 统一文件命名规则
+      let normalizedFileName: string;
+      if (extension === "obj") {
+        normalizedFileName = "model.obj"; // 统一命名为 model.obj
+      } else if (extension === "mtl") {
+        normalizedFileName = "material.mtl"; // 统一命名为 material.mtl
+      } else if (
+        extension === "png" ||
+        extension === "jpg" ||
+        extension === "jpeg"
+      ) {
+        normalizedFileName = `material.${extension}`; // 保持原扩展名
+      } else {
+        // 其他文件保持原名
+        normalizedFileName = fileName;
+      }
+
+      // 上传到存储服务（统一命名）
       const fileUrl = await storageProvider.saveFile({
         taskId,
-        fileName,
+        fileName: normalizedFileName,
         fileData: fileBuffer,
       });
 
-      log.info("handleObjZipArchive", `文件已上传: ${fileName}`, {
+      log.info("handleObjZipArchive", `文件已上传: ${normalizedFileName}`, {
         taskId,
+        originalName: fileName,
+        normalizedName: normalizedFileName,
         extension,
         url: fileUrl,
       });
 
       // 记录 OBJ 文件的 URL
       if (extension === "obj") {
-        objFileName = fileName;
+        objFileName = normalizedFileName;
         objFileUrl = fileUrl;
       }
     }

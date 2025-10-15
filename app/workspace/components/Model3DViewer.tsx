@@ -25,15 +25,18 @@ function GLBModel({ url }: { url: string }) {
   );
 }
 
-// OBJ 模型组件（参考官方示例，使用 setPath 方式）
+// OBJ 模型组件（参考官方示例，使用统一的文件命名）
 function OBJModel({ url }: { url: string }) {
   // 从代理 URL 中提取实际的 COS URL 和目录
   const urlObj = new URL(url, window.location.origin);
   const actualUrl = urlObj.searchParams.get("url") || "";
   const baseDir = actualUrl.substring(0, actualUrl.lastIndexOf("/"));
-  const objFileName = actualUrl.substring(actualUrl.lastIndexOf("/") + 1);
 
-  console.log("OBJ 解析:", { actualUrl, baseDir, objFileName });
+  console.log("OBJ 解析:", {
+    actualUrl,
+    baseDir,
+    note: "使用统一的文件命名: model.obj, material.mtl, material.png",
+  });
 
   // 创建统一的 LoadingManager，将文件名转换为代理 URL
   const manager = useMemo(() => {
@@ -58,26 +61,17 @@ function OBJModel({ url }: { url: string }) {
     return mgr;
   }, [baseDir]);
 
-  // 加载 MTL 材质（参考官方示例，只传文件名）
-  const materials = useLoader(
-    MTLLoader,
-    "material.mtl",
-    (loader) => {
-      loader.manager = manager;
-      // 不需要 setPath，因为 LoadingManager 会处理路径
-    },
-  );
+  // 加载 MTL 材质（使用统一的文件名）
+  const materials = useLoader(MTLLoader, "material.mtl", (loader) => {
+    loader.manager = manager;
+  });
   materials.preload();
 
-  // 加载 OBJ 模型（参考官方示例，只传文件名）
-  const obj = useLoader(
-    OBJLoader,
-    objFileName,
-    (loader) => {
-      loader.manager = manager;
-      loader.setMaterials(materials);
-    },
-  );
+  // 加载 OBJ 模型（使用统一的文件名 model.obj）
+  const obj = useLoader(OBJLoader, "model.obj", (loader) => {
+    loader.manager = manager;
+    loader.setMaterials(materials);
+  });
 
   // 优化材质和纹理
   obj.traverse((child) => {
