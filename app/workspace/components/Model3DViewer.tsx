@@ -1,10 +1,17 @@
 "use client";
 
-import { Suspense, useRef, useImperativeHandle, forwardRef } from "react";
+import {
+  Suspense,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  useMemo,
+} from "react";
 import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, Grid } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import * as THREE from "three";
 
 // GLB 模型组件
@@ -18,76 +25,104 @@ function GLBModel({ url }: { url: string }) {
   );
 }
 
-// OBJ 模型组件
+// OBJ 模型组件（参考官方示例，使用 setPath 方式）
 function OBJModel({ url }: { url: string }) {
-  // 加载 OBJ 模型
-  const obj = useLoader(OBJLoader, url);
+  // 从代理 URL 中提取实际的 COS URL 和目录
+  const urlObj = new URL(url, window.location.origin);
+  const actualUrl = urlObj.searchParams.get("url") || "";
+  const baseDir = actualUrl.substring(0, actualUrl.lastIndexOf("/"));
+  const objFileName = actualUrl.substring(actualUrl.lastIndexOf("/") + 1);
 
-  // 为 OBJ 模型的所有子网格添加默认材质和处理几何体
+  console.log("OBJ 解析:", { actualUrl, baseDir, objFileName });
+
+  // 创建统一的 LoadingManager，将文件名转换为代理 URL
+  const manager = useMemo(() => {
+    const mgr = new THREE.LoadingManager();
+
+    mgr.setURLModifier((fileName) => {
+      console.log("LoadingManager 拦截文件名:", fileName);
+
+      // 如果已经是完整的代理 URL，直接返回
+      if (fileName.startsWith("/api/proxy/model")) {
+        return fileName;
+      }
+
+      // 如果是相对文件名，构建完整的代理 URL
+      const fullUrl = `${baseDir}/${fileName}`;
+      const proxyUrl = `/api/proxy/model?url=${encodeURIComponent(fullUrl)}`;
+
+      console.log("文件名转代理 URL:", { fileName, fullUrl, proxyUrl });
+      return proxyUrl;
+    });
+
+    return mgr;
+  }, [baseDir]);
+
+  // 加载 MTL 材质（参考官方示例，只传文件名）
+  const materials = useLoader(
+    MTLLoader,
+    "material.mtl",
+    (loader) => {
+      loader.manager = manager;
+      // 不需要 setPath，因为 LoadingManager 会处理路径
+    },
+  );
+  materials.preload();
+
+  // 加载 OBJ 模型（参考官方示例，只传文件名）
+  const obj = useLoader(
+    OBJLoader,
+    objFileName,
+    (loader) => {
+      loader.manager = manager;
+      loader.setMaterials(materials);
+    },
+  );
+
+  // 优化材质和纹理
   obj.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry) {
-      const geometry = child.geometry;
-
-      // 检查顶点位置数据是否有效
-      const positionAttribute = geometry.getAttribute('position');
-      if (!positionAttribute) {
-        console.error('OBJ 模型缺少顶点位置数据');
-        return;
-      }
-
-      // 检查是否有 NaN 值
-      let hasNaN = false;
-      const positions = positionAttribute.array;
-      for (let i = 0; i < positions.length; i++) {
-        if (isNaN(positions[i])) {
-          hasNaN = true;
-          break;
-        }
-      }
-
-      if (hasNaN) {
-        console.error('OBJ 模型包含无效的顶点数据 (NaN)');
-        return;
-      }
-
-      // 数据有效，继续处理
-      try {
-        // 计算几何体的法线（提升渲染质量）
-        geometry.computeVertexNormals();
-
-        // 居中几何体（避免模型偏离视野）
-        geometry.center();
-      } catch (error) {
-        console.error('处理 OBJ 几何体时出错:', error);
-      }
-
-      // 为所有网格设置标准材质（OBJ 文件通常不包含材质信息）
-      child.material = new THREE.MeshStandardMaterial({
-        color: 0xffffff, // 白色
-        metalness: 0.2,
-        roughness: 0.8,
-        side: THREE.DoubleSide, // 双面渲染
-      });
-
-      // 启用阴影
+    if (child instanceof THREE.Mesh) {
       child.castShadow = true;
       child.receiveShadow = true;
+
+      // 优化材质设置
+      if (child.material) {
+        const materials = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+
+        for (const material of materials) {
+          // 设置纹理过滤和色彩空间
+          if (material.map) {
+            material.map.colorSpace = THREE.SRGBColorSpace;
+            material.map.minFilter = THREE.LinearMipmapLinearFilter;
+            material.map.magFilter = THREE.LinearFilter;
+            material.map.anisotropy = 16;
+            material.map.needsUpdate = true;
+          }
+
+          // 调整材质属性
+          if (material.type === "MeshPhongMaterial") {
+            material.shininess = 30;
+            material.specular = new THREE.Color(0x111111);
+          }
+
+          material.needsUpdate = true;
+        }
+      }
     }
   });
 
-  return (
-    // 渲染加载的 OBJ 对象
-    <primitive object={obj} scale={1} />
-  );
+  return <primitive object={obj} />;
 }
 
 // 通用模型加载组件（根据文件扩展名选择加载器）
 function Model({ url }: { url: string }) {
   // 从 URL 提取文件扩展名
-  const extension = url.split('.').pop()?.toLowerCase() || '';
+  const extension = url.split(".").pop()?.toLowerCase() || "";
 
   // 根据扩展名选择合适的加载器
-  if (extension === 'obj') {
+  if (extension === "obj") {
     return <OBJModel url={url} />;
   }
 
@@ -145,18 +180,10 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
         }}
       >
         {/* 环境光照 */}
-        <ambientLight intensity={0.5} />
+        <ambientLight intensity={0.8} />
 
         {/* 方向光 */}
-        <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-
-        {/* 聚光灯 */}
-        <spotLight
-          position={[-10, 10, -10]}
-          intensity={0.3}
-          angle={0.3}
-          penumbra={1}
-        />
+        <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow />
 
         {/* Suspense 用于异步加载模型 */}
         <Suspense fallback={<LoadingFallback />}>

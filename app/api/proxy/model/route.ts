@@ -3,10 +3,12 @@
  * 作用：解决腾讯云COS的CORS跨域问题
  *
  * 支持的格式：
- * - OBJ: text/plain
+ * - OBJ: text/plain（3D 几何体）
+ * - MTL: text/plain（材质定义）
  * - GLB: model/gltf-binary
  * - GLTF: model/gltf+json
  * - FBX: application/octet-stream
+ * - PNG/JPG/JPEG: image/png, image/jpeg（纹理图片）
  *
  * 工作原理：
  * 1. 接收前端请求（带有腾讯云模型URL作为查询参数）
@@ -79,27 +81,45 @@ export async function GET(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // 根据文件扩展名确定 Content-Type
-    const extension = modelUrl.split('.').pop()?.toLowerCase() || '';
+    const extension = modelUrl.split(".").pop()?.toLowerCase() || "";
     let contentType = "application/octet-stream"; // 默认二进制流
 
-    if (extension === 'glb') {
+    // 3D 模型格式
+    if (extension === "glb") {
       contentType = "model/gltf-binary";
-    } else if (extension === 'gltf') {
+    } else if (extension === "gltf") {
       contentType = "model/gltf+json";
-    } else if (extension === 'obj') {
+    } else if (extension === "obj") {
       // OBJ 文件调试：检查文件头
-      const fileHeader = buffer.toString('utf8', 0, Math.min(100, buffer.length));
-      console.log('OBJ 文件头:', fileHeader);
-      console.log('OBJ 文件大小:', buffer.length, 'bytes');
+      const fileHeader = buffer.toString(
+        "utf8",
+        0,
+        Math.min(100, buffer.length),
+      );
+      console.log("OBJ 文件头:", fileHeader);
+      console.log("OBJ 文件大小:", buffer.length, "bytes");
 
       // 检查是否是有效的 OBJ 文件（应该包含 'v ' 或 'f ' 等标记）
-      if (!fileHeader.includes('v ') && !fileHeader.includes('f ')) {
-        console.warn('警告: OBJ 文件格式可能不正确');
+      if (!fileHeader.includes("v ") && !fileHeader.includes("f ")) {
+        console.warn("警告: OBJ 文件格式可能不正确");
       }
 
       contentType = "text/plain"; // OBJ 是文本格式
-    } else if (extension === 'fbx') {
+    } else if (extension === "mtl") {
+      // MTL 材质文件（文本格式）
+      contentType = "text/plain";
+    } else if (extension === "fbx") {
       contentType = "application/octet-stream";
+    }
+    // 图片格式（纹理）
+    else if (extension === "png") {
+      contentType = "image/png";
+    } else if (extension === "jpg" || extension === "jpeg") {
+      contentType = "image/jpeg";
+    } else if (extension === "gif") {
+      contentType = "image/gif";
+    } else if (extension === "webp") {
+      contentType = "image/webp";
     }
 
     // 返回文件流，设置正确的Content-Type

@@ -115,7 +115,7 @@ export class TencentCOSAdapter extends BaseStorageProvider {
     const key = `models/${params.taskId}/${params.fileName}`;
 
     // 根据文件扩展名猜测 Content-Type
-    const extension = params.fileName.split('.').pop()?.toLowerCase() || '';
+    const extension = params.fileName.split(".").pop()?.toLowerCase() || "";
     const contentType = params.contentType || this.guessContentType(extension);
 
     // 上传到 COS
