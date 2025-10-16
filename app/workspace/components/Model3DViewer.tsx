@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   forwardRef,
   useMemo,
+  useEffect,
 } from "react";
 import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, Grid } from "@react-three/drei";
@@ -15,9 +16,16 @@ import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import * as THREE from "three";
 
 // GLB 模型组件
-function GLBModel({ url }: { url: string }) {
+function GLBModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
   // 加载 GLB 模型
   const { scene } = useGLTF(url);
+
+  // 场景加载后通知父组件
+  useEffect(() => {
+    if (scene && onSceneLoad) {
+      onSceneLoad(scene);
+    }
+  }, [scene, onSceneLoad]);
 
   return (
     // 渲染加载的场景
@@ -26,7 +34,7 @@ function GLBModel({ url }: { url: string }) {
 }
 
 // OBJ 模型组件（参考官方示例，使用统一的文件命名）
-function OBJModel({ url }: { url: string }) {
+function OBJModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
   // 从代理 URL 中提取实际的 COS URL 和目录
   const urlObj = new URL(url, window.location.origin);
   const actualUrl = urlObj.searchParams.get("url") || "";
@@ -107,21 +115,28 @@ function OBJModel({ url }: { url: string }) {
     }
   });
 
+  // 场景加载后通知父组件
+  useEffect(() => {
+    if (obj && onSceneLoad) {
+      onSceneLoad(obj as THREE.Group);
+    }
+  }, [obj, onSceneLoad]);
+
   return <primitive object={obj} />;
 }
 
 // 通用模型加载组件（根据文件扩展名选择加载器）
-function Model({ url }: { url: string }) {
+function Model({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
   // 从 URL 提取文件扩展名
   const extension = url.split(".").pop()?.toLowerCase() || "";
 
   // 根据扩展名选择合适的加载器
   if (extension === "obj") {
-    return <OBJModel url={url} />;
+    return <OBJModel url={url} onSceneLoad={onSceneLoad} />;
   }
 
   // 默认使用 GLB 加载器（支持 .glb 和 .gltf）
-  return <GLBModel url={url} />;
+  return <GLBModel url={url} onSceneLoad={onSceneLoad} />;
 }
 
 // 加载中占位组件
@@ -145,12 +160,17 @@ interface Model3DViewerProps {
 // 暴露给父组件的方法接口
 export interface Model3DViewerRef {
   resetCamera: () => void;
+  applyMaterial: (color: string | null) => void;
 }
 
 const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
   ({ modelUrl, showGrid = false }, ref) => {
     // OrbitControls 的引用,用于控制相机
     const controlsRef = useRef<OrbitControlsType>(null);
+    // 场景引用,用于材质切换
+    const sceneRef = useRef<THREE.Group | null>(null);
+    // 保存原始材质
+    const originalMaterialsRef = useRef<Map<string, THREE.Material | THREE.Material[]>>(new Map());
 
     // 调试日志：查看传入的 modelUrl
     console.log("Model3DViewer 接收到的 modelUrl:", modelUrl);
@@ -168,7 +188,35 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
       );
     }
 
-    // 暴露重置相机方法给父组件
+    // 应用材质颜色（单色或恢复原始贴图）
+    const applyMaterial = (color: string | null) => {
+      if (!sceneRef.current) return;
+
+      sceneRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // 如果是恢复原始贴图
+          if (color === null) {
+            const originalMaterial = originalMaterialsRef.current.get(child.uuid);
+            if (originalMaterial) {
+              child.material = originalMaterial;
+            }
+          } else {
+            // 首次切换到单色时，保存原始材质
+            if (!originalMaterialsRef.current.has(child.uuid)) {
+              originalMaterialsRef.current.set(child.uuid, child.material);
+            }
+            // 应用单色材质
+            child.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(color),
+              roughness: 0.5,
+              metalness: 0.1,
+            });
+          }
+        }
+      });
+    };
+
+    // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
       resetCamera: () => {
         if (controlsRef.current) {
@@ -176,6 +224,7 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
           controlsRef.current.reset();
         }
       },
+      applyMaterial,
     }));
     return (
       // Canvas 是 React Three Fiber 的根容器
@@ -198,7 +247,12 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
         {/* Suspense 用于异步加载模型 */}
         <Suspense fallback={<LoadingFallback />}>
           {/* 加载 3D 模型（自动识别格式：OBJ/GLB/GLTF） */}
-          <Model url={modelUrl} />
+          <Model
+            url={modelUrl}
+            onSceneLoad={(scene) => {
+              sceneRef.current = scene;
+            }}
+          />
 
           {/* 环境贴图,提供更真实的反射效果 */}
           <Environment preset="studio" />

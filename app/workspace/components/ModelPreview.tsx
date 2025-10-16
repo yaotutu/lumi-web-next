@@ -7,6 +7,14 @@ import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import Tooltip from "@/components/ui/Tooltip";
 
+// 材质颜色选项
+const MATERIAL_COLORS = [
+  { name: "原始贴图", value: null, icon: "🎨" },
+  { name: "白色", value: "#F5F5F5", icon: "⚪" },
+  { name: "蓝色", value: "#2196F3", icon: "🔵" },
+  { name: "绿色", value: "#4CAF50", icon: "🟢" },
+] as const;
+
 interface ModelPreviewProps {
   imageIndex: number | null;
   prompt: string;
@@ -23,6 +31,7 @@ export default function ModelPreview({
   const [progress, setProgress] = useState(0);
   const [showGrid, setShowGrid] = useState(false); // 控制是否显示网格
   const [isFullscreen, setIsFullscreen] = useState(false); // 控制全屏状态
+  const [currentMaterial, setCurrentMaterial] = useState<string | null>(null); // 当前材质颜色
   const model3DViewerRef = useRef<Model3DViewerRef>(null); // Model3DViewer 组件引用
   const previewContainerRef = useRef<HTMLDivElement>(null); // 3D预览容器引用
 
@@ -30,6 +39,14 @@ export default function ModelPreview({
   const handleResetCamera = useCallback(() => {
     if (model3DViewerRef.current) {
       model3DViewerRef.current.resetCamera();
+    }
+  }, []);
+
+  // 切换材质颜色
+  const handleMaterialChange = useCallback((color: string | null) => {
+    if (model3DViewerRef.current) {
+      model3DViewerRef.current.applyMaterial(color);
+      setCurrentMaterial(color);
     }
   }, []);
 
@@ -379,6 +396,27 @@ export default function ModelPreview({
               </svg>
             </button>
           </Tooltip>
+
+          {/* 分隔线 */}
+          <div className="h-6 w-px bg-white/10" />
+
+          {/* 材质颜色切换 */}
+          {MATERIAL_COLORS.map((color) => (
+            <Tooltip key={color.name} content={color.name} disabled={status !== "completed"}>
+              <button
+                type="button"
+                onClick={() => handleMaterialChange(color.value)}
+                disabled={status !== "completed"}
+                className={`flex h-9 w-9 items-center justify-center rounded-lg border-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+                  currentMaterial === color.value
+                    ? "bg-yellow-1/20 ring-2 ring-yellow-1"
+                    : "bg-transparent hover:bg-white/10"
+                }`}
+              >
+                <span className="text-lg">{color.icon}</span>
+              </button>
+            </Tooltip>
+          ))}
         </div>
       </div>
 
