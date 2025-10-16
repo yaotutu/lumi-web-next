@@ -16,7 +16,13 @@ import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import * as THREE from "three";
 
 // GLB 模型组件
-function GLBModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
+function GLBModel({
+  url,
+  onSceneLoad,
+}: {
+  url: string;
+  onSceneLoad?: (scene: THREE.Group) => void;
+}) {
   // 加载 GLB 模型
   const { scene } = useGLTF(url);
 
@@ -34,7 +40,13 @@ function GLBModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THR
 }
 
 // OBJ 模型组件（参考官方示例，使用统一的文件命名）
-function OBJModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
+function OBJModel({
+  url,
+  onSceneLoad,
+}: {
+  url: string;
+  onSceneLoad?: (scene: THREE.Group) => void;
+}) {
   // 从代理 URL 中提取实际的 COS URL 和目录
   const urlObj = new URL(url, window.location.origin);
   const actualUrl = urlObj.searchParams.get("url") || "";
@@ -126,7 +138,13 @@ function OBJModel({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THR
 }
 
 // 通用模型加载组件（根据文件扩展名选择加载器）
-function Model({ url, onSceneLoad }: { url: string; onSceneLoad?: (scene: THREE.Group) => void }) {
+function Model({
+  url,
+  onSceneLoad,
+}: {
+  url: string;
+  onSceneLoad?: (scene: THREE.Group) => void;
+}) {
   // 从 URL 提取文件扩展名
   const extension = url.split(".").pop()?.toLowerCase() || "";
 
@@ -170,7 +188,9 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
     // 场景引用,用于材质切换
     const sceneRef = useRef<THREE.Group | null>(null);
     // 保存原始材质
-    const originalMaterialsRef = useRef<Map<string, THREE.Material | THREE.Material[]>>(new Map());
+    const originalMaterialsRef = useRef<
+      Map<string, THREE.Material | THREE.Material[]>
+    >(new Map());
 
     // 调试日志：查看传入的 modelUrl
     console.log("Model3DViewer 接收到的 modelUrl:", modelUrl);
@@ -196,7 +216,9 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
         if (child instanceof THREE.Mesh) {
           // 如果是恢复原始贴图
           if (color === null) {
-            const originalMaterial = originalMaterialsRef.current.get(child.uuid);
+            const originalMaterial = originalMaterialsRef.current.get(
+              child.uuid,
+            );
             if (originalMaterial) {
               child.material = originalMaterial;
             }
