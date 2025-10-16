@@ -427,7 +427,7 @@ export default function ModelPreview({
         ) : status === "completed" ? (
           <>
             {/* 左右分栏布局 */}
-            <div className="flex items-stretch gap-4">
+            <div className="flex items-center gap-4">
               {/* 左侧：模型信息 */}
               <div className="flex-1">
                 <h3 className="mb-3 text-sm font-bold text-white">
@@ -501,7 +501,7 @@ export default function ModelPreview({
               </div>
 
               {/* 右侧：按钮组 */}
-              <div className="flex flex-col gap-2 w-64">
+              <div className="flex flex-row gap-3">
                 <Tooltip
                   content={
                     !task?.model?.modelUrl ? "模型尚未生成" : "下载3D模型文件"
@@ -509,7 +509,7 @@ export default function ModelPreview({
                 >
                   <button
                     type="button"
-                    className="btn-primary w-full flex items-center justify-center gap-2 h-12"
+                    className="btn-primary flex items-center justify-center gap-2 h-12 px-6"
                     onClick={() => {
                       if (task?.model?.modelUrl) {
                         window.open(task.model.modelUrl, "_blank");
@@ -526,7 +526,7 @@ export default function ModelPreview({
                 <Tooltip content="一键连接3D打印机打印（即将上线）">
                   <button
                     type="button"
-                    className="btn-secondary w-full flex items-center justify-center gap-2 h-12"
+                    className="btn-secondary flex items-center justify-center gap-2 h-12 px-6"
                     onClick={() => {
                       // TODO: 实现一键打印功能
                       alert("一键打印功能即将上线！");
