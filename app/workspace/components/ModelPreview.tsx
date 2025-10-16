@@ -65,6 +65,32 @@ export default function ModelPreview({
     };
   }, []);
 
+  // 计算动态标题
+  const getTitle = () => {
+    // 图片生成中
+    if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
+      return "准备中";
+    }
+    // 图片完成，等待选择
+    if (task?.status === "IMAGE_COMPLETED" && task.selectedImageIndex === null) {
+      return "3D 生成";
+    }
+    // 模型生成中
+    if (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") {
+      return "生成中";
+    }
+    // 模型完成
+    if (task?.status === "MODEL_COMPLETED") {
+      return "3D 预览";
+    }
+    // 失败
+    if (task?.status === "FAILED") {
+      return "生成失败";
+    }
+    // 默认
+    return "3D 预览";
+  };
+
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
     // 如果任务已完成模型生成
@@ -110,7 +136,7 @@ export default function ModelPreview({
         className="relative flex flex-1 flex-col items-center justify-center border-b border-white/10 overflow-hidden"
       >
         <h2 className="absolute left-5 top-5 text-base font-semibold text-white">
-          3D 预览
+          {getTitle()}
         </h2>
 
         {/* 3D渲染区域 */}
@@ -145,15 +171,105 @@ export default function ModelPreview({
               </p>
             </div>
           ) : (
-            // 空闲状态:显示占位符
-            <div className="text-center">
-              <div className="mb-4 text-5xl text-foreground-subtle">🎨</div>
-              <p className="text-sm text-foreground-subtle">
-                3D模型将在这里显示
-              </p>
-              <p className="mt-1 text-xs text-foreground-subtle">
-                选择图片后开始生成
-              </p>
+            // 空闲状态:根据任务状态显示不同的引导内容
+            <div className="text-center max-w-sm px-6">
+              {/* 图片生成中 - 提前告知接下来要做什么 */}
+              {(task?.status === "IMAGE_PENDING" ||
+                task?.status === "IMAGE_GENERATING") && (
+                <div className="flex flex-col items-center gap-4">
+                  {/* 3D旋转动画图标 */}
+                  <div className="relative h-20 w-20">
+                    <div className="absolute inset-0 animate-spin-slow">
+                      <div className="h-full w-full rounded-xl bg-gradient-to-br from-yellow-1/20 to-yellow-1/5 border-2 border-yellow-1/30" />
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center text-3xl">
+                      🎨
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold text-white">
+                      接下来要做什么？
+                    </h3>
+                    <div className="glass-panel px-4 py-3 text-left space-y-2">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-lg shrink-0">💡</span>
+                        <div className="text-sm text-white/80">
+                          <p className="font-medium mb-0.5">图片生成完成后</p>
+                          <p className="text-xs text-white/60">
+                            点击任意图片立即生成 3D 模型
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-lg shrink-0">⏱️</span>
+                        <p className="text-xs text-white/60">
+                          预计 15-30 秒
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 等待选择图片 - 引导用户点击左侧图片 */}
+              {task?.status === "IMAGE_COMPLETED" &&
+                task.selectedImageIndex === null && (
+                  <div className="flex flex-col items-center gap-4">
+                    {/* 手指点击动画 */}
+                    <div className="relative h-20 w-20">
+                      <div className="absolute inset-0 flex items-center justify-center text-5xl animate-bounce-slow">
+                        👈
+                      </div>
+                      {/* 光圈动画 */}
+                      <div className="absolute inset-0 animate-ping-slow">
+                        <div className="h-full w-full rounded-full bg-yellow-1/20" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="text-base font-semibold text-white">
+                        选择左侧图片
+                      </h3>
+                      <p className="text-sm text-white/60">
+                        点击任意图片开始生成 3D 模型
+                      </p>
+                    </div>
+
+                    {/* 可选：箭头指示动画 */}
+                    <div className="flex items-center gap-2 text-yellow-1/60 animate-pulse">
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                      <span className="text-xs">查看左侧图片</span>
+                    </div>
+                  </div>
+                )}
+
+              {/* 其他空闲状态（兜底） */}
+              {task?.status !== "IMAGE_PENDING" &&
+                task?.status !== "IMAGE_GENERATING" &&
+                task?.status !== "IMAGE_COMPLETED" && (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="text-5xl text-foreground-subtle">🎨</div>
+                    <p className="text-sm text-foreground-subtle">
+                      3D模型将在这里显示
+                    </p>
+                    <p className="text-xs text-foreground-subtle">
+                      选择图片后开始生成
+                    </p>
+                  </div>
+                )}
             </div>
           )}
         </div>

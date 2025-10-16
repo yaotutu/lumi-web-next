@@ -299,6 +299,19 @@ export default function ImageGrid({
                           alt={`生成的图片 ${idx + 1}`}
                           className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
                         />
+
+                        {/* Hover 提示遮罩 - 仅在未选中时显示 */}
+                        {selectedImage !== idx && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-sm">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="text-3xl">🎯</div>
+                              <p className="text-xs font-medium text-white">
+                                点击生成 3D
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* 选中标记 */}
                         {selectedImage === idx && (
                           <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
