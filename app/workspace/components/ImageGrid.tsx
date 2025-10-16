@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface ImageGridProps {
   initialPrompt?: string;
@@ -31,6 +32,14 @@ export default function ImageGrid({
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string>("");
+
+  // 判断是否在图片生成中（禁用输入框）
+  const isImageGenerating =
+    task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING";
+
+  // 判断是否在模型生成中（禁止切换图片）
+  const isModelGenerating =
+    task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING";
 
   // 如果任务已有图片数据，初始化图片槽位
   useEffect(() => {
@@ -63,6 +72,19 @@ export default function ImageGrid({
       setStatus("generating");
     }
   }, [task]);
+
+  // 键盘快捷键支持
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Esc 清空错误
+      if (e.key === "Escape" && error) {
+        setError("");
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [error]);
 
   // 重新生成图片 - 创建新任务
   const handleGenerate = useCallback(async () => {
@@ -127,6 +149,21 @@ export default function ImageGrid({
     }
   }, [inputText]);
 
+  // 处理图片选择
+  const handleImageSelect = useCallback(
+    (idx: number) => {
+      // 如果模型正在生成，禁止切换
+      if (isModelGenerating) {
+        return;
+      }
+
+      setSelectedImage(idx);
+      if (error) setError("");
+    },
+    [isModelGenerating, error],
+  );
+
+  // 生成3D模型
   const handleGenerate3D = () => {
     if (selectedImage === null) {
       setError(VALIDATION_MESSAGES.SELECT_IMAGE_REQUIRED);
@@ -134,6 +171,41 @@ export default function ImageGrid({
     }
     setError("");
     onGenerate3D?.(selectedImage);
+  };
+
+  // Enter 键触发生成
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!isImageGenerating) {
+        handleGenerate();
+      }
+    }
+  };
+
+  // 计算"生成3D模型"按钮的 tooltip 内容
+  const getGenerate3DTooltip = () => {
+    if (isImageGenerating) {
+      return "图片生成中，请稍候...";
+    }
+    if (selectedImage === null) {
+      return "请先选择一张图片";
+    }
+    if (isModelGenerating) {
+      return "3D模型生成中...";
+    }
+    return "";
+  };
+
+  // 计算"生成3D模型"按钮的文案
+  const getGenerate3DButtonText = () => {
+    if (isModelGenerating) {
+      return "生成中...";
+    }
+    if (task?.status === "MODEL_COMPLETED" && selectedImage !== null) {
+      return "重新生成3D模型";
+    }
+    return "生成 3D 模型";
   };
 
   return (
@@ -147,13 +219,15 @@ export default function ImageGrid({
               setInputText(e.target.value);
               if (error) setError("");
             }}
+            onKeyDown={handleKeyPress}
             placeholder="描述你想要的物体..."
             maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            className={`h-20 w-full resize-none rounded-lg border bg-[#0d0d0d] p-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none ${
+            readOnly={isImageGenerating}
+            className={`h-20 w-full resize-none rounded-lg border bg-[#242424] p-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none transition-opacity ${
               error
                 ? "border-red-1 focus:border-red-1"
                 : "border-white/10 focus:border-yellow-1 focus:ring-1 focus:ring-yellow-1/20"
-            }`}
+            } ${isImageGenerating ? "opacity-60 cursor-not-allowed" : ""}`}
             aria-label="描述你想要的物体"
             aria-invalid={!!error}
           />
@@ -167,20 +241,37 @@ export default function ImageGrid({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={status === "generating"}
-          className="btn-primary w-full"
+        <Tooltip
+          content="图片生成中，请稍候..."
+          disabled={!isImageGenerating}
         >
-          {status === "generating" ? "生成中..." : "重新再生"}
-        </button>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isImageGenerating}
+            className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
+          >
+            {isImageGenerating ? (
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                重新生成
+              </>
+            )}
+          </button>
+        </Tooltip>
       </div>
 
       {/* 生成结果区域 - flex布局容器 */}
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
         {/* 标题 */}
-        <h2 className="mb-3 shrink-0 text-sm font-semibold text-white">
+        <h2 className="mb-3 shrink-0 text-sm font-bold text-white">
           生成结果
         </h2>
 
@@ -189,7 +280,7 @@ export default function ImageGrid({
             <div className="mb-2 text-4xl opacity-60">🎨</div>
             <p className="text-sm font-medium text-white/90">准备开始创作</p>
             <p className="text-xs text-white/50">
-              输入描述后点击"重新再生"开始生成图片
+              输入描述后点击"重新生成"或按 Enter 键开始生成图片
             </p>
           </div>
         ) : task?.status === "IMAGE_PENDING" ||
@@ -200,7 +291,7 @@ export default function ImageGrid({
               {Array.from({ length: 4 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="relative h-full w-full overflow-hidden rounded-xl border-2 border-white/10 bg-gradient-to-br from-white/5 to-[#0d0d0d]"
+                  className="relative h-full w-full overflow-hidden rounded-xl border-2 border-white/10 bg-gradient-to-br from-white/5 to-[#242424]"
                   style={{
                     animation: `pulse 1.5s ease-in-out ${idx * 0.15}s infinite`,
                   }}
@@ -250,13 +341,18 @@ export default function ImageGrid({
 
             {/* 底部按钮区域 - 禁用状态 */}
             <div className="mt-3 shrink-0">
-              <button
-                type="button"
-                disabled
-                className="btn-primary w-full opacity-50 cursor-not-allowed"
-              >
-                生成 3D 模型
-              </button>
+              <Tooltip content="图片生成中，请稍候...">
+                <button
+                  type="button"
+                  disabled
+                  className="btn-primary w-full opacity-50 cursor-not-allowed flex items-center justify-center gap-2 text-sm font-semibold"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+                  </svg>
+                  生成 3D 模型
+                </button>
+              </Tooltip>
             </div>
           </>
         ) : (
@@ -270,20 +366,19 @@ export default function ImageGrid({
                     type="button"
                     onClick={() => {
                       if (slot.status === "completed") {
-                        setSelectedImage(idx);
-                        if (error) setError("");
+                        handleImageSelect(idx);
                       }
                     }}
-                    disabled={slot.status !== "completed"}
-                    className={`group relative h-full w-full overflow-hidden rounded-xl border-2 transition-all ${
+                    disabled={slot.status !== "completed" || isModelGenerating}
+                    className={`group relative h-full w-full overflow-hidden rounded-xl transition-all duration-300 ${
                       selectedImage === idx && slot.status === "completed"
-                        ? "border-yellow-1 shadow-[0_4px_16px_rgba(249,207,0,0.3)]"
-                        : "border-white/10 hover:border-white/20"
-                    } ${slot.status !== "completed" ? "cursor-not-allowed" : ""}`}
+                        ? "border-[3px] border-yellow-1 shadow-[0_8px_24px_rgba(249,207,0,0.4)] -translate-y-1 scale-[1.02]"
+                        : "border-2 border-white/10 hover:border-white/20 hover:scale-[1.02]"
+                    } ${slot.status !== "completed" || isModelGenerating ? "cursor-not-allowed" : ""} ${selectedImage !== null && selectedImage !== idx && slot.status === "completed" ? "opacity-60" : "opacity-100"}`}
                   >
                     {/* 加载中状态 */}
                     {slot.status === "pending" || slot.status === "loading" ? (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#0d0d0d]">
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/5 to-[#242424]">
                         <div className="flex flex-col items-center gap-2">
                           <div className="h-8 w-8 animate-spin rounded-full border-2 border-yellow-1/30 border-t-yellow-1" />
                           <span className="text-xs text-foreground-subtle">
@@ -300,13 +395,13 @@ export default function ImageGrid({
                           className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
                         />
 
-                        {/* Hover 提示遮罩 - 仅在未选中时显示 */}
-                        {selectedImage !== idx && (
+                        {/* Hover 提示遮罩 - 仅在未选中且未在模型生成中时显示 */}
+                        {selectedImage !== idx && !isModelGenerating && (
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-sm">
                             <div className="flex flex-col items-center gap-2">
                               <div className="text-3xl">🎯</div>
                               <p className="text-xs font-medium text-white">
-                                点击生成 3D
+                                选择此图片
                               </p>
                             </div>
                           </div>
@@ -314,27 +409,39 @@ export default function ImageGrid({
 
                         {/* 选中标记 */}
                         {selectedImage === idx && (
-                          <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
-                            <svg
-                              className="h-3.5 w-3.5 text-black"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2.5}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          </div>
+                          <>
+                            <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
+                              <svg
+                                className="h-3.5 w-3.5 text-black"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2.5}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            </div>
+
+                            {/* "使用中"徽章 - 仅在模型生成中显示 */}
+                            {isModelGenerating && (
+                              <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-yellow-1 to-accent-yellow-dim px-2.5 py-1 shadow-lg animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)]">
+                                <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-black" />
+                                <span className="text-[10px] font-semibold text-black">
+                                  使用中
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     ) : (
                       // 失败状态
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-500/10 to-[#0d0d0d]">
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-500/10 to-[#242424]">
                         <span className="text-xs text-red-500">生成失败</span>
                       </div>
                     )}
@@ -367,14 +474,32 @@ export default function ImageGrid({
 
             {/* 底部按钮 - 固定高度,不参与flex */}
             <div className="mt-3 shrink-0">
-              <button
-                type="button"
-                onClick={handleGenerate3D}
-                disabled={selectedImage === null}
-                className="btn-primary w-full"
-              >
-                生成 3D 模型
-              </button>
+              <Tooltip content={getGenerate3DTooltip()}>
+                <button
+                  type="button"
+                  onClick={handleGenerate3D}
+                  disabled={
+                    selectedImage === null ||
+                    isImageGenerating ||
+                    isModelGenerating
+                  }
+                  className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
+                >
+                  {isModelGenerating ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                      {getGenerate3DButtonText()}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+                      </svg>
+                      {getGenerate3DButtonText()}
+                    </>
+                  )}
+                </button>
+              </Tooltip>
             </div>
           </>
         )}

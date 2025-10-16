@@ -2,10 +2,10 @@
 
 :root {
   color-scheme: dark;
-  --surface-base: #000000;
-  --surface-1: #0d0d0d;
-  --surface-2: #1a1a1a;
-  --surface-3: #262626;
+  --surface-base: #141414;
+  --surface-1: #242424;
+  --surface-2: #2d2d2d;
+  --surface-3: #3a3a3a;
   --surface-overlay: rgba(255, 255, 255, var(--alpha-5));
   --text-strong: #ffffff;
   --text-muted: rgba(255, 255, 255, 0.9);
@@ -137,7 +137,7 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   position: relative;
-  background: #000000;
+  background: #141414;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -203,10 +203,12 @@ a:hover {
 
 @layer utilities {
   .glass-panel {
-    background: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #2d2d2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-lg);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+      0 4px 24px rgba(0, 0, 0, 0.5);
   }
 
   .surface-card {
@@ -793,7 +795,7 @@ a:hover {
     overflow: hidden;
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #1a1a1a;
+    background: #2d2d2d;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }

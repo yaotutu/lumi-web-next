@@ -91,7 +91,38 @@ npm run format
 - `useEffect` - 副作用处理
 - `useSearchParams` - URL 参数传递(Hero → Workspace)
 
-**关键状态类型** (`types/index.ts`):
+**任务状态类型** (`prisma/schema.prisma`):
+
+任务状态采用**阶段式设计**，清晰区分图片生成和模型生成两个阶段：
+
+```typescript
+enum TaskStatus {
+  // === 图片生成阶段 ===
+  IMAGE_PENDING      // 图片生成：等待开始（队列中）
+  IMAGE_GENERATING   // 图片生成：生成中
+  IMAGE_COMPLETED    // 图片生成：已完成，等待用户选择
+
+  // === 3D模型生成阶段 ===
+  MODEL_PENDING      // 模型生成：等待开始（用户已选图片）
+  MODEL_GENERATING   // 模型生成：生成中
+  MODEL_COMPLETED    // 模型生成：已完成
+
+  // === 终态 ===
+  FAILED            // 任务失败
+  CANCELLED         // 用户取消
+}
+```
+
+**完整状态流转**:
+```
+创建任务 → IMAGE_PENDING → IMAGE_GENERATING → IMAGE_COMPLETED
+                                                      ↓
+                                               (用户选择图片)
+                                                      ↓
+         MODEL_PENDING → MODEL_GENERATING → MODEL_COMPLETED
+```
+
+**前端组件状态映射** (`types/index.ts`):
 - `GenerationStatus`: "idle" | "generating" | "completed" | "failed"
 - `GeneratedImage` - 图片数据结构
 - `Model3D` - 3D 模型数据结构
@@ -596,9 +627,9 @@ lib/providers/storage/
 ├── base.ts               # 抽象基类（公共逻辑）
 ├── factory.ts            # 工厂函数（自动选择存储方式）
 ├── adapters/             # 存储适配器
-│   ├── local.ts         # 本地文件系统适配器
-│   ├── aliyun-oss.ts    # 阿里云 OSS 适配器（TODO）
-│   └── tencent-cos.ts   # 腾讯云 COS 适配器（TODO）
+│   ├── local.ts         # 本地文件系统适配器 ✅ 完整实现
+│   ├── aliyun-oss.ts    # 阿里云 OSS 适配器（占位符）
+│   └── tencent-cos.ts   # 腾讯云 COS 适配器 ✅ 完整实现
 └── index.ts              # 统一导出
 ```
 
@@ -609,48 +640,85 @@ import { createStorageProvider } from '@/lib/providers/storage';
 // 自动根据环境变量选择存储方式
 const storageProvider = createStorageProvider();
 
-// 保存图片
+// 保存图片（支持 Buffer 或 Base64 字符串）
 const imageUrl = await storageProvider.saveTaskImage({
   taskId: "task-123",
   index: 0,
-  imageData: buffer
+  imageData: buffer  // 或 "data:image/png;base64,..."
 });
 
-// 保存模型
+// 保存模型文件
 const modelUrl = await storageProvider.saveTaskModel({
   taskId: "task-123",
   modelData: buffer,
-  format: "glb"
+  format: "glb"  // 或 "obj", "fbx", "gltf"
 });
 
-// 检查文件
+// 保存通用文件（MTL、纹理等）
+const fileUrl = await storageProvider.saveFile({
+  taskId: "task-123",
+  fileName: "texture.mtl",
+  fileData: buffer,
+  contentType: "text/plain"  // 可选
+});
+
+// 检查文件是否存在
 const exists = await storageProvider.fileExists(imageUrl);
 
-// 获取文件信息
+// 获取文件信息（大小、是否存在）
 const info = await storageProvider.getFileInfo(imageUrl);
+console.log(info.size, info.exists);
 
-// 删除任务资源
+// 删除任务的所有资源（图片 + 模型）
 await storageProvider.deleteTaskResources("task-123");
+
+// Mock 数据生成（用于开发测试）
+const mockImageUrl = await storageProvider.saveMockImage("task-123", 0);
+const mockModelUrl = await storageProvider.saveMockModel("task-123");
 ```
 
 **核心特性**:
 - ✅ 统一接口：所有适配器实现相同的 `StorageProvider` 接口
 - ✅ 多种存储：支持本地文件系统、阿里云 OSS、腾讯云 COS
 - ✅ 自动选择：根据环境变量自动选择最佳存储方式
-- ✅ Mock 数据：提供 `saveMockImage` 和 `saveMockModel` 方法
+- ✅ 格式支持：图片（PNG/JPG）、模型（GLB/GLTF/OBJ/FBX）、通用文件
+- ✅ Mock 数据：提供 `saveMockImage` 和 `saveMockModel` 方法生成假数据
 - ✅ 易于迁移：切换存储方式无需修改业务代码
+- ✅ 批量删除：删除任务时自动清理所有关联资源
 
 **存储方式优先级**:
 ```
-1. 阿里云 OSS (ALIYUN_OSS_ACCESS_KEY_ID + ALIYUN_OSS_ACCESS_KEY_SECRET)
-2. 腾讯云 COS (TENCENT_COS_SECRET_ID + TENCENT_COS_SECRET_KEY)
+1. 腾讯云 COS (TENCENT_COS_SECRET_ID + TENCENT_COS_SECRET_KEY + TENCENT_COS_BUCKET)
+2. 阿里云 OSS (ALIYUN_OSS_ACCESS_KEY_ID + ALIYUN_OSS_ACCESS_KEY_SECRET)
 3. 本地文件系统 (默认，存储到 public/generated/)
 ```
 
-**注意**:
-- 本地文件系统适合开发和小规模部署
-- 生产环境建议使用 OSS/COS
-- OSS/COS 适配器需要安装对应的 SDK（当前为占位实现）
+**腾讯云 COS 配置示例**:
+```bash
+# .env.local
+TENCENT_COS_SECRET_ID=your-secret-id
+TENCENT_COS_SECRET_KEY=your-secret-key
+TENCENT_COS_BUCKET=your-bucket-1234567890  # 包含 AppId
+TENCENT_COS_REGION=ap-beijing              # 默认北京
+```
+
+**本地存储目录结构**:
+```
+public/generated/
+├── images/
+│   └── {taskId}/
+│       ├── 0.png
+│       ├── 1.png
+│       ├── 2.png
+│       └── 3.png
+└── models/
+    └── {taskId}.glb  # 或 .obj, .fbx, .gltf
+```
+
+**实现状态**:
+- ✅ **本地文件系统** - 完整实现，适合开发和小规模部署
+- ✅ **腾讯云 COS** - 完整实现，已安装 `cos-nodejs-sdk-v5`，适合生产环境
+- ⚠️ **阿里云 OSS** - 占位符实现，需安装 `ali-oss` SDK
 
 ## Worker 架构
 
@@ -689,55 +757,177 @@ export async function register() {
 
 #### 1. **图片生成 Worker** (`lib/workers/image-worker.ts`)
 
+**监听状态**: `IMAGE_PENDING`（任务创建后的初始状态）
+
 ```typescript
-// API 层创建任务并设置状态
+// API 层创建任务
 POST /api/tasks
 { prompt: "用户输入的提示词" }
   ↓
-createTaskWithStatus(userId, prompt, "IMAGE_GENERATING")  // 立即返回
+createTask(userId, prompt)  // 默认 status="IMAGE_PENDING"，立即返回
 
-// Worker 监听并执行
+// Worker 自动监听并执行
 while (isRunning) {
-  // 每 2 秒查询数据库
+  // 每 2 秒查询数据库，查找待处理任务
   const tasks = await prisma.task.findMany({
-    where: { status: "IMAGE_GENERATING" },
+    where: { status: "IMAGE_PENDING" },  // 监听 IMAGE_PENDING
     take: 3  // 最大并发3个任务
   });
 
   // 发现任务后执行完整流程
   for (const task of tasks) {
-    - 生成4个风格变体提示词 (自动选择 SiliconFlow DeepSeek-V3 或 Qwen)
-    - 调用图片生成API生成4张图片 (自动选择 SiliconFlow 或阿里云)
-    - 断点续传(支持失败重试)
-    - 更新状态为 IMAGE_COMPLETED
+    // 1. 更新状态为 IMAGE_GENERATING（标记为处理中）
+    await updateTask(task.id, {
+      status: "IMAGE_GENERATING",
+      imageGenerationStartedAt: new Date()
+    });
+
+    // 2. 生成4个风格变体提示词 (LLM Provider)
+    const variants = await llmProvider.generatePromptVariants(task.prompt, systemPrompt);
+
+    // 3. 调用图片生成API生成4张图片 (Image Provider)
+    const imageUrls = await imageProvider.generateImages(variants[0], 4);
+
+    // 4. 保存图片到存储 (Storage Provider)
+    for (let i = 0; i < imageUrls.length; i++) {
+      await storageProvider.saveTaskImage({ taskId: task.id, index: i, imageData: imageUrls[i] });
+    }
+
+    // 5. 更新数据库记录
+    await createTaskImages(task.id, imageUrls);
+
+    // 6. 更新状态为 IMAGE_COMPLETED
+    await updateTask(task.id, {
+      status: "IMAGE_COMPLETED",
+      imageGenerationCompletedAt: new Date()
+    });
   }
 }
 ```
 
+**关键设计**:
+- ✅ 断点续传：检查已生成的图片数量，仅生成缺失的图片
+- ✅ 失败重试：支持最大3次重试，限流错误延迟30秒
+- ✅ 并发控制：最多同时处理3个任务，防止资源耗尽
+- ✅ 状态追踪：记录开始和完成时间戳
+
 #### 2. **3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`)
+
+**监听状态**: `MODEL_PENDING`（用户选择图片后触发）
 
 ```typescript
 // API 层只改状态（触发 Worker）
 PATCH /api/tasks/{id}
-{ selectedImageIndex: 2 }  // API 检测到选中图片，自动设置 status="MODEL_PENDING"
+{ selectedImageIndex: 2 }
+  ↓
+// API 检测到选中图片，自动设置 status="MODEL_PENDING"
+await updateTask(taskId, {
+  selectedImageIndex: 2,
+  status: "MODEL_PENDING"  // 触发 Model3D Worker
+});
 
-// Worker 监听状态并执行
+// Worker 自动监听并执行
 while (isRunning) {
-  // 每 2 秒查询数据库
+  // 每 2 秒查询数据库，查找待处理任务
   const tasks = await prisma.task.findMany({
-    where: { status: "MODEL_PENDING" }  // 监听 MODEL_PENDING 状态
+    where: { status: "MODEL_PENDING" },  // 监听 MODEL_PENDING
+    take: 1  // 最大并发1个3D任务（3D生成耗时较长）
   });
 
   // 发现任务后执行完整流程
   for (const task of tasks) {
-    - 更新状态为 MODEL_GENERATING（开始处理）
-    - 提交腾讯云 AI3D 任务
-    - 创建本地模型记录
-    - 轮询腾讯云状态 (每 5 秒，WAIT → RUN → DONE)
-    - 更新最终状态 (MODEL_COMPLETED/FAILED)
+    // 1. 更新状态为 MODEL_GENERATING（标记为处理中）
+    await updateTask(task.id, {
+      status: "MODEL_GENERATING",
+      modelGenerationStartedAt: new Date()
+    });
+
+    // 2. 获取选中的图片 URL
+    const selectedImage = task.images[task.selectedImageIndex!];
+
+    // 3. 提交腾讯云混元 3D 任务 (Model3D Provider)
+    const { jobId } = await model3DProvider.submitModelGenerationJob({
+      imageUrl: selectedImage.url
+    });
+
+    // 4. 创建本地模型记录（初始状态 PENDING）
+    await prisma.taskModel.create({
+      data: {
+        taskId: task.id,
+        name: `${task.prompt.substring(0, 20)}.glb`,
+        status: "PENDING",
+        apiTaskId: jobId,
+        format: "GLB"
+      }
+    });
+
+    // 5. 轮询腾讯云任务状态（每 5 秒，最多 10 分钟）
+    let finalStatus: "DONE" | "FAIL" = "FAIL";
+    while (elapsed < MAX_POLL_TIME) {
+      const statusResponse = await model3DProvider.queryModelTaskStatus(jobId);
+
+      if (statusResponse.status === "DONE") {
+        finalStatus = "DONE";
+        break;
+      } else if (statusResponse.status === "FAIL") {
+        finalStatus = "FAIL";
+        break;
+      }
+
+      // 更新进度
+      await prisma.taskModel.update({
+        where: { taskId: task.id },
+        data: {
+          status: statusResponse.status === "RUN" ? "GENERATING" : "PENDING",
+          progress: calculateProgress(elapsed)
+        }
+      });
+
+      await sleep(5000);
+    }
+
+    // 6. 下载并保存模型文件（如果成功）
+    if (finalStatus === "DONE") {
+      const modelBuffer = await downloadModel(statusResponse.modelUrl);
+      const localUrl = await storageProvider.saveTaskModel({
+        taskId: task.id,
+        modelData: modelBuffer,
+        format: "glb"
+      });
+
+      // 7. 更新模型记录和任务状态为 MODEL_COMPLETED
+      await prisma.taskModel.update({
+        where: { taskId: task.id },
+        data: {
+          status: "COMPLETED",
+          modelUrl: localUrl,
+          completedAt: new Date()
+        }
+      });
+
+      await updateTask(task.id, {
+        status: "MODEL_COMPLETED",
+        modelGenerationCompletedAt: new Date(),
+        completedAt: new Date()
+      });
+    } else {
+      // 8. 失败处理
+      await updateTask(task.id, {
+        status: "FAILED",
+        failedAt: new Date(),
+        errorMessage: "3D 模型生成失败"
+      });
+    }
   }
 }
 ```
+
+**关键设计**:
+- ✅ 自动触发：用户选择图片后，API 自动设置 `MODEL_PENDING` 触发 Worker
+- ✅ 状态同步：TaskModel 的 status（PENDING/GENERATING/COMPLETED/FAILED）与腾讯云 API 的状态（WAIT/RUN/DONE/FAIL）对应
+- ✅ 轮询机制：每 5 秒查询一次任务状态，最多轮询 10 分钟
+- ✅ 进度追踪：根据轮询时间计算进度百分比
+- ✅ 并发限制：最多同时处理 1 个 3D 任务（3D 生成耗时长、资源消耗大）
 
 ### Worker 配置
 
@@ -791,17 +981,36 @@ MAX_CONCURRENT: 1              // 最大并发3D任务数
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. 用户输入: "一只可爱的猫咪"
    ↓
-2. POST /api/tasks → status=IMAGE_GENERATING (立即返回)
+2. POST /api/tasks
+   → createTask(userId, prompt)
+   → status = IMAGE_PENDING (立即返回)
    ↓
-3. ImageWorker: 检测到 IMAGE_GENERATING 状态
+3. ImageWorker: 检测到 IMAGE_PENDING 状态
    ↓
-4. ImageWorker: 生成4个风格变体提示词
+4. ImageWorker: status → IMAGE_GENERATING（标记处理中）
    ↓
-5. ImageWorker: 调用图片生成API生成4张图片 (SiliconFlow 或阿里云)
+5. ImageWorker: 生成4个风格变体提示词 (LLM Provider)
    ↓
-6. ImageWorker: status → IMAGE_COMPLETED
+6. ImageWorker: 调用图片生成API (Image Provider: SiliconFlow 或阿里云)
    ↓
-7. 前端轮询: 获取到4张图片,用户选择一张
+7. ImageWorker: 保存图片到存储 (Storage Provider: COS/OSS/Local)
+   ↓
+8. ImageWorker: 创建数据库记录 (TaskImage × 4)
+   ↓
+9. ImageWorker: status → IMAGE_COMPLETED
+   ↓
+10. 前端轮询: 获取到4张图片，用户选择一张
+```
+
+**数据库状态变化**:
+```sql
+Task:
+  status: IMAGE_PENDING → IMAGE_GENERATING → IMAGE_COMPLETED
+  imageGenerationStartedAt: null → 2025-01-15 10:00:00
+  imageGenerationCompletedAt: null → 2025-01-15 10:00:05
+
+TaskImage: (创建 4 条记录)
+  taskId, index, url, prompt
 ```
 
 #### 3D 模型生成流程
@@ -811,20 +1020,48 @@ MAX_CONCURRENT: 1              // 最大并发3D任务数
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. 用户选择第2张图片
    ↓
-2. PATCH /api/tasks/{id} { selectedImageIndex: 2 }
-   → API 自动设置 status=MODEL_PENDING (立即返回)
+2. PATCH /api/tasks/{id}
+   { selectedImageIndex: 2 }
+   → API 自动设置 status = MODEL_PENDING (立即返回)
    ↓
 3. Model3DWorker: 检测到 MODEL_PENDING 状态
    ↓
-4. Model3DWorker: 更新状态为 MODEL_GENERATING
+4. Model3DWorker: status → MODEL_GENERATING（标记处理中）
    ↓
-5. Model3DWorker: 提交腾讯云AI3D任务
+5. Model3DWorker: 提交腾讯云混元 3D 任务（获得 jobId）
    ↓
-6. Model3DWorker: 轮询腾讯云状态 (WAIT → RUN → DONE)
+6. Model3DWorker: 创建 TaskModel 记录（status=PENDING, apiTaskId=jobId）
    ↓
-7. Model3DWorker: status → MODEL_COMPLETED
+7. Model3DWorker: 轮询腾讯云状态（每 5 秒）
+   ├─ WAIT → TaskModel.status = PENDING
+   ├─ RUN  → TaskModel.status = GENERATING (更新 progress)
+   └─ DONE → 继续下一步
    ↓
-8. 前端轮询: 获取到3D模型,显示预览
+8. Model3DWorker: 下载模型文件（GLB 格式）
+   ↓
+9. Model3DWorker: 保存到存储 (Storage Provider)
+   ↓
+10. Model3DWorker: 更新记录
+    ├─ TaskModel.status → COMPLETED, modelUrl 设置
+    └─ Task.status → MODEL_COMPLETED
+   ↓
+11. 前端轮询: 获取到3D模型，显示预览和下载按钮
+```
+
+**数据库状态变化**:
+```sql
+Task:
+  selectedImageIndex: null → 2
+  status: IMAGE_COMPLETED → MODEL_PENDING → MODEL_GENERATING → MODEL_COMPLETED
+  modelGenerationStartedAt: null → 2025-01-15 10:05:00
+  modelGenerationCompletedAt: null → 2025-01-15 10:07:30
+  completedAt: null → 2025-01-15 10:07:30
+
+TaskModel: (创建 1 条记录)
+  status: PENDING → GENERATING → COMPLETED
+  progress: 0 → 30 → 60 → 90 → 100
+  apiTaskId: "tencent-job-xxx"
+  modelUrl: "/generated/models/task-123.glb" (或 COS URL)
 ```
 
 ### Worker 目录结构

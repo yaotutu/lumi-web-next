@@ -5,6 +5,7 @@ import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface ModelPreviewProps {
   imageIndex: number | null;
@@ -65,18 +66,43 @@ export default function ModelPreview({
     };
   }, []);
 
+  // 快捷键支持（F键切换全屏）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F 键切换全屏（仅在模型完成时）
+      if (e.key === "f" || e.key === "F") {
+        if (status === "completed") {
+          e.preventDefault();
+          handleToggleFullscreen();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [status, handleToggleFullscreen]);
+
   // 计算动态标题
   const getTitle = () => {
     // 图片生成中
-    if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
+    if (
+      task?.status === "IMAGE_PENDING" ||
+      task?.status === "IMAGE_GENERATING"
+    ) {
       return "准备中";
     }
     // 图片完成，等待选择
-    if (task?.status === "IMAGE_COMPLETED" && task.selectedImageIndex === null) {
+    if (
+      task?.status === "IMAGE_COMPLETED" &&
+      task.selectedImageIndex === null
+    ) {
       return "3D 生成";
     }
     // 模型生成中
-    if (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") {
+    if (
+      task?.status === "MODEL_PENDING" ||
+      task?.status === "MODEL_GENERATING"
+    ) {
       return "生成中";
     }
     // 模型完成
@@ -135,12 +161,12 @@ export default function ModelPreview({
         ref={previewContainerRef}
         className="relative flex flex-1 flex-col items-center justify-center border-b border-white/10 overflow-hidden"
       >
-        <h2 className="absolute left-5 top-5 text-base font-semibold text-white">
+        <h2 className="absolute left-5 top-5 text-base font-bold text-white">
           {getTitle()}
         </h2>
 
         {/* 3D渲染区域 */}
-        <div className="flex h-full w-full items-center justify-center">
+        <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_50%,#424242_0%,#2d2d2d_100%)]">
           {status === "generating" ? (
             // 生成中:显示加载动画
             <div className="text-center">
@@ -154,11 +180,22 @@ export default function ModelPreview({
             </div>
           ) : status === "completed" ? (
             // 完成:渲染 3D 模型（使用代理URL绕过CORS）
-            <Model3DViewer
-              ref={model3DViewerRef}
-              modelUrl={getProxiedModelUrl(task?.model?.modelUrl)} // 使用代理URL，解决CORS问题
-              showGrid={showGrid}
-            />
+            (() => {
+              const originalUrl = task?.model?.modelUrl;
+              const proxiedUrl = getProxiedModelUrl(originalUrl);
+              console.log("ModelPreview 模型 URL:", {
+                originalUrl,
+                proxiedUrl,
+                taskModel: task?.model,
+              });
+              return (
+                <Model3DViewer
+                  ref={model3DViewerRef}
+                  modelUrl={proxiedUrl}
+                  showGrid={showGrid}
+                />
+              );
+            })()
           ) : status === "failed" ? (
             // 失败状态:显示错误信息
             <div className="text-center max-w-md px-6">
@@ -203,9 +240,7 @@ export default function ModelPreview({
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="text-lg shrink-0">⏱️</span>
-                        <p className="text-xs text-white/60">
-                          预计 15-30 秒
-                        </p>
+                        <p className="text-xs text-white/60">预计 15-30 秒</p>
                       </div>
                     </div>
                   </div>
@@ -275,75 +310,75 @@ export default function ModelPreview({
         </div>
 
         {/* 控制按钮 */}
-        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0d0d] p-1.5">
-          <button
-            type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-            title="显示网格"
+        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#242424] p-1.5">
+          <Tooltip
+            content={showGrid ? "隐藏网格" : "显示网格"}
             disabled={status !== "completed"}
-            onClick={() => setShowGrid(!showGrid)}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={status !== "completed"}
+              onClick={() => setShowGrid(!showGrid)}
             >
-              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-            </svg>
-            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              显示网格
-            </span>
-          </button>
-          <button
-            type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-            title="重置视角"
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+              </svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="重置视角" disabled={status !== "completed"}>
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={status !== "completed"}
+              onClick={handleResetCamera}
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          </Tooltip>
+          <Tooltip
+            content={isFullscreen ? "退出全屏 (F)" : "全屏预览 (F)"}
             disabled={status !== "completed"}
-            onClick={handleResetCamera}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={status !== "completed"}
+              onClick={handleToggleFullscreen}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              重置视角
-            </span>
-          </button>
-          <button
-            type="button"
-            className="group relative flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-            title={isFullscreen ? "退出全屏" : "全屏预览"}
-            disabled={status !== "completed"}
-            onClick={handleToggleFullscreen}
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
-              />
-            </svg>
-            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              {isFullscreen ? "退出全屏" : "全屏预览"}
-            </span>
-          </button>
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+                />
+              </svg>
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -353,81 +388,125 @@ export default function ModelPreview({
           <GenerationProgress progress={Math.round(progress)} />
         ) : status === "completed" ? (
           <>
-            <div className="mb-4">
-              <h3 className="mb-2 text-sm font-semibold text-white">
-                模型信息
-              </h3>
-              <div className="space-y-1.5 text-xs text-white/60">
-                <div className="flex justify-between">
-                  <span>格式:</span>
-                  <span className="text-white/90 font-medium">
+            {/* 左右分栏布局 */}
+            <div className="flex items-stretch gap-4">
+              {/* 左侧：模型信息 */}
+              <div className="flex-1">
+                <h3 className="mb-3 text-sm font-bold text-white">
+                  模型信息
+                </h3>
+
+                {/* 格式和质量徽章 */}
+                <div className="mb-3 flex gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-yellow-1/10 px-2.5 py-1 text-xs font-medium text-yellow-1 border border-yellow-1/20">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
                     {task?.model?.format || "OBJ"}
                   </span>
-                </div>
-                {task?.model?.fileSize && (
-                  <div className="flex justify-between">
-                    <span>文件大小:</span>
-                    <span className="text-white/90 font-medium">
-                      {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
-                    </span>
-                  </div>
-                )}
-                {task?.model?.faceCount !== null &&
-                  task?.model?.faceCount !== undefined && (
-                    <div className="flex justify-between">
-                      <span>面数:</span>
-                      <span className="text-white/90 font-medium">
-                        {task.model.faceCount.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                {task?.model?.vertexCount !== null &&
-                  task?.model?.vertexCount !== undefined && (
-                    <div className="flex justify-between">
-                      <span>顶点数:</span>
-                      <span className="text-white/90 font-medium">
-                        {task.model.vertexCount.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                <div className="flex justify-between">
-                  <span>质量:</span>
-                  <span className="text-yellow-1 font-medium">
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-yellow-1/10 to-yellow-1/5 px-2.5 py-1 text-xs font-medium text-yellow-1 border border-yellow-1/20">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
                     {task?.model?.quality || "高清"}
                   </span>
                 </div>
-              </div>
-            </div>
 
-            {/* 按钮组 - 并排显示，使用统一的按钮样式 */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn-primary flex-1"
-                onClick={() => {
-                  if (task?.model?.modelUrl) {
-                    window.open(task.model.modelUrl, "_blank");
+                {/* 详细信息 - 只显示有数据的字段 */}
+                {(task?.model?.fileSize ||
+                  (task?.model?.faceCount !== null && task?.model?.faceCount !== undefined) ||
+                  (task?.model?.vertexCount !== null && task?.model?.vertexCount !== undefined)) && (
+                  <div className="space-y-2 text-xs text-white/70">
+                    {task?.model?.fileSize && (
+                      <div className="flex justify-between items-center">
+                        <span className="flex items-center gap-1.5">
+                          <svg className="h-3.5 w-3.5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                          </svg>
+                          文件大小
+                        </span>
+                        <span className="text-white font-medium tabular-nums">
+                          {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+                    )}
+                    {task?.model?.faceCount !== null &&
+                      task?.model?.faceCount !== undefined && (
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5">
+                            <svg className="h-3.5 w-3.5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z" />
+                            </svg>
+                            面数
+                          </span>
+                          <span className="text-white font-medium tabular-nums">
+                            {task.model.faceCount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    {task?.model?.vertexCount !== null &&
+                      task?.model?.vertexCount !== undefined && (
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5">
+                            <svg className="h-3.5 w-3.5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                            </svg>
+                            顶点数
+                          </span>
+                          <span className="text-white font-medium tabular-nums">
+                            {task.model.vertexCount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* 右侧：按钮组 */}
+              <div className="flex flex-col gap-2 w-64">
+                <Tooltip
+                  content={
+                    !task?.model?.modelUrl ? "模型尚未生成" : "下载3D模型文件"
                   }
-                }}
-                disabled={!task?.model?.modelUrl}
-              >
-                下载模型
-              </button>
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                onClick={() => {
-                  // TODO: 实现一键打印功能
-                  alert("一键打印功能即将上线！");
-                }}
-              >
-                一键打印
-              </button>
+                >
+                  <button
+                    type="button"
+                    className="btn-primary w-full flex items-center justify-center gap-2 h-12"
+                    onClick={() => {
+                      if (task?.model?.modelUrl) {
+                        window.open(task.model.modelUrl, "_blank");
+                      }
+                    }}
+                    disabled={!task?.model?.modelUrl}
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    下载模型
+                  </button>
+                </Tooltip>
+                <Tooltip content="一键连接3D打印机打印（即将上线）">
+                  <button
+                    type="button"
+                    className="btn-secondary w-full flex items-center justify-center gap-2 h-12"
+                    onClick={() => {
+                      // TODO: 实现一键打印功能
+                      alert("一键打印功能即将上线！");
+                    }}
+                    disabled={!task?.model?.modelUrl}
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    一键打印
+                  </button>
+                </Tooltip>
+              </div>
             </div>
           </>
         ) : status === "failed" ? (
           <>
-            <div className="mb-3">
+            <div className="mb-3 w-full max-w-md">
               <h3 className="mb-1.5 text-sm font-semibold text-white">
                 生成失败
               </h3>
@@ -436,7 +515,8 @@ export default function ModelPreview({
               </div>
             </div>
 
-            <button
+            <div className="w-full max-w-md">
+              <button
               type="button"
               className="btn-primary w-full"
               onClick={async () => {
@@ -465,23 +545,26 @@ export default function ModelPreview({
             >
               重新生成3D模型
             </button>
+            </div>
           </>
         ) : (
           <>
-            <div className="mb-3">
+            <div className="mb-3 w-full max-w-md">
               <h3 className="mb-1.5 text-sm font-semibold text-white">
                 模型信息
               </h3>
               <div className="text-xs text-white/60">等待生成模型...</div>
             </div>
 
-            <button
-              type="button"
-              disabled
-              className="w-full cursor-not-allowed rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground opacity-50"
-            >
-              下载模型
-            </button>
+            <div className="w-full max-w-md">
+              <button
+                type="button"
+                disabled
+                className="w-full cursor-not-allowed rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground opacity-50"
+              >
+                下载模型
+              </button>
+            </div>
           </>
         )}
       </div>

@@ -148,9 +148,25 @@ export interface Model3DViewerRef {
 }
 
 const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
-  ({ modelUrl = "/demo.glb", showGrid = false }, ref) => {
+  ({ modelUrl, showGrid = false }, ref) => {
     // OrbitControls 的引用,用于控制相机
     const controlsRef = useRef<OrbitControlsType>(null);
+
+    // 调试日志：查看传入的 modelUrl
+    console.log("Model3DViewer 接收到的 modelUrl:", modelUrl);
+
+    // 如果没有 modelUrl，显示错误提示
+    if (!modelUrl) {
+      console.error("Model3DViewer: modelUrl 为空，无法加载模型");
+      return (
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="text-center">
+            <div className="mb-2 text-4xl">⚠️</div>
+            <p className="text-sm text-white/60">模型 URL 为空</p>
+          </div>
+        </div>
+      );
+    }
 
     // 暴露重置相机方法给父组件
     useImperativeHandle(ref, () => ({
