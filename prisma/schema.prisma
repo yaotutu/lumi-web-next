@@ -19,6 +19,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   tasks     Task[]
+  models    Model[]   // 用户拥有的所有模型（AI生成 + 用户上传）
 }
 
 // 任务表 - 核心业务实体
@@ -51,7 +52,7 @@ model Task {
 
   // 关联的生成结果
   images      TaskImage[]
-  model       TaskModel?
+  models      Model[]   // AI生成的模型（可能有多个历史版本）
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([status])
@@ -83,42 +84,68 @@ model TaskImage {
   @@index([taskId])
 }
 
-// 3D模型表
-model TaskModel {
+// 3D模型表 - 独立实体（核心资源）
+model Model {
   id        String   @id @default(cuid())
-  taskId    String   @unique
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // 归属关系（必需）
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 来源关系（可选）
+  source    ModelSource @default(AI_GENERATED)  // 模型来源：AI生成/用户上传
+  taskId    String?                              // AI生成时有值，上传时为null
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   // 模型基本信息
   name      String
-  modelUrl  String?  // 本地路径: /generated/models/{taskId}.obj (或 .glb)
-  previewImageUrl String?  // 模型预览图 URL (从腾讯云返回的预览图)
+  description String?              // 模型描述（用户可编辑）
+  modelUrl  String                 // 模型文件 URL
+  previewImageUrl String?          // 预览图 URL
 
-  // 生成状态
-  status    ModelStatus @default(PENDING)
-  progress  Int      @default(0)
+  // AI生成相关（仅AI生成时有值）
+  prompt    String?                // 原始提示词（AI生成时记录）
 
   // 模型元数据
   format    String   @default("OBJ")
   fileSize  Int?
   faceCount Int?
   vertexCount Int?
-  quality   String   @default("高清")
+  quality   String?
 
-  // 3D生成API相关
-  apiTaskId String?
-  apiRequestId String?
+  // 生成状态（仅AI生成时使用）
+  generationStatus  ModelGenerationStatus?  // AI生成的状态
+  progress          Int @default(0)
+
+  // 3D生成API相关（AI生成）
+  apiTaskId     String?
+  apiRequestId  String?
 
   // 打印服务相关
   sliceTaskId String?  // 打印服务返回的切片任务ID，用于查询打印状态
 
+  // 隐私和共享设置（模型广场功能）
+  visibility    ModelVisibility @default(PRIVATE)  // 可见性：公开/私有
+  publishedAt   DateTime?                          // 发布时间（首次设为公开时记录）
+
+  // 统计数据
+  viewCount     Int @default(0)   // 浏览次数
+  likeCount     Int @default(0)   // 点赞数（预留）
+  downloadCount Int @default(0)   // 下载次数（预留）
+
+  // 时间戳
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   completedAt DateTime?
   failedAt  DateTime?
   errorMessage String?
 
-  @@index([status])
+  // 索引优化
+  @@index([userId, createdAt(sort: Desc)])               // 我的模型列表
+  @@index([visibility, publishedAt(sort: Desc)])         // 公开模型列表（按时间）
+  @@index([visibility, likeCount(sort: Desc)])           // 公开模型列表（按热度）
+  @@index([source])                                      // 按来源筛选
+  @@index([generationStatus])                            // Worker 查询（仅AI生成）
 }
 
 // 枚举: 任务状态
@@ -138,10 +165,23 @@ enum TaskStatus {
   CANCELLED          // 用户取消
 }
 
-// 枚举: 3D模型状态（与 Provider 的 WAIT/RUN/DONE/FAIL 一一对应）
-enum ModelStatus {
+// 枚举: 模型生成状态（与 Provider 的 WAIT/RUN/DONE/FAIL 一一对应）
+enum ModelGenerationStatus {
   PENDING      // 等待处理（对应 Provider 的 WAIT）
   GENERATING   // 生成中（对应 Provider 的 RUN）
   COMPLETED    // 生成完成（对应 Provider 的 DONE）
   FAILED       // 生成失败（对应 Provider 的 FAIL）
+}
+
+// 枚举: 模型来源
+enum ModelSource {
+  AI_GENERATED   // AI 生成（通过 Task）
+  USER_UPLOADED  // 用户上传
+  IMPORTED       // 从其他平台导入（预留）
+}
+
+// 枚举: 模型可见性（模型广场功能）
+enum ModelVisibility {
+  PRIVATE   // 私有（仅创建者可见）
+  PUBLIC    // 公开（所有人可见）
 }

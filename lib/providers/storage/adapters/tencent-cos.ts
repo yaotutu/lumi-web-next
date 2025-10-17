@@ -17,7 +17,12 @@
 
 import COS from "cos-nodejs-sdk-v5";
 import { BaseStorageProvider } from "../base";
-import type { FileInfo, SaveImageParams, SaveModelParams } from "../types";
+import type {
+  FileInfo,
+  SaveImageParams,
+  SaveModelParams,
+  SaveFileParams,
+} from "../types";
 
 /**
  * 腾讯云 COS Storage 适配器

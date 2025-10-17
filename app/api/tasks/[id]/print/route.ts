@@ -23,13 +23,13 @@ const log = createLogger("PrintAPI");
 export const POST = withErrorHandler(
   async (
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;
 
     log.info("POST", "开始处理打印请求", { taskId: id });
 
-    // 1. 获取任务详情
+    // 1. 获取任务详情（包含 models）
     const task = await TaskService.getTaskById(id);
 
     // 2. 验证任务状态
@@ -41,30 +41,34 @@ export const POST = withErrorHandler(
       throw new AppError(
         "INVALID_STATE",
         "模型尚未生成完成，无法提交打印任务",
-        { taskId: id, status: task.status }
+        { taskId: id, status: task.status },
       );
     }
 
-    if (!task.model || !task.model.modelUrl) {
+    // 获取最新的已完成模型
+    const latestModel = task.models.find(
+      (m) => m.generationStatus === "COMPLETED",
+    );
+    if (!latestModel || !latestModel.modelUrl) {
       log.warn("POST", "模型文件不存在", { taskId: id });
       throw new AppError("NOT_FOUND", "模型文件不存在", { taskId: id });
     }
 
     // 3. 提取对象存储路径（去掉URL前缀）
-    const objectPath = extractObjectPath(task.model.modelUrl);
+    const objectPath = extractObjectPath(latestModel.modelUrl);
 
     log.info("POST", "提取对象存储路径", {
       taskId: id,
-      originalUrl: task.model.modelUrl,
+      originalUrl: latestModel.modelUrl,
       objectPath,
     });
 
     // 4. 准备打印服务请求数据
     // 确保 file_name 包含后缀（如果 name 没有后缀，则使用 format 字段补充）
-    let fileName = task.model.name;
+    let fileName = latestModel.name;
     if (!fileName.includes(".")) {
       // name 没有后缀，使用 format 字段补充
-      const extension = task.model.format.toLowerCase();
+      const extension = (latestModel.format || "OBJ").toLowerCase();
       fileName = `${fileName}.${extension}`;
     }
 
@@ -122,7 +126,7 @@ export const POST = withErrorHandler(
             statusText: response.statusText,
             responseBody: responseText,
             printRequest,
-          }
+          },
         );
 
         throw new AppError(
@@ -132,7 +136,7 @@ export const POST = withErrorHandler(
             statusCode: response.status,
             errorMessage: responseText,
             printRequest,
-          }
+          },
         );
       }
 
@@ -151,7 +155,7 @@ export const POST = withErrorHandler(
           {
             responseText,
             parseError,
-          }
+          },
         );
       }
 
@@ -211,10 +215,10 @@ export const POST = withErrorHandler(
           printServiceUrl,
           printRequest,
           originalError: error,
-        }
+        },
       );
     }
-  }
+  },
 );
 
 /**

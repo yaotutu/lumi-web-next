@@ -9,7 +9,7 @@
  * - 解耦API请求和后台任务处理
  */
 
-import type { ModelStatus, TaskStatus } from "@prisma/client";
+import type { ModelGenerationStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
 import type { ModelTaskStatus } from "@/lib/providers/model3d";
@@ -60,7 +60,7 @@ const CONFIG = {
  * Provider 状态（技术层）：WAIT/RUN/DONE/FAIL
  * 业务状态（数据库层）：PENDING/GENERATING/COMPLETED/FAILED
  */
-const PROVIDER_STATUS_MAP: Record<ModelTaskStatus, ModelStatus> = {
+const PROVIDER_STATUS_MAP: Record<ModelTaskStatus, ModelGenerationStatus> = {
   WAIT: "PENDING", // Provider: 等待处理 → 业务: 等待中
   RUN: "GENERATING", // Provider: 运行中 → 业务: 生成中
   DONE: "COMPLETED", // Provider: 完成 → 业务: 已完成
@@ -70,7 +70,9 @@ const PROVIDER_STATUS_MAP: Record<ModelTaskStatus, ModelStatus> = {
 /**
  * 映射 Provider 状态为业务状态
  */
-function mapProviderStatus(providerStatus: ModelTaskStatus): ModelStatus {
+function mapProviderStatus(
+  providerStatus: ModelTaskStatus,
+): ModelGenerationStatus {
   return PROVIDER_STATUS_MAP[providerStatus];
 }
 
@@ -110,7 +112,7 @@ async function processTask(taskId: string): Promise<void> {
       where: { id: taskId },
       include: {
         images: { orderBy: { index: "asc" } },
-        model: true,
+        models: { orderBy: { createdAt: "desc" } }, // 获取所有模型，按时间倒序
       },
     });
 
@@ -148,11 +150,16 @@ async function processTask(taskId: string): Promise<void> {
       throw new Error("任务未选择图片");
     }
 
-    // 验证不能已有模型记录
-    if (task.model) {
+    // 验证是否已有完成的模型记录（允许有失败的历史记录）
+    const existingModel = task.models.find(
+      (m) =>
+        m.generationStatus === "COMPLETED" ||
+        m.generationStatus === "GENERATING",
+    );
+    if (existingModel) {
       log.warn("processTask", "已有模型记录，跳过", {
         taskId,
-        modelId: task.model.id,
+        modelId: existingModel.id,
       });
       return;
     }
@@ -190,21 +197,26 @@ async function processTask(taskId: string): Promise<void> {
       requestId: tencentResponse.requestId,
     });
 
-    // 3. 创建本地TaskModel记录（初始状态为 PENDING）
-    const model = await prisma.taskModel.create({
+    // 3. 创建 Model 记录（AI 生成模型）
+    const model = await prisma.model.create({
       data: {
+        userId: task.userId,
         taskId,
+        source: "AI_GENERATED",
         name: `${task.prompt.slice(0, 30)} - 3D模型`,
-        status: "PENDING", // 初始状态为 PENDING，对应 Provider 的 WAIT
+        prompt: task.prompt,
+        modelUrl: "", // 初始为空，生成完成后更新
+        generationStatus: "PENDING", // 初始状态为 PENDING，对应 Provider 的 WAIT
         progress: 0,
         apiTaskId: tencentResponse.jobId,
         apiRequestId: tencentResponse.requestId,
       },
     });
 
-    log.info("processTask", "本地模型记录创建成功", {
+    log.info("processTask", "AI生成模型记录创建成功", {
       taskId,
       modelId: model.id,
+      source: "AI_GENERATED",
       initialStatus: "PENDING",
     });
 
@@ -231,20 +243,17 @@ async function processTask(taskId: string): Promise<void> {
     });
 
     // 如果已有模型记录，也标记为失败
-    const existingModel = await prisma.taskModel.findUnique({
-      where: { taskId },
+    await prisma.model.updateMany({
+      where: {
+        taskId,
+        generationStatus: { not: "COMPLETED" }, // 只更新未完成的模型
+      },
+      data: {
+        generationStatus: "FAILED",
+        failedAt: new Date(),
+        errorMessage: errorMsg,
+      },
     });
-
-    if (existingModel) {
-      await prisma.taskModel.update({
-        where: { id: existingModel.id },
-        data: {
-          status: "FAILED",
-          failedAt: new Date(),
-          errorMessage: errorMsg,
-        },
-      });
-    }
   } finally {
     processingTasks.delete(taskId);
   }
@@ -299,10 +308,13 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
     else if (status.status === "FAIL") progress = 0;
 
     // 更新本地模型状态和进度
-    await prisma.taskModel.update({
-      where: { taskId },
+    await prisma.model.updateMany({
+      where: {
+        taskId,
+        generationStatus: { not: "COMPLETED" }, // 只更新未完成的模型
+      },
       data: {
-        status: businessStatus, // 同步更新业务状态
+        generationStatus: businessStatus, // 同步更新业务状态
         progress,
       },
     });
@@ -378,25 +390,25 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
           });
         } catch (error) {
           // 预览图下载失败不应阻塞主流程，只记录警告
-          log.warn(
-            "pollModel3DStatus",
-            "预览图下载失败，但不影响模型保存",
-            {
-              taskId,
-              jobId,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
+          log.warn("pollModel3DStatus", "预览图下载失败，但不影响模型保存", {
+            taskId,
+            jobId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       } else {
         log.info("pollModel3DStatus", "腾讯云未返回预览图", { taskId, jobId });
       }
 
       // 更新模型状态为COMPLETED（存储持久化的 URL，而不是临时 URL）
-      await prisma.taskModel.update({
-        where: { taskId },
+      // 使用 apiTaskId 精确定位当前正在处理的模型记录
+      await prisma.model.updateMany({
+        where: {
+          taskId,
+          apiTaskId: jobId, // 精确匹配当前任务的 jobId
+        },
         data: {
-          status: "COMPLETED",
+          generationStatus: "COMPLETED",
           progress: 100,
           format: MODEL_FORMAT, // 明确设置模型格式
           modelUrl: storageUrl, // 持久化的存储 URL
@@ -431,10 +443,13 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
       });
 
       // 更新模型状态为FAILED
-      await prisma.taskModel.update({
-        where: { taskId },
+      await prisma.model.updateMany({
+        where: {
+          taskId,
+          generationStatus: { not: "COMPLETED" }, // 只更新未完成的模型
+        },
         data: {
-          status: "FAILED",
+          generationStatus: "FAILED",
           failedAt: new Date(),
           errorMessage: errorMsg,
         },

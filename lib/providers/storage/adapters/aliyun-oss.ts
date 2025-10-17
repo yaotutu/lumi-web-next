@@ -20,7 +20,12 @@
  */
 
 import { BaseStorageProvider } from "../base";
-import type { FileInfo, SaveImageParams, SaveModelParams } from "../types";
+import type {
+  FileInfo,
+  SaveImageParams,
+  SaveModelParams,
+  SaveFileParams,
+} from "../types";
 
 /**
  * 阿里云 OSS Storage 适配器
@@ -39,6 +44,12 @@ export class AliyunOSSAdapter extends BaseStorageProvider {
   }
 
   protected async saveTaskModelImpl(_params: SaveModelParams): Promise<string> {
+    throw new Error(
+      "阿里云 OSS 适配器尚未实现，请先安装 ali-oss SDK 或使用本地存储",
+    );
+  }
+
+  protected async saveFileImpl(_params: SaveFileParams): Promise<string> {
     throw new Error(
       "阿里云 OSS 适配器尚未实现，请先安装 ali-oss SDK 或使用本地存储",
     );

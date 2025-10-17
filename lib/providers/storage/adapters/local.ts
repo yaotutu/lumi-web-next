@@ -14,7 +14,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { BaseStorageProvider } from "../base";
-import type { FileInfo, SaveImageParams, SaveModelParams } from "../types";
+import type {
+  FileInfo,
+  SaveImageParams,
+  SaveModelParams,
+  SaveFileParams,
+} from "../types";
 
 // 存储根目录
 const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
@@ -78,6 +83,23 @@ export class LocalStorageAdapter extends BaseStorageProvider {
     fs.writeFileSync(filepath, params.modelData);
 
     return `/generated/models/${filename}`;
+  }
+
+  /**
+   * 保存通用文件到本地文件系统
+   */
+  protected async saveFileImpl(params: SaveFileParams): Promise<string> {
+    const dir = path.join(STORAGE_ROOT, "models", params.taskId);
+
+    // 确保目录存在
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const filepath = path.join(dir, params.fileName);
+    fs.writeFileSync(filepath, params.fileData);
+
+    return `/generated/models/${params.taskId}/${params.fileName}`;
   }
 
   /**

@@ -28,6 +28,40 @@ export default function ModelPreview({
   task,
   taskId,
 }: ModelPreviewProps) {
+  // 获取最新的模型（无论状态如何）
+  // 优先获取正在生成中的模型，如果没有则获取最后一个模型
+  const latestModel = task?.models?.length
+    ? task.models
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0]
+    : undefined;
+
+  // 调试日志：查看选择的模型
+  console.log("=== ModelPreview latestModel 选择 ===", {
+    taskId: task?.id,
+    taskStatus: task?.status,
+    allModelsCount: task?.models?.length,
+    allModels: task?.models?.map((m) => ({
+      id: m.id,
+      createdAt: m.createdAt,
+      generationStatus: m.generationStatus,
+      modelUrl: m.modelUrl,
+      progress: m.progress,
+    })),
+    selectedLatestModel: latestModel
+      ? {
+          id: latestModel.id,
+          createdAt: latestModel.createdAt,
+          generationStatus: latestModel.generationStatus,
+          modelUrl: latestModel.modelUrl,
+          progress: latestModel.progress,
+        }
+      : null,
+  });
+
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [showGrid, setShowGrid] = useState(false); // 控制是否显示网格
@@ -186,21 +220,24 @@ export default function ModelPreview({
 
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
-    // 如果任务已完成模型生成
-    if (task?.status === "MODEL_COMPLETED" && task.model) {
+    // 如果任务已完成模型生成（任务状态为 MODEL_COMPLETED 或者模型的 generationStatus 为 COMPLETED）
+    if (
+      task?.status === "MODEL_COMPLETED" ||
+      latestModel?.generationStatus === "COMPLETED"
+    ) {
       setStatus("completed");
-      setProgress(task.model.progress || 100);
+      setProgress(latestModel?.progress || 100);
       return;
     }
 
     // 如果正在生成模型（包括等待和生成中）
+    // 只要任务状态是 MODEL_PENDING 或 MODEL_GENERATING，就显示生成中
     if (
-      (task?.status === "MODEL_PENDING" ||
-        task?.status === "MODEL_GENERATING") &&
-      task.model
+      task?.status === "MODEL_PENDING" ||
+      task?.status === "MODEL_GENERATING"
     ) {
       setStatus("generating");
-      setProgress(task.model.progress || 0);
+      setProgress(latestModel?.progress || 0);
       return;
     }
 
@@ -219,7 +256,12 @@ export default function ModelPreview({
       setStatus("idle");
       setProgress(0);
     }
-  }, [task?.status, task?.model?.progress, task?.model?.status, task?.model]);
+  }, [
+    task?.status,
+    latestModel?.progress,
+    latestModel?.generationStatus,
+    latestModel,
+  ]);
 
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden">
@@ -248,12 +290,15 @@ export default function ModelPreview({
           ) : status === "completed" ? (
             // 完成:渲染 3D 模型（使用代理URL绕过CORS）
             (() => {
-              const originalUrl = task?.model?.modelUrl;
+              const originalUrl = latestModel?.modelUrl;
               const proxiedUrl = getProxiedModelUrl(originalUrl);
-              console.log("ModelPreview 模型 URL:", {
+              console.log("=== ModelPreview 渲染 3D 模型 ===", {
+                taskStatus: task?.status,
+                latestModelGenerationStatus: latestModel?.generationStatus,
                 originalUrl,
                 proxiedUrl,
-                taskModel: task?.model,
+                latestModelFullData: latestModel,
+                allModels: task?.models,
               });
               return (
                 <Model3DViewer
@@ -502,7 +547,7 @@ export default function ModelPreview({
                         d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                       />
                     </svg>
-                    {task?.model?.format || "OBJ"}
+                    {latestModel?.format || "OBJ"}
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-yellow-1/10 to-yellow-1/5 px-2.5 py-1 text-xs font-medium text-yellow-1 border border-yellow-1/20">
                     <svg
@@ -518,18 +563,18 @@ export default function ModelPreview({
                         d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
                       />
                     </svg>
-                    {task?.model?.quality || "高清"}
+                    {latestModel?.quality || "高清"}
                   </span>
                 </div>
 
                 {/* 详细信息 - 只显示有数据的字段 */}
-                {(task?.model?.fileSize ||
-                  (task?.model?.faceCount !== null &&
-                    task?.model?.faceCount !== undefined) ||
-                  (task?.model?.vertexCount !== null &&
-                    task?.model?.vertexCount !== undefined)) && (
+                {(latestModel?.fileSize ||
+                  (latestModel?.faceCount !== null &&
+                    latestModel?.faceCount !== undefined) ||
+                  (latestModel?.vertexCount !== null &&
+                    latestModel?.vertexCount !== undefined)) && (
                   <div className="space-y-2 text-xs text-white/70">
-                    {task?.model?.fileSize && (
+                    {latestModel?.fileSize && (
                       <div className="flex justify-between items-center">
                         <span className="flex items-center gap-1.5">
                           <svg
@@ -548,12 +593,12 @@ export default function ModelPreview({
                           文件大小
                         </span>
                         <span className="text-white font-medium tabular-nums">
-                          {(task.model.fileSize / (1024 * 1024)).toFixed(2)} MB
+                          {(latestModel.fileSize / (1024 * 1024)).toFixed(2)} MB
                         </span>
                       </div>
                     )}
-                    {task?.model?.faceCount !== null &&
-                      task?.model?.faceCount !== undefined && (
+                    {latestModel?.faceCount !== null &&
+                      latestModel?.faceCount !== undefined && (
                         <div className="flex justify-between items-center">
                           <span className="flex items-center gap-1.5">
                             <svg
@@ -572,12 +617,12 @@ export default function ModelPreview({
                             面数
                           </span>
                           <span className="text-white font-medium tabular-nums">
-                            {task.model.faceCount.toLocaleString()}
+                            {latestModel.faceCount.toLocaleString()}
                           </span>
                         </div>
                       )}
-                    {task?.model?.vertexCount !== null &&
-                      task?.model?.vertexCount !== undefined && (
+                    {latestModel?.vertexCount !== null &&
+                      latestModel?.vertexCount !== undefined && (
                         <div className="flex justify-between items-center">
                           <span className="flex items-center gap-1.5">
                             <svg
@@ -596,7 +641,7 @@ export default function ModelPreview({
                             顶点数
                           </span>
                           <span className="text-white font-medium tabular-nums">
-                            {task.model.vertexCount.toLocaleString()}
+                            {latestModel.vertexCount.toLocaleString()}
                           </span>
                         </div>
                       )}
@@ -608,18 +653,18 @@ export default function ModelPreview({
               <div className="flex flex-row gap-3">
                 <Tooltip
                   content={
-                    !task?.model?.modelUrl ? "模型尚未生成" : "下载3D模型文件"
+                    !latestModel?.modelUrl ? "模型尚未生成" : "下载3D模型文件"
                   }
                 >
                   <button
                     type="button"
                     className="btn-primary flex items-center justify-center gap-2 h-12 px-6"
                     onClick={() => {
-                      if (task?.model?.modelUrl) {
-                        window.open(task.model.modelUrl, "_blank");
+                      if (latestModel?.modelUrl) {
+                        window.open(latestModel.modelUrl, "_blank");
                       }
                     }}
-                    disabled={!task?.model?.modelUrl}
+                    disabled={!latestModel?.modelUrl}
                   >
                     <svg
                       className="h-5 w-5"
@@ -639,7 +684,7 @@ export default function ModelPreview({
                 </Tooltip>
                 <Tooltip
                   content={
-                    !task?.model?.modelUrl
+                    !latestModel?.modelUrl
                       ? "模型尚未生成"
                       : isPrinting
                         ? "正在提交打印任务..."
@@ -650,7 +695,7 @@ export default function ModelPreview({
                     type="button"
                     className="btn-secondary flex items-center justify-center gap-2 h-12 px-6"
                     onClick={handlePrint}
-                    disabled={!task?.model?.modelUrl || isPrinting}
+                    disabled={!latestModel?.modelUrl || isPrinting}
                   >
                     {isPrinting ? (
                       <>

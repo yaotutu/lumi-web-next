@@ -92,11 +92,14 @@ export async function createModelForTask(
   }
 
   // 创建模型记录
-  const model = await prisma.taskModel.create({
+  const model = await prisma.model.create({
     data: {
+      userId: task.userId,
       taskId,
+      source: "AI_GENERATED",
       name: modelData.name.trim(),
-      status: "PENDING",
+      modelUrl: "", // 初始为空，生成完成后更新
+      generationStatus: "PENDING",
       progress: 0,
     },
   });
@@ -114,15 +117,16 @@ export async function createModelForTask(
 export async function updateTaskModel(
   taskId: string,
   modelData: Partial<{
-    status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED";
+    generationStatus: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED";
     progress: number;
-    url?: string;
+    modelUrl?: string;
     errorMessage?: string;
   }>,
 ) {
-  // 查找该任务的模型
-  const existingModel = await prisma.taskModel.findUnique({
+  // 查找该任务的最新模型（按创建时间倒序，取第一个）
+  const existingModel = await prisma.model.findFirst({
     where: { taskId },
+    orderBy: { createdAt: "desc" },
   });
 
   if (!existingModel) {
@@ -130,7 +134,7 @@ export async function updateTaskModel(
   }
 
   // 更新模型记录
-  const model = await prisma.taskModel.update({
+  const model = await prisma.model.update({
     where: { id: existingModel.id },
     data: modelData,
   });

@@ -1,15 +1,20 @@
 // ============================================
 // Prisma 导出的类型
 // ============================================
-export type { Task, TaskImage, TaskModel, User } from "@prisma/client";
-export { ModelStatus, TaskStatus } from "@prisma/client";
+export type { Task, TaskImage, Model, User } from "@prisma/client";
+export {
+  ModelGenerationStatus,
+  ModelSource,
+  ModelVisibility,
+  TaskStatus,
+} from "@prisma/client";
 
 // 扩展类型: 任务详情（包含关联数据）
-import type { Task, TaskImage, TaskModel } from "@prisma/client";
+import type { Task, TaskImage, Model } from "@prisma/client";
 
 export type TaskWithDetails = Task & {
   images: TaskImage[];
-  model: TaskModel | null;
+  models: Model[]; // 改为数组，支持多个模型历史
 };
 
 // ============================================

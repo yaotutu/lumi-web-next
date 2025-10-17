@@ -36,7 +36,7 @@ export async function listTasks(
       images: {
         orderBy: { index: "asc" },
       },
-      model: true,
+      models: true,
     },
     orderBy: {
       createdAt: "desc",
@@ -61,7 +61,7 @@ export async function getTaskById(taskId: string) {
       images: {
         orderBy: { index: "asc" },
       },
-      model: true,
+      models: true,
     },
   });
 
@@ -103,7 +103,7 @@ export async function createTask(userId: string, prompt: string) {
     },
     include: {
       images: true,
-      model: true,
+      models: true,
     },
   });
 
@@ -145,7 +145,7 @@ export async function createTaskWithStatus(
     },
     include: {
       images: true,
-      model: true,
+      models: true,
     },
   });
 
@@ -190,7 +190,7 @@ export async function updateTask(
     data,
     include: {
       images: true,
-      model: true,
+      models: true,
     },
   });
 
@@ -286,7 +286,7 @@ export async function retryImageGeneration(taskId: string) {
     });
 
     // 2. 删除旧的模型记录（如果有）
-    await tx.taskModel.deleteMany({
+    await tx.model.deleteMany({
       where: { taskId },
     });
 
@@ -306,7 +306,7 @@ export async function retryImageGeneration(taskId: string) {
       },
       include: {
         images: true,
-        model: true,
+        models: true,
       },
     });
 
@@ -355,7 +355,7 @@ export async function retryModelGeneration(taskId: string) {
   // 事务：清理旧模型 + 重置任务状态
   const updatedTask = await prisma.$transaction(async (tx) => {
     // 1. 删除旧的模型记录
-    await tx.taskModel.deleteMany({
+    await tx.model.deleteMany({
       where: { taskId },
     });
 
@@ -372,7 +372,7 @@ export async function retryModelGeneration(taskId: string) {
       },
       include: {
         images: true,
-        model: true,
+        models: true,
       },
     });
 
@@ -393,17 +393,30 @@ export async function updateModelSliceTaskId(
   taskId: string,
   sliceTaskId: string,
 ) {
-  // 验证任务存在
-  const task = await getTaskById(taskId);
+  // 查询任务（需要包含 models）
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+      models: true,
+    },
+  });
 
-  // 验证模型存在
-  if (!task.model) {
-    throw new AppError("NOT_FOUND", `任务 ${taskId} 没有关联的模型`);
+  // 验证任务存在
+  if (!task) {
+    throw new AppError("NOT_FOUND", `任务不存在: ${taskId}`);
+  }
+
+  // 验证模型存在（获取最新的已完成模型）
+  const latestModel = task.models.find(
+    (m) => m.generationStatus === "COMPLETED",
+  );
+  if (!latestModel) {
+    throw new AppError("NOT_FOUND", `任务 ${taskId} 没有已完成的模型`);
   }
 
   // 更新模型的 sliceTaskId
-  const updatedModel = await prisma.taskModel.update({
-    where: { taskId },
+  const updatedModel = await prisma.model.update({
+    where: { id: latestModel.id },
     data: { sliceTaskId },
   });
 

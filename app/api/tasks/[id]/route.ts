@@ -54,9 +54,9 @@ export const PATCH = withErrorHandler(
         currentTask.status === "MODEL_COMPLETED")
     ) {
       // 如果是MODEL_COMPLETED状态,需要先删除旧的模型记录
-      if (currentTask.status === "MODEL_COMPLETED" && currentTask.model) {
-        await prisma.taskModel.delete({
-          where: { id: currentTask.model.id },
+      if (currentTask.status === "MODEL_COMPLETED") {
+        await prisma.model.deleteMany({
+          where: { taskId: id },
         });
       }
 
