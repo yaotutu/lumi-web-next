@@ -6,6 +6,7 @@ import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import Tooltip from "@/components/ui/Tooltip";
+import Toast, { type ToastType } from "@/components/ui/Toast";
 
 // 材质颜色选项
 const MATERIAL_COLORS = [
@@ -33,6 +34,10 @@ export default function ModelPreview({
   const [isFullscreen, setIsFullscreen] = useState(false); // 控制全屏状态
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null); // 当前材质颜色
   const [isPrinting, setIsPrinting] = useState(false); // 控制打印请求状态
+  const [toast, setToast] = useState<{
+    type: ToastType;
+    message: string;
+  } | null>(null); // Toast 提示状态
   const model3DViewerRef = useRef<Model3DViewerRef>(null); // Model3DViewer 组件引用
   const previewContainerRef = useRef<HTMLDivElement>(null); // 3D预览容器引用
 
@@ -54,7 +59,10 @@ export default function ModelPreview({
   // 一键打印：提交打印任务到外部打印服务
   const handlePrint = useCallback(async () => {
     if (!taskId) {
-      alert("任务ID不存在，无法提交打印");
+      setToast({
+        type: "error",
+        message: "任务ID不存在，无法提交打印",
+      });
       return;
     }
 
@@ -71,17 +79,22 @@ export default function ModelPreview({
       const data = await response.json();
 
       if (data.success) {
-        alert(
-          `打印任务已成功提交！\n\n打印任务ID: ${data.data.printTaskId || "未知"}\n任务名称: ${data.data.printRequest.task_name}`,
-        );
+        setToast({
+          type: "success",
+          message: "打印任务已开始，正在处理中...",
+        });
       } else {
-        alert(`打印任务提交失败：${data.error?.message || "未知错误"}`);
+        setToast({
+          type: "error",
+          message: `打印任务提交失败：${data.error?.message || "未知错误"}`,
+        });
       }
     } catch (error) {
       console.error("提交打印任务失败:", error);
-      alert(
-        `提交打印任务失败：${error instanceof Error ? error.message : "网络错误"}`,
-      );
+      setToast({
+        type: "error",
+        message: `提交打印任务失败：${error instanceof Error ? error.message : "网络错误"}`,
+      });
     } finally {
       setIsPrinting(false);
     }
@@ -731,6 +744,16 @@ export default function ModelPreview({
           </>
         )}
       </div>
+
+      {/* Toast 提示 */}
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

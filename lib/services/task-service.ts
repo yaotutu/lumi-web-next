@@ -381,3 +381,31 @@ export async function retryModelGeneration(taskId: string) {
 
   return updatedTask;
 }
+
+/**
+ * 更新模型的 sliceTaskId（打印服务返回的切片任务ID）
+ * @param taskId 任务ID
+ * @param sliceTaskId 切片任务ID
+ * @returns 更新后的任务模型
+ * @throws AppError NOT_FOUND - 任务或模型不存在
+ */
+export async function updateModelSliceTaskId(
+  taskId: string,
+  sliceTaskId: string,
+) {
+  // 验证任务存在
+  const task = await getTaskById(taskId);
+
+  // 验证模型存在
+  if (!task.model) {
+    throw new AppError("NOT_FOUND", `任务 ${taskId} 没有关联的模型`);
+  }
+
+  // 更新模型的 sliceTaskId
+  const updatedModel = await prisma.taskModel.update({
+    where: { taskId },
+    data: { sliceTaskId },
+  });
+
+  return updatedModel;
+}

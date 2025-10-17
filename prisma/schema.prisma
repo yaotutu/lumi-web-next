@@ -108,6 +108,9 @@ model TaskModel {
   apiTaskId String?
   apiRequestId String?
 
+  // 打印服务相关
+  sliceTaskId String?  // 打印服务返回的切片任务ID，用于查询打印状态
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   completedAt DateTime?
