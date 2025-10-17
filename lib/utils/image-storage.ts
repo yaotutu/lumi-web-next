@@ -224,6 +224,91 @@ export async function downloadAndUploadModel(
 }
 
 /**
+ * 从远程 URL 下载预览图并上传到存储服务
+ *
+ * @param remoteUrl 远程预览图 URL（如：腾讯云返回的预览图 URL）
+ * @param taskId 任务 ID
+ * @returns 存储后的 URL（本地路径或 COS URL）
+ *
+ * @throws 如果下载或上传失败
+ */
+export async function downloadAndUploadPreviewImage(
+  remoteUrl: string,
+  taskId: string,
+): Promise<string> {
+  log.info("downloadAndUploadPreviewImage", "开始下载并上传预览图", {
+    taskId,
+    remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
+  });
+
+  try {
+    // 1. 下载预览图到 Buffer
+    log.info("downloadAndUploadPreviewImage", "正在下载预览图", { taskId });
+
+    const response = await fetch(remoteUrl);
+
+    if (!response.ok) {
+      throw new Error(
+        `下载预览图失败: HTTP ${response.status} ${response.statusText}`,
+      );
+    }
+
+    // 获取 Content-Type（用于验证）
+    const contentType = response.headers.get("content-type");
+    if (contentType && !contentType.startsWith("image/")) {
+      log.warn(
+        "downloadAndUploadPreviewImage",
+        "响应的 Content-Type 不是图片类型",
+        {
+          taskId,
+          contentType,
+        },
+      );
+    }
+
+    // 转换为 Buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const imageBuffer = Buffer.from(arrayBuffer);
+
+    log.info("downloadAndUploadPreviewImage", "预览图下载成功", {
+      taskId,
+      size: imageBuffer.length,
+      sizeKB: (imageBuffer.length / 1024).toFixed(2),
+    });
+
+    // 2. 上传到存储服务
+    const storageProvider = createStorageProvider();
+
+    log.info("downloadAndUploadPreviewImage", "正在上传预览图到存储服务", {
+      taskId,
+      provider: storageProvider.getName(),
+    });
+
+    // 使用通用文件保存方法，文件名为 preview.png
+    const storageUrl = await storageProvider.saveFile({
+      taskId,
+      fileName: "preview.png",
+      fileData: imageBuffer,
+      contentType: "image/png",
+    });
+
+    log.info("downloadAndUploadPreviewImage", "预览图上传成功", {
+      taskId,
+      storageUrl,
+      provider: storageProvider.getName(),
+    });
+
+    return storageUrl;
+  } catch (error) {
+    log.error("downloadAndUploadPreviewImage", "下载或上传预览图失败", error, {
+      taskId,
+      remoteUrl,
+    });
+    throw error;
+  }
+}
+
+/**
  * 处理 OBJ ZIP 压缩包
  * 解压并上传 OBJ、MTL、纹理文件到存储服务
  *

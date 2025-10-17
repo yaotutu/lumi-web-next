@@ -23,7 +23,7 @@ const log = createLogger("PrintAPI");
 export const POST = withErrorHandler(
   async (
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> },
+    { params }: { params: Promise<{ id: string }> }
   ) => {
     const { id } = await params;
 
@@ -41,7 +41,7 @@ export const POST = withErrorHandler(
       throw new AppError(
         "INVALID_STATE",
         "模型尚未生成完成，无法提交打印任务",
-        { taskId: id, status: task.status },
+        { taskId: id, status: task.status }
       );
     }
 
@@ -77,7 +77,8 @@ export const POST = withErrorHandler(
       auto_convert_unit: true, // 自动转换单位
       scale: 2, // 缩放比例
       upload_to_printer: true, // 上传到打印机
-      auto_print: true, // 自动开始打印
+      auto_print: true, // 自动开始打印，
+      moonraker_url: "http://192.168.200.209:7125",
     };
 
     // 5. 调用外部打印服务 API
@@ -121,7 +122,7 @@ export const POST = withErrorHandler(
             statusText: response.statusText,
             responseBody: responseText,
             printRequest,
-          },
+          }
         );
 
         throw new AppError(
@@ -131,7 +132,7 @@ export const POST = withErrorHandler(
             statusCode: response.status,
             errorMessage: responseText,
             printRequest,
-          },
+          }
         );
       }
 
@@ -150,7 +151,7 @@ export const POST = withErrorHandler(
           {
             responseText,
             parseError,
-          },
+          }
         );
       }
 
@@ -203,15 +204,17 @@ export const POST = withErrorHandler(
 
       throw new AppError(
         "EXTERNAL_API_ERROR",
-        `调用打印服务失败: ${error instanceof Error ? error.message : String(error)}`,
+        `调用打印服务失败: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         {
           printServiceUrl,
           printRequest,
           originalError: error,
-        },
+        }
       );
     }
-  },
+  }
 );
 
 /**

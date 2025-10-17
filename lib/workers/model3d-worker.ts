@@ -15,7 +15,10 @@ import { createLogger, timer } from "@/lib/logger";
 import type { ModelTaskStatus } from "@/lib/providers/model3d";
 import { createModel3DProvider } from "@/lib/providers/model3d";
 import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
-import { downloadAndUploadModel } from "@/lib/utils/image-storage";
+import {
+  downloadAndUploadModel,
+  downloadAndUploadPreviewImage,
+} from "@/lib/utils/image-storage";
 
 // 创建日志器
 const log = createLogger("Model3DWorker");
@@ -313,6 +316,7 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         resultFiles: status.resultFiles?.map((f) => ({
           type: f.type,
           url: f.url?.substring(0, 100),
+          previewImageUrl: f.previewImageUrl?.substring(0, 100),
         })),
       });
 
@@ -333,6 +337,7 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
           jobId,
           format: MODEL_FORMAT,
           remoteModelUrlPreview: modelFile.url.substring(0, 80) + "...",
+          hasPreviewImage: !!modelFile.previewImageUrl,
         },
       );
 
@@ -350,6 +355,43 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
         storageUrl,
       });
 
+      // 🎯 下载并保存预览图（如果有）
+      let previewImageStorageUrl: string | undefined;
+      if (modelFile.previewImageUrl) {
+        try {
+          log.info("pollModel3DStatus", "开始下载并保存预览图", {
+            taskId,
+            jobId,
+            previewImageUrlPreview:
+              modelFile.previewImageUrl.substring(0, 80) + "...",
+          });
+
+          previewImageStorageUrl = await downloadAndUploadPreviewImage(
+            modelFile.previewImageUrl,
+            taskId,
+          );
+
+          log.info("pollModel3DStatus", "预览图上传成功", {
+            taskId,
+            jobId,
+            previewImageStorageUrl,
+          });
+        } catch (error) {
+          // 预览图下载失败不应阻塞主流程，只记录警告
+          log.warn(
+            "pollModel3DStatus",
+            "预览图下载失败，但不影响模型保存",
+            {
+              taskId,
+              jobId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          );
+        }
+      } else {
+        log.info("pollModel3DStatus", "腾讯云未返回预览图", { taskId, jobId });
+      }
+
       // 更新模型状态为COMPLETED（存储持久化的 URL，而不是临时 URL）
       await prisma.taskModel.update({
         where: { taskId },
@@ -358,6 +400,7 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
           progress: 100,
           format: MODEL_FORMAT, // 明确设置模型格式
           modelUrl: storageUrl, // 持久化的存储 URL
+          previewImageUrl: previewImageStorageUrl, // 预览图 URL（可能为 undefined）
           completedAt: new Date(),
         },
       });

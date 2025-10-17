@@ -92,6 +92,7 @@ model TaskModel {
   // 模型基本信息
   name      String
   modelUrl  String?  // 本地路径: /generated/models/{taskId}.obj (或 .glb)
+  previewImageUrl String?  // 模型预览图 URL (从腾讯云返回的预览图)
 
   // 生成状态
   status    ModelStatus @default(PENDING)
