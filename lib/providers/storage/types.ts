@@ -25,18 +25,20 @@ export interface SaveImageParams {
 
 /**
  * 保存模型参数
+ *
+ * 设计理念：Model 是独立资源，只需要 modelId
  */
 export interface SaveModelParams {
-  taskId: string; // 任务 ID
+  modelId: string; // 模型 ID（唯一标识符）
   modelData: Buffer; // 模型文件 Buffer
   format?: string; // 文件格式 (默认 'glb')
 }
 
 /**
- * 保存通用文件参数
+ * 保存通用文件参数（MTL、纹理等模型附件）
  */
 export interface SaveFileParams {
-  taskId: string; // 任务 ID
+  modelId: string; // 模型 ID（模型相关文件必须关联到模型）
   fileName: string; // 文件名（包含扩展名）
   fileData: Buffer; // 文件 Buffer
   contentType?: string; // MIME 类型（可选）

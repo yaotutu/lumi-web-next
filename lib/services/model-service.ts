@@ -2,9 +2,17 @@
  * 模型管理服务
  * 职责：Model 实体的 CRUD 操作、业务逻辑验证
  * 原则：函数式编程，纯函数优先，使用统一错误处理
+ *
+ * 分为两大类方法：
+ * 1. 用户 API 方法：listUserModels、getModelById、createUploadedModel 等
+ * 2. Worker 方法：createAIGeneratedModel、updateModelProgress、markModelCompleted 等
  */
 
-import type { ModelSource, ModelVisibility } from "@prisma/client";
+import type {
+  ModelSource,
+  ModelVisibility,
+  ModelGenerationStatus,
+} from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { AppError } from "@/lib/utils/errors";
 // Service层不再进行Zod验证，验证在API路由层完成
@@ -320,4 +328,156 @@ export async function getUserModelStats(userId: string) {
   };
 
   return stats;
+}
+
+// ============================================
+// Worker 方法：AI 生成模型的生命周期管理
+// ============================================
+
+/**
+ * 创建 AI 生成的模型记录（Worker 专用）
+ * @param userId 用户ID
+ * @param taskId 任务ID
+ * @param modelData 模型初始数据
+ * @returns 创建的模型记录
+ */
+export async function createAIGeneratedModel(
+  userId: string,
+  taskId: string,
+  modelData: {
+    name: string;
+    prompt: string;
+  },
+) {
+  const model = await prisma.model.create({
+    data: {
+      userId,
+      taskId,
+      source: "AI_GENERATED",
+      name: modelData.name,
+      prompt: modelData.prompt,
+      modelUrl: "", // 初始为空，生成完成后更新
+      generationStatus: "PENDING", // 初始状态为 PENDING
+      progress: 0,
+      providerJobId: "", // 暂时为空，提交任务后更新
+      providerRequestId: "",
+    },
+  });
+
+  return model;
+}
+
+/**
+ * 更新模型的 Provider 任务 ID（Worker 专用）
+ * @param modelId 模型ID
+ * @param providerJobId Provider 任务 ID
+ * @param providerRequestId Provider 请求 ID（可选）
+ */
+export async function updateModelProviderJobId(
+  modelId: string,
+  providerJobId: string,
+  providerRequestId?: string,
+) {
+  await prisma.model.update({
+    where: { id: modelId },
+    data: {
+      providerJobId,
+      ...(providerRequestId && { providerRequestId }),
+    },
+  });
+}
+
+/**
+ * 更新模型生成状态和进度（Worker 专用）
+ * @param modelId 模型ID
+ * @param generationStatus 生成状态
+ * @param progress 进度百分比（0-100）
+ */
+export async function updateModelProgress(
+  modelId: string,
+  generationStatus: ModelGenerationStatus,
+  progress: number,
+) {
+  await prisma.model.update({
+    where: { id: modelId },
+    data: {
+      generationStatus,
+      progress,
+    },
+  });
+}
+
+/**
+ * 标记模型生成完成（Worker 专用）
+ * @param modelId 模型ID
+ * @param resultData 生成结果数据
+ */
+export async function markModelCompleted(
+  modelId: string,
+  resultData: {
+    modelUrl: string;
+    previewImageUrl?: string;
+    format?: string;
+  },
+) {
+  await prisma.model.update({
+    where: { id: modelId },
+    data: {
+      generationStatus: "COMPLETED",
+      progress: 100,
+      modelUrl: resultData.modelUrl,
+      previewImageUrl: resultData.previewImageUrl,
+      format: resultData.format,
+      completedAt: new Date(),
+    },
+  });
+}
+
+/**
+ * 标记模型生成失败（Worker 专用）
+ * @param modelId 模型ID
+ * @param errorMessage 错误信息
+ */
+export async function markModelFailed(
+  modelId: string,
+  errorMessage: string,
+) {
+  await prisma.model.update({
+    where: { id: modelId },
+    data: {
+      generationStatus: "FAILED",
+      failedAt: new Date(),
+      errorMessage,
+    },
+  });
+}
+
+/**
+ * 获取任务关联的所有模型（Worker 专用）
+ * @param taskId 任务ID
+ * @returns 模型列表
+ */
+export async function getModelsByTaskId(taskId: string) {
+  const models = await prisma.model.findMany({
+    where: { taskId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return models;
+}
+
+/**
+ * 检查任务是否有正在生成中的模型（Worker 专用）
+ * @param taskId 任务ID
+ * @returns 是否存在生成中的模型
+ */
+export async function hasGeneratingModel(taskId: string): Promise<boolean> {
+  const count = await prisma.model.count({
+    where: {
+      taskId,
+      generationStatus: "GENERATING",
+    },
+  });
+
+  return count > 0;
 }

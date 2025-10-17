@@ -136,7 +136,7 @@ export async function downloadAndUploadImages(
  * 从远程 URL 下载 3D 模型并上传到存储服务
  *
  * @param remoteUrl 远程模型 URL（如：腾讯云返回的临时 URL）
- * @param taskId 任务 ID
+ * @param modelId 模型 ID（用于存储路径）
  * @param format 模型格式（'glb' 或 'obj'）
  * @returns 存储后的 URL（本地路径或 COS URL）
  *
@@ -144,18 +144,18 @@ export async function downloadAndUploadImages(
  */
 export async function downloadAndUploadModel(
   remoteUrl: string,
-  taskId: string,
+  modelId: string,
   format = "glb",
 ): Promise<string> {
   log.info("downloadAndUploadModel", "开始下载并上传 3D 模型", {
-    taskId,
+    modelId,
     format,
     remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
   });
 
   try {
     // 1. 下载模型到 Buffer
-    log.info("downloadAndUploadModel", "正在下载模型", { taskId });
+    log.info("downloadAndUploadModel", "正在下载模型", { modelId });
 
     const response = await fetch(remoteUrl);
 
@@ -168,7 +168,7 @@ export async function downloadAndUploadModel(
     // 获取 Content-Type（用于验证）
     const contentType = response.headers.get("content-type");
     log.info("downloadAndUploadModel", "响应 Content-Type", {
-      taskId,
+      modelId,
       contentType,
     });
 
@@ -177,7 +177,7 @@ export async function downloadAndUploadModel(
     const modelBuffer = Buffer.from(arrayBuffer);
 
     log.info("downloadAndUploadModel", "模型下载成功", {
-      taskId,
+      modelId,
       format,
       size: modelBuffer.length,
       sizeMB: (modelBuffer.length / 1024 / 1024).toFixed(2),
@@ -188,27 +188,27 @@ export async function downloadAndUploadModel(
 
     if (format === "obj" && isZip) {
       log.info("downloadAndUploadModel", "检测到 OBJ ZIP 压缩包，开始解压", {
-        taskId,
+        modelId,
       });
-      return await handleObjZipArchive(taskId, modelBuffer);
+      return await handleObjZipArchive(modelId, modelBuffer);
     }
 
     // 3. 非 ZIP 文件，直接上传（GLB 等二进制格式）
     const storageProvider = createStorageProvider();
 
     log.info("downloadAndUploadModel", "正在上传到存储服务", {
-      taskId,
+      modelId,
       provider: storageProvider.getName(),
     });
 
     const storageUrl = await storageProvider.saveTaskModel({
-      taskId,
+      modelId,
       modelData: modelBuffer,
       format,
     });
 
     log.info("downloadAndUploadModel", "模型上传成功", {
-      taskId,
+      modelId,
       storageUrl,
       provider: storageProvider.getName(),
     });
@@ -216,7 +216,7 @@ export async function downloadAndUploadModel(
     return storageUrl;
   } catch (error) {
     log.error("downloadAndUploadModel", "下载或上传模型失败", error, {
-      taskId,
+      modelId,
       remoteUrl,
     });
     throw error;
@@ -227,23 +227,23 @@ export async function downloadAndUploadModel(
  * 从远程 URL 下载预览图并上传到存储服务
  *
  * @param remoteUrl 远程预览图 URL（如：腾讯云返回的预览图 URL）
- * @param taskId 任务 ID
+ * @param modelId 模型 ID（用于存储路径）
  * @returns 存储后的 URL（本地路径或 COS URL）
  *
  * @throws 如果下载或上传失败
  */
 export async function downloadAndUploadPreviewImage(
   remoteUrl: string,
-  taskId: string,
+  modelId: string,
 ): Promise<string> {
   log.info("downloadAndUploadPreviewImage", "开始下载并上传预览图", {
-    taskId,
+    modelId,
     remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
   });
 
   try {
     // 1. 下载预览图到 Buffer
-    log.info("downloadAndUploadPreviewImage", "正在下载预览图", { taskId });
+    log.info("downloadAndUploadPreviewImage", "正在下载预览图", { modelId });
 
     const response = await fetch(remoteUrl);
 
@@ -260,7 +260,7 @@ export async function downloadAndUploadPreviewImage(
         "downloadAndUploadPreviewImage",
         "响应的 Content-Type 不是图片类型",
         {
-          taskId,
+          modelId,
           contentType,
         },
       );
@@ -271,7 +271,7 @@ export async function downloadAndUploadPreviewImage(
     const imageBuffer = Buffer.from(arrayBuffer);
 
     log.info("downloadAndUploadPreviewImage", "预览图下载成功", {
-      taskId,
+      modelId,
       size: imageBuffer.length,
       sizeKB: (imageBuffer.length / 1024).toFixed(2),
     });
@@ -280,20 +280,20 @@ export async function downloadAndUploadPreviewImage(
     const storageProvider = createStorageProvider();
 
     log.info("downloadAndUploadPreviewImage", "正在上传预览图到存储服务", {
-      taskId,
+      modelId,
       provider: storageProvider.getName(),
     });
 
     // 使用通用文件保存方法，文件名为 preview.png
     const storageUrl = await storageProvider.saveFile({
-      taskId,
+      modelId,
       fileName: "preview.png",
       fileData: imageBuffer,
       contentType: "image/png",
     });
 
     log.info("downloadAndUploadPreviewImage", "预览图上传成功", {
-      taskId,
+      modelId,
       storageUrl,
       provider: storageProvider.getName(),
     });
@@ -301,7 +301,7 @@ export async function downloadAndUploadPreviewImage(
     return storageUrl;
   } catch (error) {
     log.error("downloadAndUploadPreviewImage", "下载或上传预览图失败", error, {
-      taskId,
+      modelId,
       remoteUrl,
     });
     throw error;
@@ -312,12 +312,12 @@ export async function downloadAndUploadPreviewImage(
  * 处理 OBJ ZIP 压缩包
  * 解压并上传 OBJ、MTL、纹理文件到存储服务
  *
- * @param taskId 任务 ID
+ * @param modelId 模型 ID（用于存储路径）
  * @param zipBuffer ZIP 文件的 Buffer
  * @returns OBJ 文件的存储 URL
  */
 async function handleObjZipArchive(
-  taskId: string,
+  modelId: string,
   zipBuffer: Buffer,
 ): Promise<string> {
   const JSZip = (await import("jszip")).default;
@@ -325,7 +325,7 @@ async function handleObjZipArchive(
 
   try {
     // 1. 解压 ZIP 文件
-    log.info("handleObjZipArchive", "正在解压 ZIP 文件", { taskId });
+    log.info("handleObjZipArchive", "正在解压 ZIP 文件", { modelId });
     const zip = await JSZip.loadAsync(zipBuffer);
 
     // 2. 查找 OBJ 文件
@@ -334,7 +334,7 @@ async function handleObjZipArchive(
 
     const files = Object.keys(zip.files);
     log.info("handleObjZipArchive", "ZIP 包含的文件", {
-      taskId,
+      modelId,
       files,
     });
 
@@ -350,7 +350,7 @@ async function handleObjZipArchive(
       const extension = fileName.split(".").pop()?.toLowerCase() || "";
 
       log.info("handleObjZipArchive", `处理文件: ${fileName}`, {
-        taskId,
+        modelId,
         size: fileBuffer.length,
         extension,
       });
@@ -374,13 +374,13 @@ async function handleObjZipArchive(
 
       // 上传到存储服务（统一命名）
       const fileUrl = await storageProvider.saveFile({
-        taskId,
+        modelId,
         fileName: normalizedFileName,
         fileData: fileBuffer,
       });
 
       log.info("handleObjZipArchive", `文件已上传: ${normalizedFileName}`, {
-        taskId,
+        modelId,
         originalName: fileName,
         normalizedName: normalizedFileName,
         extension,
@@ -399,7 +399,7 @@ async function handleObjZipArchive(
     }
 
     log.info("handleObjZipArchive", "OBJ ZIP 解压和上传完成", {
-      taskId,
+      modelId,
       objFileUrl,
       totalFiles: files.length,
     });
@@ -407,7 +407,7 @@ async function handleObjZipArchive(
     return objFileUrl;
   } catch (error) {
     log.error("handleObjZipArchive", "处理 OBJ ZIP 压缩包失败", error, {
-      taskId,
+      modelId,
     });
     throw error;
   }

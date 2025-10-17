@@ -97,10 +97,14 @@ export class TencentCOSAdapter extends BaseStorageProvider {
 
   /**
    * 保存 3D 模型到 COS
+   *
+   * 🎯 最佳实践：Model 是独立资源，路径为 models/{modelId}/
+   * 这样每个模型都有自己独立的命名空间，清晰且可扩展
    */
   protected async saveTaskModelImpl(params: SaveModelParams): Promise<string> {
     const format = params.format || "glb";
-    const key = `models/${params.taskId}.${format}`;
+    // 路径: models/{modelId}/model.{format}
+    const key = `models/${params.modelId}/model.${format}`;
 
     // 根据格式设置 Content-Type
     const contentType = this.getModelContentType(format);
@@ -113,11 +117,13 @@ export class TencentCOSAdapter extends BaseStorageProvider {
   }
 
   /**
-   * 保存通用文件到 COS (MTL、纹理等)
+   * 保存通用文件到 COS (MTL、纹理等模型附件)
+   *
+   * 🎯 所有模型相关文件都放在同一目录：models/{modelId}/{fileName}
    */
   protected async saveFileImpl(params: SaveFileParams): Promise<string> {
-    // 构建文件路径: models/{taskId}/{fileName}
-    const key = `models/${params.taskId}/${params.fileName}`;
+    // 路径: models/{modelId}/{fileName}
+    const key = `models/${params.modelId}/${params.fileName}`;
 
     // 根据文件扩展名猜测 Content-Type
     const extension = params.fileName.split(".").pop()?.toLowerCase() || "";

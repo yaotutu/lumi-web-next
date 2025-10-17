@@ -241,7 +241,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
     ]);
 
     return this.saveTaskModel({
-      taskId,
+      modelId: `mock-${taskId}`, // Mock 模型使用 taskId 作为标识
       modelData: mockModelBuffer,
       format: "glb",
     });
