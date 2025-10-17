@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as ModelService from "@/lib/services/model-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import {
   listPublicModelsSchema,
@@ -57,9 +58,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   // 验证输入（错误会被withErrorHandler自动捕获）
   const validatedData = createUploadedModelSchema.parse(body);
 
-  // TODO: 获取当前用户ID（从session或JWT）
-  // 临时使用硬编码的测试用户ID
-  const userId = "test-user-id";
+  // 获取当前用户ID
+  const userId = getCurrentUserId();
 
   // 创建模型记录
   const model = await ModelService.createUploadedModel(userId, validatedData);

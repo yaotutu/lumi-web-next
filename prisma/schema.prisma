@@ -65,7 +65,7 @@ model TaskImage {
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   // 图片数据
-  // ⚠️ 当前存储：阿里云临时URL（24小时有效期）
+  // ⚠️ 当前存储：根据配置可能是阿里云临时URL（24小时有效期）或 SiliconFlow 永久URL
   // 格式示例: https://dashscope-result.oss-cn-beijing.aliyuncs.com/xxx.png
   // TODO: 对接OSS后改为本地路径: /generated/images/{taskId}/0.png
   url       String
@@ -74,9 +74,9 @@ model TaskImage {
   // 生成该图片使用的提示词（可选，用于调试和追踪）
   prompt    String?
 
-  // 阿里云API数据(可选)
-  aliyunTaskId    String?
-  aliyunRequestId String?
+  // 图片生成 Provider API 数据（提供商无关，可能是阿里云、SiliconFlow等）
+  providerTaskId    String?      // Provider 返回的任务ID
+  providerRequestId String?      // Provider 返回的请求ID
 
   createdAt DateTime @default(now())
 
@@ -117,9 +117,9 @@ model Model {
   generationStatus  ModelGenerationStatus?  // AI生成的状态
   progress          Int @default(0)
 
-  // 3D生成API相关（AI生成）
-  apiTaskId     String?
-  apiRequestId  String?
+  // 3D生成 Provider API 相关（提供商无关，可能是腾讯云混元3D等）
+  providerJobId     String?      // Provider 返回的任务/作业ID（如腾讯云的 JobId）
+  providerRequestId String?      // Provider 返回的请求ID
 
   // 打印服务相关
   sliceTaskId String?  // 打印服务返回的切片任务ID，用于查询打印状态

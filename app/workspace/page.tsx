@@ -89,10 +89,24 @@ function WorkspaceContent() {
         if (taskData.success) {
           setTask(taskData.data);
 
-          // 如果任务完成或失败，停止轮询
+          // 如果任务完成，确保获取到最新数据后再停止轮询
+          // 对于 MODEL_COMPLETED 状态，检查是否已有完成的模型
+          if (taskData.data.status === "MODEL_COMPLETED") {
+            const hasCompletedModel = taskData.data.models?.some(
+              (m: { generationStatus: string }) =>
+                m.generationStatus === "COMPLETED",
+            );
+            if (hasCompletedModel) {
+              console.log("模型生成完成，已获取到最新模型数据，停止轮询");
+              return false; // 有完成的模型，停止轮询
+            }
+            console.log("任务状态为 MODEL_COMPLETED，但尚未获取到完成的模型，继续轮询");
+            return true; // 没有完成的模型，继续轮询
+          }
+
+          // 其他完成状态直接停止轮询
           if (
             taskData.data.status === "IMAGE_COMPLETED" ||
-            taskData.data.status === "MODEL_COMPLETED" ||
             taskData.data.status === "FAILED" ||
             taskData.data.status === "CANCELLED"
           ) {

@@ -28,15 +28,31 @@ export default function ModelPreview({
   task,
   taskId,
 }: ModelPreviewProps) {
-  // 获取最新的模型（无论状态如何）
-  // 优先获取正在生成中的模型，如果没有则获取最后一个模型
+  // 获取最新的模型（优化选择逻辑）
+  // 策略：
+  // 1. 优先选择 generationStatus 为 COMPLETED 的最新模型
+  // 2. 如果没有 COMPLETED 模型，选择最新的模型（可能是 GENERATING 或 PENDING）
   const latestModel = task?.models?.length
-    ? task.models
-        .slice()
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        )[0]
+    ? (() => {
+        const completedModels = task.models.filter(
+          (m) => m.generationStatus === "COMPLETED",
+        );
+        if (completedModels.length > 0) {
+          // 从已完成的模型中选择最新的
+          return completedModels.sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )[0];
+        }
+        // 如果没有已完成的模型，选择最新创建的模型（可能是正在生成中）
+        return task.models
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime(),
+          )[0];
+      })()
     : undefined;
 
   // 调试日志：查看选择的模型
@@ -221,9 +237,11 @@ export default function ModelPreview({
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
     // 如果任务已完成模型生成（任务状态为 MODEL_COMPLETED 或者模型的 generationStatus 为 COMPLETED）
+    // 🛡️ 防御性检查：必须确保 modelUrl 存在，避免显示空模型
     if (
-      task?.status === "MODEL_COMPLETED" ||
-      latestModel?.generationStatus === "COMPLETED"
+      (task?.status === "MODEL_COMPLETED" ||
+        latestModel?.generationStatus === "COMPLETED") &&
+      latestModel?.modelUrl // 必须有 modelUrl 才认为真正完成
     ) {
       setStatus("completed");
       setProgress(latestModel?.progress || 100);
@@ -232,9 +250,11 @@ export default function ModelPreview({
 
     // 如果正在生成模型（包括等待和生成中）
     // 只要任务状态是 MODEL_PENDING 或 MODEL_GENERATING，就显示生成中
+    // 🛡️ 边缘情况处理：即使状态为 MODEL_COMPLETED，但 modelUrl 为空时，也显示生成中
     if (
       task?.status === "MODEL_PENDING" ||
-      task?.status === "MODEL_GENERATING"
+      task?.status === "MODEL_GENERATING" ||
+      (task?.status === "MODEL_COMPLETED" && !latestModel?.modelUrl)
     ) {
       setStatus("generating");
       setProgress(latestModel?.progress || 0);

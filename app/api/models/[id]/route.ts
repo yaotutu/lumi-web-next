@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as ModelService from "@/lib/services/model-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import {
   modelIdSchema,
@@ -57,9 +58,8 @@ export const PATCH = withErrorHandler(
     const modelId = modelIdSchema.parse(id);
     const validatedData = updateModelSchema.parse(body);
 
-    // TODO: 获取当前用户ID（从session或JWT）
-    // 临时使用硬编码的测试用户ID
-    const userId = "test-user-id";
+    // 获取当前用户ID
+    const userId = getCurrentUserId();
 
     // 更新模型（包含权限验证）
     const model = await ModelService.updateModel(
@@ -90,9 +90,8 @@ export const DELETE = withErrorHandler(
     // 验证模型 ID
     const modelId = modelIdSchema.parse(id);
 
-    // TODO: 获取当前用户ID（从session或JWT）
-    // 临时使用硬编码的测试用户ID
-    const userId = "test-user-id";
+    // 获取当前用户ID
+    const userId = getCurrentUserId();
 
     // 删除模型（包含权限验证）
     await ModelService.deleteModel(modelId, userId);

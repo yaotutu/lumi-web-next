@@ -41,8 +41,8 @@ export async function addImageToTask(taskId: string, imageData: AddImageInput) {
         taskId,
         url: imageData.url,
         index: imageData.index,
-        aliyunTaskId: imageData.aliyunTaskId,
-        aliyunRequestId: imageData.aliyunRequestId,
+        providerTaskId: imageData.providerTaskId,
+        providerRequestId: imageData.providerRequestId,
       },
     });
 

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as ModelService from "@/lib/services/model-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
@@ -19,9 +20,8 @@ import { withErrorHandler } from "@/lib/utils/errors";
  * }
  */
 export const GET = withErrorHandler(async (_request: NextRequest) => {
-  // TODO: 获取当前用户ID（从session或JWT）
-  // 临时使用硬编码的测试用户ID
-  const userId = "test-user-id";
+  // 获取当前用户ID
+  const userId = getCurrentUserId();
 
   // 获取用户的模型统计
   const stats = await ModelService.getUserModelStats(userId);

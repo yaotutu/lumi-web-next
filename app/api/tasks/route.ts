@@ -1,7 +1,7 @@
 import type { TaskStatus } from "@prisma/client";
 import { type NextRequest, NextResponse } from "next/server";
-import { MOCK_USER } from "@/lib/constants";
 import * as TaskService from "@/lib/services/task-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import {
   createTaskSchema,
@@ -28,8 +28,11 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
   const validatedParams = listTasksQuerySchema.parse(queryParams);
   const { status, limit } = validatedParams;
 
+  // 获取当前用户ID
+  const userId = getCurrentUserId();
+
   // 调用Service层获取任务列表
-  const tasks = await TaskService.listTasks(MOCK_USER.id, { status, limit });
+  const tasks = await TaskService.listTasks(userId, { status, limit });
 
   return NextResponse.json({
     success: true,
@@ -52,10 +55,13 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const validatedData = createTaskSchema.parse(body);
   const { prompt } = validatedData;
 
+  // 获取当前用户ID
+  const userId = getCurrentUserId();
+
   // 创建任务并直接设置状态为IMAGE_GENERATING
   // Worker会自动检测并处理此状态的任务
   const task = await TaskService.createTaskWithStatus(
-    MOCK_USER.id,
+    userId,
     prompt,
     "IMAGE_GENERATING",
   );

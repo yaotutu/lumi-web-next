@@ -208,8 +208,8 @@ async function processTask(taskId: string): Promise<void> {
         modelUrl: "", // 初始为空，生成完成后更新
         generationStatus: "PENDING", // 初始状态为 PENDING，对应 Provider 的 WAIT
         progress: 0,
-        apiTaskId: tencentResponse.jobId,
-        apiRequestId: tencentResponse.requestId,
+        providerJobId: tencentResponse.jobId,
+        providerRequestId: tencentResponse.requestId,
       },
     });
 
@@ -307,17 +307,21 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
     else if (status.status === "DONE") progress = 100;
     else if (status.status === "FAIL") progress = 0;
 
-    // 更新本地模型状态和进度
-    await prisma.model.updateMany({
-      where: {
-        taskId,
-        generationStatus: { not: "COMPLETED" }, // 只更新未完成的模型
-      },
-      data: {
-        generationStatus: businessStatus, // 同步更新业务状态
-        progress,
-      },
-    });
+    // 🔒 原子更新策略：只在 WAIT/RUN 状态时更新 generationStatus
+    // DONE 状态不在此处更新，避免 generationStatus=COMPLETED 先于 modelUrl 设置
+    // 这样可以保证前端查询时，COMPLETED 状态必然伴随有效的 modelUrl
+    if (status.status === "WAIT" || status.status === "RUN") {
+      await prisma.model.updateMany({
+        where: {
+          taskId,
+          generationStatus: { not: "COMPLETED" }, // 只更新未完成的模型
+        },
+        data: {
+          generationStatus: businessStatus, // WAIT → PENDING, RUN → GENERATING
+          progress,
+        },
+      });
+    }
 
     // 处理完成状态
     if (status.status === "DONE") {
@@ -401,11 +405,11 @@ async function pollModel3DStatus(taskId: string, jobId: string): Promise<void> {
       }
 
       // 更新模型状态为COMPLETED（存储持久化的 URL，而不是临时 URL）
-      // 使用 apiTaskId 精确定位当前正在处理的模型记录
+      // 使用 providerJobId 精确定位当前正在处理的模型记录
       await prisma.model.updateMany({
         where: {
           taskId,
-          apiTaskId: jobId, // 精确匹配当前任务的 jobId
+          providerJobId: jobId, // 精确匹配当前任务的 jobId
         },
         data: {
           generationStatus: "COMPLETED",

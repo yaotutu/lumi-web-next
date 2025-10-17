@@ -76,8 +76,8 @@ export const addImageSchema = z.object({
     .number()
     .min(0, { message: "图片索引不能小于0" })
     .max(100, { message: "图片索引不能大于100" }),
-  aliyunTaskId: z.string().optional(),
-  aliyunRequestId: z.string().optional(),
+  providerTaskId: z.string().optional(),
+  providerRequestId: z.string().optional(),
 });
 
 /**

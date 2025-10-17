@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import * as ModelService from "@/lib/services/model-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { listUserModelsSchema } from "@/lib/validators/model-validators";
 
@@ -14,9 +15,8 @@ import { listUserModelsSchema } from "@/lib/validators/model-validators";
  * - offset: 分页偏移 (默认: 0)
  */
 export const GET = withErrorHandler(async (request: NextRequest) => {
-  // TODO: 获取当前用户ID（从session或JWT）
-  // 临时使用硬编码的测试用户ID
-  const userId = "test-user-id";
+  // 获取当前用户ID
+  const userId = getCurrentUserId();
 
   // 从查询参数获取筛选条件
   const { searchParams } = new URL(request.url);
