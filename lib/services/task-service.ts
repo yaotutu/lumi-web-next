@@ -1,13 +1,26 @@
 /**
- * 任务管理服务
- * 职责：任务的CRUD操作、状态管理、业务逻辑验证
- * 原则：函数式编程，纯函数优先，使用统一错误处理
+ * 任务管理服务 - 业务逻辑层
+ *
+ * 职责：
+ * - Task 实体的业务逻辑处理
+ * - 任务状态管理、业务规则判断
+ * - 调用 Repository 层进行数据访问
+ *
+ * 原则：
+ * - 函数式编程，纯函数优先
+ * - 使用统一错误处理
+ * - 不直接操作数据库，通过 Repository 层
  */
 
 import type { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createStorageProvider } from "@/lib/providers/storage";
 import { AppError } from "@/lib/utils/errors";
+import {
+  TaskRepository,
+  TaskImageRepository,
+  ModelRepository,
+} from "@/lib/repositories";
 // Service层不再进行Zod验证，验证在API路由层完成
 
 /**
@@ -23,28 +36,8 @@ export async function listTasks(
     limit?: number;
   },
 ) {
-  // 参数已在外层API路由验证，直接使用
-  const { status, limit = 20 } = options || {};
-
-  // 查询任务，包含关联的图片和模型
-  const tasks = await prisma.task.findMany({
-    where: {
-      userId,
-      ...(status && { status }),
-    },
-    include: {
-      images: {
-        orderBy: { index: "asc" },
-      },
-      models: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: limit,
-  });
-
-  return tasks;
+  // 调用 Repository 层查询用户任务列表
+  return TaskRepository.findTasksByUserId(userId, options);
 }
 
 /**
@@ -54,16 +47,8 @@ export async function listTasks(
  * @throws AppError NOT_FOUND - 任务不存在
  */
 export async function getTaskById(taskId: string) {
-  // 查询任务
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    include: {
-      images: {
-        orderBy: { index: "asc" },
-      },
-      models: true,
-    },
-  });
+  // 调用 Repository 层查询任务
+  const task = await TaskRepository.findTaskById(taskId);
 
   // 验证任务存在
   if (!task) {
@@ -77,7 +62,7 @@ export async function getTaskById(taskId: string) {
  * 创建新任务
  * @param userId 用户ID
  * @param prompt 文本提示词（已验证）
- * @returns 创建的任务对象
+ * @returns 创建的任务对象（包含关联的 images 和 models）
  * @throws AppError VALIDATION_ERROR - 提示词验证失败
  */
 export async function createTask(userId: string, prompt: string) {
@@ -94,20 +79,15 @@ export async function createTask(userId: string, prompt: string) {
     throw new AppError("VALIDATION_ERROR", "提示词长度不能超过500个字符");
   }
 
-  // 创建数据库记录
-  const task = await prisma.task.create({
-    data: {
-      userId,
-      prompt: trimmedPrompt,
-      status: "IMAGE_PENDING", // 默认状态为图片等待生成
-    },
-    include: {
-      images: true,
-      models: true,
-    },
+  // 调用 Repository 层创建任务
+  const task = await TaskRepository.createTask({
+    userId,
+    prompt: trimmedPrompt,
+    status: "IMAGE_PENDING", // 默认状态为图片等待生成
   });
 
-  return task;
+  // 查询完整的任务对象（包含关联数据）
+  return getTaskById(task.id);
 }
 
 /**
@@ -115,7 +95,7 @@ export async function createTask(userId: string, prompt: string) {
  * @param userId 用户ID
  * @param prompt 文本提示词（已验证）
  * @param status 初始状态
- * @returns 创建的任务对象
+ * @returns 创建的任务对象（包含关联的 images 和 models）
  * @throws AppError VALIDATION_ERROR - 提示词验证失败
  */
 export async function createTaskWithStatus(
@@ -136,27 +116,22 @@ export async function createTaskWithStatus(
     throw new AppError("VALIDATION_ERROR", "提示词长度不能超过500个字符");
   }
 
-  // 创建数据库记录
-  const task = await prisma.task.create({
-    data: {
-      userId,
-      prompt: trimmedPrompt,
-      status,
-    },
-    include: {
-      images: true,
-      models: true,
-    },
+  // 调用 Repository 层创建任务
+  const task = await TaskRepository.createTask({
+    userId,
+    prompt: trimmedPrompt,
+    status,
   });
 
-  return task;
+  // 查询完整的任务对象（包含关联数据）
+  return getTaskById(task.id);
 }
 
 /**
  * 更新任务信息
  * @param taskId 任务ID
  * @param data 要更新的数据（已验证）
- * @returns 更新后的任务对象
+ * @returns 更新后的任务对象（包含关联的 images 和 models）
  * @throws AppError NOT_FOUND - 任务不存在
  * @throws AppError VALIDATION_ERROR - 数据验证失败
  */
@@ -184,17 +159,11 @@ export async function updateTask(
     throw new AppError("VALIDATION_ERROR", "选中图片索引必须在0-3之间");
   }
 
-  // 更新数据库记录
-  const task = await prisma.task.update({
-    where: { id: taskId },
-    data,
-    include: {
-      images: true,
-      models: true,
-    },
-  });
+  // 调用 Repository 层更新任务
+  await TaskRepository.updateTask(taskId, data);
 
-  return task;
+  // 查询并返回完整的任务对象（包含关联数据）
+  return getTaskById(taskId);
 }
 
 /**
@@ -210,10 +179,8 @@ export async function deleteTask(taskId: string) {
   const storageProvider = createStorageProvider();
   await storageProvider.deleteTaskResources(taskId);
 
-  // 删除数据库记录（级联删除images和model）
-  await prisma.task.delete({
-    where: { id: taskId },
-  });
+  // 调用 Repository 层删除数据库记录（级联删除 images 和 model）
+  await TaskRepository.deleteTask(taskId);
 }
 
 /**
@@ -242,14 +209,11 @@ export async function cancelTask(taskId: string) {
     });
   }
 
-  // 更新任务状态为失败，并记录取消原因
-  await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: "FAILED",
-      failedAt: new Date(),
-      errorMessage: "用户取消",
-    },
+  // 调用 Repository 层更新任务状态为失败，并记录取消原因
+  await TaskRepository.updateTask(taskId, {
+    status: "FAILED",
+    failedAt: new Date(),
+    errorMessage: "用户取消",
   });
 
   return task;
@@ -279,6 +243,7 @@ export async function retryImageGeneration(taskId: string) {
   }
 
   // 事务：清理旧数据 + 重置任务状态
+  // 注意：对于涉及多表操作的复杂事务，在 Service 层使用 prisma.$transaction 是合理的
   const updatedTask = await prisma.$transaction(async (tx) => {
     // 1. 删除旧的图片记录
     await tx.taskImage.deleteMany({
@@ -353,6 +318,7 @@ export async function retryModelGeneration(taskId: string) {
   }
 
   // 事务：清理旧模型 + 重置任务状态
+  // 注意：对于涉及多表操作的复杂事务，在 Service 层使用 prisma.$transaction 是合理的
   const updatedTask = await prisma.$transaction(async (tx) => {
     // 1. 删除旧的模型记录
     await tx.model.deleteMany({
@@ -393,13 +359,8 @@ export async function updateModelSliceTaskId(
   taskId: string,
   sliceTaskId: string,
 ) {
-  // 查询任务（需要包含 models）
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    include: {
-      models: true,
-    },
-  });
+  // 调用 Repository 层查询任务（需要包含 models）
+  const task = await TaskRepository.findTaskById(taskId);
 
   // 验证任务存在
   if (!task) {
@@ -414,10 +375,9 @@ export async function updateModelSliceTaskId(
     throw new AppError("NOT_FOUND", `任务 ${taskId} 没有已完成的模型`);
   }
 
-  // 更新模型的 sliceTaskId
-  const updatedModel = await prisma.model.update({
-    where: { id: latestModel.id },
-    data: { sliceTaskId },
+  // 调用 Repository 层更新模型的 sliceTaskId
+  const updatedModel = await ModelRepository.updateModel(latestModel.id, {
+    sliceTaskId,
   });
 
   return updatedModel;

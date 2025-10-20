@@ -1,7 +1,15 @@
 /**
- * 模型管理服务
- * 职责：Model 实体的 CRUD 操作、业务逻辑验证
- * 原则：函数式编程，纯函数优先，使用统一错误处理
+ * 模型管理服务 - 业务逻辑层
+ *
+ * 职责：
+ * - Model 实体的业务逻辑处理
+ * - 权限验证、业务规则判断
+ * - 调用 Repository 层进行数据访问
+ *
+ * 原则：
+ * - 函数式编程，纯函数优先
+ * - 使用统一错误处理
+ * - 不直接操作数据库，通过 Repository 层
  *
  * 分为两大类方法：
  * 1. 用户 API 方法：listUserModels、getModelById、createUploadedModel 等
@@ -13,8 +21,8 @@ import type {
   ModelVisibility,
   ModelGenerationStatus,
 } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
 import { AppError } from "@/lib/utils/errors";
+import { ModelRepository } from "@/lib/repositories";
 // Service层不再进行Zod验证，验证在API路由层完成
 
 /**
@@ -32,23 +40,8 @@ export async function listUserModels(
     offset?: number;
   },
 ) {
-  const { source, visibility, limit = 20, offset = 0 } = options || {};
-
-  // 查询用户的模型，按创建时间倒序
-  const models = await prisma.model.findMany({
-    where: {
-      userId,
-      ...(source && { source }),
-      ...(visibility && { visibility }),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: limit,
-    skip: offset,
-  });
-
-  return models;
+  // 调用 Repository 层查询用户模型
+  return ModelRepository.findModelsByUserId(userId, options);
 }
 
 /**
@@ -61,35 +54,8 @@ export async function listPublicModels(options?: {
   limit?: number;
   offset?: number;
 }) {
-  const { sortBy = "recent", limit = 20, offset = 0 } = options || {};
-
-  // 排序规则
-  const orderBy =
-    sortBy === "popular"
-      ? { likeCount: "desc" as const }
-      : { publishedAt: "desc" as const };
-
-  // 查询公开模型
-  const models = await prisma.model.findMany({
-    where: {
-      visibility: "PUBLIC",
-      publishedAt: { not: null }, // 必须已发布
-    },
-    orderBy,
-    take: limit,
-    skip: offset,
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-  });
-
-  return models;
+  // 调用 Repository 层查询公开模型
+  return ModelRepository.findPublicModels(options);
 }
 
 /**
@@ -102,25 +68,7 @@ export async function listPublicModels(options?: {
  */
 export async function getModelById(modelId: string, userId?: string) {
   // 查询模型
-  const model = await prisma.model.findUnique({
-    where: { id: modelId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      task: {
-        select: {
-          id: true,
-          prompt: true,
-          createdAt: true,
-        },
-      },
-    },
-  });
+  const model = await ModelRepository.findModelById(modelId);
 
   // 验证模型存在
   if (!model) {
@@ -134,10 +82,7 @@ export async function getModelById(modelId: string, userId?: string) {
 
   // 增加浏览次数（仅公开模型且非创建者访问时）
   if (model.visibility === "PUBLIC" && model.userId !== userId) {
-    await prisma.model.update({
-      where: { id: modelId },
-      data: { viewCount: { increment: 1 } },
-    });
+    await ModelRepository.incrementViewCount(modelId);
   }
 
   return model;
@@ -161,24 +106,20 @@ export async function createUploadedModel(
     visibility?: ModelVisibility;
   },
 ) {
-  // 创建模型记录
-  const model = await prisma.model.create({
-    data: {
-      userId,
-      source: "USER_UPLOADED",
-      name: modelData.name.trim(),
-      description: modelData.description?.trim(),
-      modelUrl: modelData.modelUrl,
-      previewImageUrl: modelData.previewImageUrl,
-      format: modelData.format || "OBJ",
-      fileSize: modelData.fileSize,
-      visibility: modelData.visibility || "PRIVATE",
-      // 用户上传的模型立即完成
-      completedAt: new Date(),
-    },
+  // 调用 Repository 层创建模型
+  return ModelRepository.createUploadedModel({
+    user: { connect: { id: userId } },
+    source: "USER_UPLOADED",
+    name: modelData.name.trim(),
+    description: modelData.description?.trim(),
+    modelUrl: modelData.modelUrl,
+    previewImageUrl: modelData.previewImageUrl,
+    format: modelData.format || "OBJ",
+    fileSize: modelData.fileSize,
+    visibility: modelData.visibility || "PRIVATE",
+    // 用户上传的模型立即完成
+    completedAt: new Date(),
   });
-
-  return model;
 }
 
 /**
@@ -200,9 +141,7 @@ export async function updateModel(
   },
 ) {
   // 验证模型存在且用户有权限
-  const existingModel = await prisma.model.findUnique({
-    where: { id: modelId },
-  });
+  const existingModel = await ModelRepository.findModelById(modelId);
 
   if (!existingModel) {
     throw new AppError("NOT_FOUND", `模型不存在: ${modelId}`);
@@ -235,13 +174,8 @@ export async function updateModel(
     }
   }
 
-  // 更新模型记录
-  const model = await prisma.model.update({
-    where: { id: modelId },
-    data: updatePayload,
-  });
-
-  return model;
+  // 调用 Repository 层更新模型
+  return ModelRepository.updateModel(modelId, updatePayload);
 }
 
 /**
@@ -253,9 +187,7 @@ export async function updateModel(
  */
 export async function deleteModel(modelId: string, userId: string) {
   // 验证模型存在且用户有权限
-  const existingModel = await prisma.model.findUnique({
-    where: { id: modelId },
-  });
+  const existingModel = await ModelRepository.findModelById(modelId);
 
   if (!existingModel) {
     throw new AppError("NOT_FOUND", `模型不存在: ${modelId}`);
@@ -266,9 +198,7 @@ export async function deleteModel(modelId: string, userId: string) {
   }
 
   // 删除数据库记录
-  await prisma.model.delete({
-    where: { id: modelId },
-  });
+  await ModelRepository.deleteModel(modelId);
 
   // TODO: 删除存储中的文件（modelUrl, previewImageUrl）
   // 需要调用 StorageProvider.deleteFile()
@@ -279,10 +209,7 @@ export async function deleteModel(modelId: string, userId: string) {
  * @param modelId 模型ID
  */
 export async function incrementDownloadCount(modelId: string) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: { downloadCount: { increment: 1 } },
-  });
+  await ModelRepository.incrementDownloadCount(modelId);
 }
 
 /**
@@ -291,10 +218,7 @@ export async function incrementDownloadCount(modelId: string) {
  * @param increment 增加还是减少（1 或 -1）
  */
 export async function updateLikeCount(modelId: string, increment: 1 | -1) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: { likeCount: { increment } },
-  });
+  await ModelRepository.updateLikeCount(modelId, increment);
 }
 
 /**
@@ -303,17 +227,8 @@ export async function updateLikeCount(modelId: string, increment: 1 | -1) {
  * @returns 统计数据
  */
 export async function getUserModelStats(userId: string) {
-  // 查询用户的所有模型
-  const models = await prisma.model.findMany({
-    where: { userId },
-    select: {
-      source: true,
-      visibility: true,
-      viewCount: true,
-      likeCount: true,
-      downloadCount: true,
-    },
-  });
+  // 查询用户的所有模型（用于统计）
+  const models = await ModelRepository.findAllModelsByUserId(userId);
 
   // 统计数据
   const stats = {
@@ -349,22 +264,13 @@ export async function createAIGeneratedModel(
     prompt: string;
   },
 ) {
-  const model = await prisma.model.create({
-    data: {
-      userId,
-      taskId,
-      source: "AI_GENERATED",
-      name: modelData.name,
-      prompt: modelData.prompt,
-      modelUrl: "", // 初始为空，生成完成后更新
-      generationStatus: "PENDING", // 初始状态为 PENDING
-      progress: 0,
-      providerJobId: "", // 暂时为空，提交任务后更新
-      providerRequestId: "",
-    },
+  // 调用 Repository 层创建 AI 生成的模型
+  return ModelRepository.createAIGeneratedModel({
+    userId,
+    taskId,
+    name: modelData.name,
+    prompt: modelData.prompt,
   });
-
-  return model;
 }
 
 /**
@@ -378,13 +284,14 @@ export async function updateModelProviderJobId(
   providerJobId: string,
   providerRequestId?: string,
 ) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: {
-      providerJobId,
-      ...(providerRequestId && { providerRequestId }),
-    },
-  });
+  // 准备更新数据
+  const updateData: Record<string, unknown> = { providerJobId };
+  if (providerRequestId) {
+    updateData.providerRequestId = providerRequestId;
+  }
+
+  // 调用 Repository 层更新模型
+  await ModelRepository.updateModel(modelId, updateData);
 }
 
 /**
@@ -398,12 +305,10 @@ export async function updateModelProgress(
   generationStatus: ModelGenerationStatus,
   progress: number,
 ) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: {
-      generationStatus,
-      progress,
-    },
+  // 调用 Repository 层更新模型状态和进度
+  await ModelRepository.updateModel(modelId, {
+    generationStatus,
+    progress,
   });
 }
 
@@ -420,16 +325,14 @@ export async function markModelCompleted(
     format?: string;
   },
 ) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: {
-      generationStatus: "COMPLETED",
-      progress: 100,
-      modelUrl: resultData.modelUrl,
-      previewImageUrl: resultData.previewImageUrl,
-      format: resultData.format,
-      completedAt: new Date(),
-    },
+  // 调用 Repository 层更新模型为完成状态
+  await ModelRepository.updateModel(modelId, {
+    generationStatus: "COMPLETED",
+    progress: 100,
+    modelUrl: resultData.modelUrl,
+    previewImageUrl: resultData.previewImageUrl,
+    format: resultData.format,
+    completedAt: new Date(),
   });
 }
 
@@ -442,13 +345,11 @@ export async function markModelFailed(
   modelId: string,
   errorMessage: string,
 ) {
-  await prisma.model.update({
-    where: { id: modelId },
-    data: {
-      generationStatus: "FAILED",
-      failedAt: new Date(),
-      errorMessage,
-    },
+  // 调用 Repository 层更新模型为失败状态
+  await ModelRepository.updateModel(modelId, {
+    generationStatus: "FAILED",
+    failedAt: new Date(),
+    errorMessage,
   });
 }
 
@@ -458,12 +359,8 @@ export async function markModelFailed(
  * @returns 模型列表
  */
 export async function getModelsByTaskId(taskId: string) {
-  const models = await prisma.model.findMany({
-    where: { taskId },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return models;
+  // 调用 Repository 层查询任务关联的模型
+  return ModelRepository.findModelsByTaskId(taskId);
 }
 
 /**
@@ -472,12 +369,7 @@ export async function getModelsByTaskId(taskId: string) {
  * @returns 是否存在生成中的模型
  */
 export async function hasGeneratingModel(taskId: string): Promise<boolean> {
-  const count = await prisma.model.count({
-    where: {
-      taskId,
-      generationStatus: "GENERATING",
-    },
-  });
-
+  // 调用 Repository 层统计生成中的模型数量
+  const count = await ModelRepository.countGeneratingModelsByTaskId(taskId);
   return count > 0;
 }
