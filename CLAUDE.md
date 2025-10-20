@@ -35,6 +35,103 @@ npm run format
 
 ## 核心架构
 
+### 数据库架构：Image-Centric + Job 执行层分离
+
+项目采用**分层架构**，将业务状态和执行状态分离，支持细粒度的任务控制和重试。
+
+#### 四层架构设计
+
+```
+用户层 (User)
+   ↓
+业务层 (GenerationRequest → GeneratedImage → GeneratedModel)
+   ↓
+执行层 (ImageGenerationJob, ModelGenerationJob)
+   ↓
+配置层 (QueueConfig) + 资源层 (UserAsset)
+```
+
+#### 核心实体说明
+
+**1. 业务层（Business Layer）**
+
+- **GenerationRequest（容器，无状态）**
+  - 作用：管理用户的生成请求元信息
+  - 特点：**不包含 status 字段**，状态管理下沉到 Image 和 Job 层面
+  - 字段：userId, prompt, createdAt, completedAt
+
+- **GeneratedImage（核心实体，有独立状态）**
+  - 作用：每张图片作为独立实体，拥有自己的生命周期
+  - 状态：`imageStatus`（PENDING → GENERATING → COMPLETED/FAILED）
+  - 字段：requestId, index（0-3）, imageUrl, imagePrompt, imageStatus
+  - 关联：1:1 ImageGenerationJob, 1:1 GeneratedModel（可选）
+
+- **GeneratedModel（3D 模型，属于图片）**
+  - 作用：由 GeneratedImage 生成的 3D 模型
+  - 字段：sourceImageId, modelUrl, previewImageUrl, format, sliceTaskId
+  - 关联：1:1 ModelGenerationJob
+
+**2. 执行层（Execution Layer）**
+
+- **ImageGenerationJob（图片生成任务，1:1 with Image）**
+  - 作用：每张图片有独立的 Job，支持独立重试和优先级
+  - 状态：`status`（PENDING → RUNNING → COMPLETED/FAILED/RETRYING/TIMEOUT）
+  - 执行控制：retryCount, maxRetries, nextRetryAt, timeoutAt, priority
+  - Provider 信息：providerName, providerJobId, providerRequestId
+
+- **ModelGenerationJob（模型生成任务，1:1 with Model）**
+  - 作用：3D 模型生成的执行任务
+  - 状态：`status`（PENDING → RUNNING → COMPLETED/FAILED/RETRYING/TIMEOUT）
+  - 执行控制：retryCount, maxRetries, nextRetryAt, timeoutAt, priority, **progress**（0-100）
+  - Provider 信息：providerName, providerJobId, providerRequestId
+
+**3. 配置层 + 资源层**
+
+- **QueueConfig（队列配置，动态可调整）**
+  - 作用：运行时动态配置队列参数
+  - 字段：maxConcurrency, jobTimeout, maxRetries, retryDelayBase, retryDelayMax, enablePriority, isActive
+
+- **UserAsset（用户资产管理）**
+  - 作用：统一管理 AI 生成和用户上传的 3D 模型
+  - 来源：AI_GENERATED（关联 GeneratedModel）、USER_UPLOADED、IMPORTED
+  - 可见性：PRIVATE / PUBLIC（模型广场）
+
+#### 状态管理原则
+
+**核心原则**：**业务状态和执行状态分离**
+
+| 实体 | 状态字段 | 职责 |
+|------|---------|------|
+| GenerationRequest | **无 status** | 容器，管理请求元信息 |
+| GeneratedImage | `imageStatus` | 图片业务状态（PENDING/GENERATING/COMPLETED/FAILED） |
+| GeneratedModel | **无 status** | 模型实体，状态通过 Job 体现 |
+| ImageGenerationJob | `status` | 图片生成执行状态（PENDING/RUNNING/RETRYING/COMPLETED/FAILED/TIMEOUT） |
+| ModelGenerationJob | `status` | 模型生成执行状态（PENDING/RUNNING/RETRYING/COMPLETED/FAILED/TIMEOUT） |
+
+**状态流转示例**：
+
+```
+用户创建请求
+   ↓
+GenerationRequest (创建) + 4个 GeneratedImage (imageStatus=PENDING) + 4个 ImageGenerationJob (status=PENDING)
+   ↓
+ImageWorker 监听 Job.status=PENDING
+   ↓
+Job (PENDING → RUNNING) + Image (PENDING → GENERATING)
+   ↓
+生成成功 → Job (COMPLETED) + Image (COMPLETED, imageUrl 设置)
+生成失败 → Job (RETRYING/FAILED) + Image (保持 GENERATING 或 FAILED)
+   ↓
+用户选择图片 → 创建 GeneratedModel + ModelGenerationJob (status=PENDING)
+   ↓
+Model3DWorker 监听 Job.status=PENDING
+   ↓
+Job (PENDING → RUNNING) + Model (创建)
+   ↓
+生成成功 → Job (COMPLETED) + Model (modelUrl 设置)
+生成失败 → Job (RETRYING/FAILED) + Model (failedAt 设置)
+```
+
 ### 页面结构
 
 项目采用 Next.js App Router 架构:
@@ -52,11 +149,15 @@ npm run format
 ```
 用户输入文本描述
     ↓
-生成4张参考图片 (模拟延迟1.5秒)
+后端创建 GenerationRequest + 4个 GeneratedImage + 4个 ImageGenerationJob
+    ↓
+ImageWorker 监听并执行（每张图片独立生成）
     ↓
 用户选择一张图片
     ↓
-生成3D模型 (模拟延迟3秒,带进度条)
+后端创建 GeneratedModel + ModelGenerationJob
+    ↓
+Model3DWorker 监听并执行（轮询腾讯云状态，带进度条）
     ↓
 显示模型信息和下载按钮
 ```
@@ -84,56 +185,11 @@ npm run format
 - `Toast` - 消息提示
 - `EmptyState` - 空状态占位
 
-### 状态管理
-
-项目使用 React 内置 hooks 管理状态:
-- `useState` - 本地组件状态
-- `useEffect` - 副作用处理
-- `useSearchParams` - URL 参数传递(Hero → Workspace)
-
-**任务状态类型** (`prisma/schema.prisma`):
-
-任务状态采用**阶段式设计**，清晰区分图片生成和模型生成两个阶段：
-
-```typescript
-enum TaskStatus {
-  // === 图片生成阶段 ===
-  IMAGE_PENDING      // 图片生成：等待开始（队列中）
-  IMAGE_GENERATING   // 图片生成：生成中
-  IMAGE_COMPLETED    // 图片生成：已完成，等待用户选择
-
-  // === 3D模型生成阶段 ===
-  MODEL_PENDING      // 模型生成：等待开始（用户已选图片）
-  MODEL_GENERATING   // 模型生成：生成中
-  MODEL_COMPLETED    // 模型生成：已完成
-
-  // === 终态 ===
-  FAILED            // 任务失败
-  CANCELLED         // 用户取消
-}
-```
-
-**完整状态流转**:
-```
-创建任务 → IMAGE_PENDING → IMAGE_GENERATING → IMAGE_COMPLETED
-                                                      ↓
-                                               (用户选择图片)
-                                                      ↓
-         MODEL_PENDING → MODEL_GENERATING → MODEL_COMPLETED
-```
-
-**前端组件状态映射** (`types/index.ts`):
-- `GenerationStatus`: "idle" | "generating" | "completed" | "failed"
-- `GeneratedImage` - 图片数据结构
-- `Model3D` - 3D 模型数据结构
-
 ### 常量配置 (`lib/constants.ts`)
 
 ```typescript
 IMAGE_GENERATION.COUNT = 4           // 每次生成4张图片
-IMAGE_GENERATION.DELAY = 1500        // 模拟1.5秒延迟
 IMAGE_GENERATION.MAX_PROMPT_LENGTH = 500  // 最大输入长度
-MODEL_GENERATION.DELAY = 3000        // 3D生成3秒延迟
 ```
 
 ## 样式系统
@@ -226,11 +282,32 @@ components/
   └── ui/          # 全局UI组件(Toast、Skeleton等)
 
 lib/
-  ├── services/    # 业务逻辑层
-  ├── providers/   # 外部API封装 (图片生成、LLM、3D模型等)
+  ├── repositories/  # 数据访问层（Repository 模式）
+  │   ├── generation-request.repository.ts  # GenerationRequest CRUD
+  │   ├── generated-image.repository.ts     # GeneratedImage CRUD
+  │   ├── generated-model.repository.ts     # GeneratedModel CRUD
+  │   ├── job.repository.ts                 # Job CRUD
+  │   ├── queue-config.repository.ts        # QueueConfig CRUD
+  │   └── user-asset.repository.ts          # UserAsset CRUD
+  ├── services/      # 业务逻辑层
+  │   ├── generation-request-service.ts  # GenerationRequest 业务逻辑
+  │   ├── generated-model-service.ts     # GeneratedModel 业务逻辑
+  │   └── prompt-optimizer.ts            # 提示词优化服务
+  ├── providers/   # 外部API封装（适配器模式）
+  │   ├── image/   # 图片生成服务（统一接口，多渠道适配器）
+  │   ├── llm/     # LLM服务（提示词优化）
+  │   ├── model3d/ # 3D模型生成服务
+  │   └── storage/ # 存储服务（本地/OSS/COS）
   ├── validators/  # Zod验证schemas
   ├── utils/       # 工具函数
-  ├── workers/     # 后台任务处理 (图片生成、3D模型生成)
+  │   ├── errors.ts      # 统一错误处理
+  │   ├── retry.ts       # 重试工具
+  │   └── image-storage.ts  # 图片存储工具
+  ├── workers/     # 后台任务处理（Job-Based 架构）
+  │   ├── index.ts              # Worker 统一启动入口
+  │   ├── image-worker.ts       # 图片生成 Worker
+  │   ├── model3d-worker.ts     # 3D 模型生成 Worker
+  │   └── worker-config-manager.ts  # Worker 配置管理器
   └── constants.ts # 全局常量
 
 types/
@@ -244,8 +321,16 @@ app/
   │   ├── page.tsx       # 工作台页面
   │   └── components/    # 工作台专用组件
   ├── api/               # API路由
+  │   ├── tasks/         # 任务相关API（已废弃，使用 test/requests）
+  │   ├── test/          # 测试 API（新架构）
+  │   │   ├── requests/  # GenerationRequest CRUD
+  │   │   └── models/    # GeneratedModel CRUD
+  │   ├── workers/       # Worker 状态监控
+  │   └── admin/         # 管理后台（队列配置等）
   ├── layout.tsx         # 根布局
   └── globals.css        # 全局样式
+
+instrumentation.ts       # Next.js 启动钩子（启动 Workers）
 ```
 
 ## 开发注意事项
@@ -412,21 +497,124 @@ handleGenerate() → setImages() → handleSelect() → onGenerate3D(index)
 
 ## 后端架构规范
 
-### 三层架构
+### 四层架构
 
 ```
-API路由层 (app/api/) → Service层 (lib/services/) → 数据访问层 (Prisma)
+API路由层 (app/api/) → Service层 (lib/services/) → Repository层 (lib/repositories/) → 数据访问层 (Prisma)
+                                                      ↓
+                                              Worker层 (lib/workers/)
 ```
 
 **目录结构**:
-- `lib/services/` - 业务逻辑层
-- `lib/providers/` - 外部API封装（采用适配器模式）
+- `lib/repositories/` - **数据访问层**（Repository 模式，封装 Prisma 操作）
+  - `generation-request.repository.ts` - GenerationRequest CRUD
+  - `generated-image.repository.ts` - GeneratedImage CRUD
+  - `generated-model.repository.ts` - GeneratedModel CRUD
+  - `job.repository.ts` - ImageGenerationJob / ModelGenerationJob CRUD
+  - `queue-config.repository.ts` - QueueConfig CRUD
+  - `user-asset.repository.ts` - UserAsset CRUD
+- `lib/services/` - **业务逻辑层**（调用 Repository 和 Provider）
+  - `generation-request-service.ts` - GenerationRequest 业务逻辑
+  - `generated-model-service.ts` - GeneratedModel 业务逻辑
+  - `prompt-optimizer.ts` - 提示词优化服务
+- `lib/providers/` - **外部API封装**（采用适配器模式）
   - `image/` - 图片生成服务（统一接口，多渠道适配器）
   - `llm/` - LLM服务（提示词优化）
   - `model3d/` - 3D模型生成服务
-- `lib/workers/` - 后台任务处理 (图片生成Worker、3D模型生成Worker)
+  - `storage/` - 存储服务（本地/OSS/COS）
+- `lib/workers/` - **后台任务处理**（Job-Based 架构）
+  - `image-worker.ts` - 图片生成 Worker（监听 ImageGenerationJob）
+  - `model3d-worker.ts` - 3D 模型生成 Worker（监听 ModelGenerationJob）
+  - `worker-config-manager.ts` - Worker 配置管理器
 - `lib/validators/` - Zod验证schemas
 - `lib/utils/errors.ts` - 统一错误处理
+
+### Repository 层规范
+
+**核心原则**：
+1. **封装 Prisma 操作**，隔离数据库访问逻辑
+2. **不包含业务逻辑**，只提供 CRUD 操作
+3. **统一命名规范**：`find*`, `create*`, `update*`, `delete*`
+4. **关联查询**：使用 `include` 预加载关联数据
+
+**示例**：
+```typescript
+// lib/repositories/generation-request.repository.ts
+
+/**
+ * 根据 ID 查询 GenerationRequest（包含关联数据）
+ */
+export async function findRequestById(requestId: string) {
+  return prisma.generationRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      images: {
+        orderBy: { index: "asc" },
+        include: {
+          generatedModel: true,
+          generationJob: {
+            select: { status: true, retryCount: true },
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * 创建 GenerationRequest + 4个 GeneratedImage + 4个 ImageGenerationJob（事务）
+ */
+export async function createRequestWithImagesAndJobs(data: {
+  userId: string;
+  prompt: string;
+}): Promise<{
+  request: GenerationRequest;
+  imageIds: string[];
+  jobIds: string[];
+}> {
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. 创建 GenerationRequest
+    const request = await tx.generationRequest.create({
+      data: { userId: data.userId, prompt: data.prompt },
+    });
+
+    // 2. 创建 4 个 GeneratedImage
+    const images = await Promise.all(
+      [0, 1, 2, 3].map((index) =>
+        tx.generatedImage.create({
+          data: {
+            requestId: request.id,
+            index,
+            imageStatus: "PENDING",
+            imageUrl: null,
+          },
+        }),
+      ),
+    );
+
+    // 3. 为每个 Image 创建 ImageGenerationJob
+    const jobs = await Promise.all(
+      images.map((image) =>
+        tx.imageGenerationJob.create({
+          data: {
+            imageId: image.id,
+            status: "PENDING",
+            priority: 0,
+          },
+        }),
+      ),
+    );
+
+    return {
+      request,
+      imageIds: images.map((img) => img.id),
+      jobIds: jobs.map((job) => job.id),
+    };
+  });
+
+  return result;
+}
+```
 
 ### 错误处理规则
 
@@ -720,16 +908,26 @@ public/generated/
 - ✅ **腾讯云 COS** - 完整实现，已安装 `cos-nodejs-sdk-v5`，适合生产环境
 - ⚠️ **阿里云 OSS** - 占位符实现，需安装 `ali-oss` SDK
 
-## Worker 架构
+## Worker 架构：Job-Based + 三层任务处理
 
-项目采用 **事件驱动的异步任务处理架构**,通过 Worker 机制处理耗时的后台任务。
+项目采用 **Job-Based 异步任务处理架构**，每个任务（Image/Model）都有独立的 Job 实体，支持细粒度的状态管理、重试和优先级控制。
 
 ### 核心原则
 
 ```
-API 层 → 只负责状态变更 (快速响应)
-Worker 层 → 监听状态变化并执行业务逻辑 (后台处理)
+API 层 → 创建 Job（PENDING 状态）→ 快速响应
+   ↓
+Worker 层 → 三层任务处理（超时检测 → 重试调度 → 新任务执行）
+   ↓
+更新 Job 状态（RUNNING → COMPLETED/FAILED）+ 更新业务实体状态
 ```
+
+**关键设计**：
+- ✅ **业务状态和执行状态分离**：Image.imageStatus（业务）+ Job.status（执行）
+- ✅ **每个 Image 独立 Job**：4 张图片并发生成，独立重试
+- ✅ **三层任务处理**：超时检测 → 重试调度 → 新任务执行
+- ✅ **动态配置**：使用 WorkerConfigManager 动态调整并发数、超时时间、重试策略
+- ✅ **优先级队列**：支持高优先级任务优先执行
 
 ### Worker 启动机制
 

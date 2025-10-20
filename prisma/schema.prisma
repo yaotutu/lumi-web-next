@@ -102,6 +102,9 @@ model GeneratedModel {
   format          String @default("OBJ")
   fileSize        Int?
 
+  // 打印相关
+  sliceTaskId String? // 外部打印服务返回的切片任务ID
+
   // 时间戳（状态通过 generationJob 体现）
   createdAt   DateTime @default(now())
   completedAt DateTime?

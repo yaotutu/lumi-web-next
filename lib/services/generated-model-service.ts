@@ -131,3 +131,26 @@ export async function deleteModel(modelId: string) {
   // 调用 Repository 层删除数据库记录（级联删除 Job）
   await GeneratedModelRepository.deleteModel(modelId);
 }
+
+/**
+ * 更新模型的切片任务ID（打印服务返回）
+ * @param modelId 模型ID
+ * @param sliceTaskId 切片任务ID
+ * @throws AppError NOT_FOUND - 模型不存在
+ */
+export async function updateSliceTaskId(
+  modelId: string,
+  sliceTaskId: string,
+) {
+  // 验证模型存在
+  await getModelById(modelId);
+
+  // 更新切片任务ID
+  await GeneratedModelRepository.updateModel(modelId, {
+    sliceTaskId,
+  });
+
+  console.log(
+    `✅ 更新模型切片任务ID: modelId=${modelId}, sliceTaskId=${sliceTaskId}`,
+  );
+}

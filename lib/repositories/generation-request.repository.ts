@@ -35,6 +35,7 @@ export async function findRequestById(requestId: string) {
               completedAt: true,
               failedAt: true,
               errorMessage: true,
+              sliceTaskId: true, // 打印任务ID
             },
           },
           generationJob: {
@@ -43,6 +44,19 @@ export async function findRequestById(requestId: string) {
               id: true,
               status: true,
               retryCount: true,
+            },
+          },
+        },
+      },
+      generatedModels: {
+        // 直接查询所有模型（用于打印等功能）
+        orderBy: { createdAt: "desc" },
+        include: {
+          generationJob: {
+            select: {
+              id: true,
+              status: true,
+              progress: true,
             },
           },
         },
