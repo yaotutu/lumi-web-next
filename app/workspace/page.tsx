@@ -76,14 +76,35 @@ function WorkspaceContent() {
   useEffect(() => {
     if (!task?.id) return;
 
-    // 只有在生成中的状态才需要轮询
+    // 检查是否需要轮询：
+    // 1. 图片生成中
+    // 2. 模型生成中（检查 task.status）
+    // 3. 有任何模型正在生成（检查 task.models）
+    const hasGeneratingModels = task.models?.some(
+      (m) => !m.generationStatus || m.generationStatus === "PENDING" || m.generationStatus === "GENERATING"
+    );
+
     const needsPolling =
       task.status === "IMAGE_PENDING" ||
       task.status === "IMAGE_GENERATING" ||
       task.status === "MODEL_PENDING" ||
-      task.status === "MODEL_GENERATING";
+      task.status === "MODEL_GENERATING" ||
+      hasGeneratingModels;
 
-    if (!needsPolling) return;
+    if (!needsPolling) {
+      console.log("⏸️ 无需轮询：所有任务已完成");
+      return;
+    }
+
+    console.log("▶️ 启动轮询：", {
+      taskStatus: task.status,
+      hasGeneratingModels,
+      modelsStatus: task.models?.map(m => ({
+        id: m.id,
+        status: m.generationStatus,
+        modelUrl: m.modelUrl
+      }))
+    });
 
     // 立即执行一次轮询（不等待首次interval触发）
     const pollOnce = async () => {
@@ -141,6 +162,13 @@ function WorkspaceContent() {
     return () => clearInterval(interval);
   }, [task?.id, task?.status]);
 
+  // 处理图片选择（仅更新索引，不触发生成）
+  const handleImageSelect = (imageIndex: number) => {
+    console.log(`📌 用户选择了图片 ${imageIndex}`);
+    setSelectedImageIndex(imageIndex);
+  };
+
+  // 处理3D模型生成（发送API请求触发生成）
   const handleGenerate3D = async (imageIndex: number) => {
     setSelectedImageIndex(imageIndex);
 
@@ -156,27 +184,33 @@ function WorkspaceContent() {
 
       try {
         // 只需要更新 selectedImageIndex，后台会自动检测并开始生成3D模型
+        console.log(`🔵 发送PATCH请求: taskId=${task.id}, imageIndex=${imageIndex}`);
         const response = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ selectedImageIndex: imageIndex }),
         });
 
+        console.log(`🔵 收到响应: status=${response.status}`);
         const rawData = await response.json();
+        console.log(`🔵 响应数据:`, rawData);
         const data = adaptTaskResponse(rawData); // ✅ 适配后端数据
 
         if (data.success) {
           // 后台队列会自动处理3D模型生成，前端轮询Task状态即可
-          console.log("图片选择成功，3D模型生成已加入队列");
-          // 立即更新任务数据
-          setTask(data.data);
+          console.log("✅ 图片选择成功，3D模型生成已加入队列");
+          // 保持乐观更新的状态，不要立即覆盖
+          // 让轮询来更新实际状态，避免状态闪烁
+          console.log("⏳ 保持 MODEL_PENDING 状态，等待轮询更新");
         } else {
-          console.error("Failed to select image:", data.message || "Unknown error");
+          console.error("❌ 图片选择失败:", data.message || rawData.message || "Unknown error");
+          alert(`选择图片失败: ${data.message || rawData.message || "Unknown error"}`);
           // 回滚乐观更新
           setTask({ ...task, selectedImageIndex: imageIndex });
         }
       } catch (error) {
-        console.error("Failed to select image:", error);
+        console.error("❌ 请求异常:", error);
+        alert(`请求失败: ${error instanceof Error ? error.message : "网络错误"}`);
         // 回滚乐观更新
         setTask({ ...task, selectedImageIndex: imageIndex });
       }
@@ -223,6 +257,7 @@ function WorkspaceContent() {
       <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
           initialPrompt={task.prompt}
+          onImageSelect={handleImageSelect}
           onGenerate3D={handleGenerate3D}
           task={task}
           taskId={task.id}
@@ -236,6 +271,7 @@ function WorkspaceContent() {
           prompt={task.prompt}
           task={task}
           taskId={task.id}
+          onGenerate3D={handleGenerate3D}
         />
       </div>
     </>

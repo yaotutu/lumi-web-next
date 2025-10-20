@@ -9,6 +9,7 @@ import Tooltip from "@/components/ui/Tooltip";
 interface ImageGridProps {
   initialPrompt?: string;
   onGenerate3D?: (imageIndex: number) => void;
+  onImageSelect?: (imageIndex: number) => void; // 选择图片时的回调（不触发生成）
   task?: TaskWithDetails | null;
   taskId?: string;
 }
@@ -24,6 +25,7 @@ interface ImageSlot {
 export default function ImageGrid({
   initialPrompt = "",
   onGenerate3D,
+  onImageSelect,
   task,
   taskId,
 }: ImageGridProps) {
@@ -181,8 +183,14 @@ export default function ImageGrid({
 
       setSelectedImage(idx);
       if (error) setError("");
+
+      // 通知父组件选中的图片变化（用于右侧预览区显示对应的模型）
+      // 注意：这里只是更新索引，不触发实际的模型生成
+      if (onImageSelect) {
+        onImageSelect(idx);
+      }
     },
-    [isModelGenerating, error],
+    [isModelGenerating, error, onImageSelect],
   );
 
   // 生成3D模型

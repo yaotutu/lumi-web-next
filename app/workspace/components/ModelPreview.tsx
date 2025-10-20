@@ -21,39 +21,54 @@ interface ModelPreviewProps {
   prompt: string;
   task?: TaskWithDetails | null;
   taskId?: string;
+  onGenerate3D?: (imageIndex: number) => void; // 生成3D模型的回调
 }
 
 export default function ModelPreview({
-  // imageIndex 和 prompt 暂未使用，但保留以供未来扩展
+  imageIndex,
+  prompt,
   task,
   taskId,
+  onGenerate3D,
 }: ModelPreviewProps) {
-  // 获取最新的模型（优化选择逻辑）
+  // 根据选中的图片索引，获取对应图片的模型
   // 策略：
-  // 1. 优先选择 generationStatus 为 COMPLETED 的最新模型
-  // 2. 如果没有 COMPLETED 模型，选择最新的模型（可能是 GENERATING 或 PENDING）
-  const latestModel = task?.models?.length
+  // 1. 如果有 imageIndex，查找该图片对应的模型（从 images[imageIndex].generatedModel）
+  // 2. 如果没有 imageIndex，查找最新的模型
+  const selectedModel = task?.images && imageIndex !== null && imageIndex !== undefined
     ? (() => {
-        const completedModels = task.models.filter(
-          (m) => m.generationStatus === "COMPLETED",
-        );
-        if (completedModels.length > 0) {
-          // 从已完成的模型中选择最新的
-          return completedModels.sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          )[0];
+        const selectedImage = task.images.find((img) => img.index === imageIndex);
+        if (selectedImage && (selectedImage as any).generatedModel) {
+          const model = (selectedImage as any).generatedModel;
+          // 从 task.models 中找到完整的模型数据（包含 generationStatus 和 progress）
+          const fullModel = task.models?.find((m) => m.id === model.id);
+          return fullModel || model;
         }
-        // 如果没有已完成的模型，选择最新创建的模型（可能是正在生成中）
-        return task.models
-          .slice()
-          .sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() -
-              new Date(a.createdAt).getTime(),
-          )[0];
+        return undefined;
       })()
-    : undefined;
+    : task?.models?.length
+      ? (() => {
+          const completedModels = task.models.filter(
+            (m) => m.generationStatus === "COMPLETED",
+          );
+          if (completedModels.length > 0) {
+            return completedModels.sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            )[0];
+          }
+          return task.models
+            .slice()
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime(),
+            )[0];
+        })()
+      : undefined;
+
+  // 为了向后兼容，保留 latestModel 别名
+  const latestModel = selectedModel;
 
   // 调试日志：查看选择的模型
   console.log("=== ModelPreview latestModel 选择 ===", {
@@ -236,51 +251,76 @@ export default function ModelPreview({
 
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
-    // 如果任务已完成模型生成（任务状态为 MODEL_COMPLETED 或者模型的 generationStatus 为 COMPLETED）
-    // 🛡️ 防御性检查：必须确保 modelUrl 存在，避免显示空模型
-    if (
-      (task?.status === "MODEL_COMPLETED" ||
-        latestModel?.generationStatus === "COMPLETED") &&
-      latestModel?.modelUrl // 必须有 modelUrl 才认为真正完成
-    ) {
-      setStatus("completed");
-      setProgress(latestModel?.progress || 100);
-      return;
+    // 优先根据当前选中图片的模型状态来决定UI
+    // 如果有选中的模型（selectedModel），根据模型状态显示
+    if (latestModel) {
+      // 模型已完成且有 URL
+      if (latestModel.generationStatus === "COMPLETED" && latestModel.modelUrl) {
+        setStatus("completed");
+        setProgress(100);
+        console.log("✅ 模型已完成，显示3D预览");
+        return;
+      }
+
+      // 模型生成中
+      if (!latestModel.generationStatus || latestModel.generationStatus === "PENDING" || latestModel.generationStatus === "GENERATING") {
+        setStatus("generating");
+        setProgress(latestModel.progress || 0);
+        console.log("⏳ 模型生成中，显示进度:", latestModel.progress);
+        return;
+      }
+
+      // 模型失败
+      if (latestModel.generationStatus === "FAILED" || latestModel.failedAt) {
+        setStatus("failed");
+        console.log("❌ 模型生成失败");
+        return;
+      }
     }
 
-    // 如果正在生成模型（包括等待和生成中）
-    // 只要任务状态是 MODEL_PENDING 或 MODEL_GENERATING，就显示生成中
-    // 🛡️ 边缘情况处理：即使状态为 MODEL_COMPLETED，但 modelUrl 为空时，也显示生成中
-    if (
-      task?.status === "MODEL_PENDING" ||
-      task?.status === "MODEL_GENERATING" ||
-      (task?.status === "MODEL_COMPLETED" && !latestModel?.modelUrl)
-    ) {
+    // 如果没有选中的模型，根据任务状态决定
+    // 模型生成中（即使 latestModel 还没创建，只要 task.status 是生成中）
+    if (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") {
       setStatus("generating");
-      setProgress(latestModel?.progress || 0);
+      setProgress(0);
+      console.log("⏳ 模型生成中（等待后端创建记录）");
       return;
     }
 
-    // 如果任务失败
-    if (task?.status === "FAILED") {
-      setStatus("failed");
-      return;
-    }
-
-    // 其他状态（等待选择图片）
-    if (
-      task?.status === "IMAGE_COMPLETED" ||
-      task?.status === "IMAGE_PENDING" ||
-      task?.status === "IMAGE_GENERATING"
-    ) {
+    // 图片生成中
+    if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
       setStatus("idle");
       setProgress(0);
+      console.log("⏳ 图片生成中，等待选择");
+      return;
     }
+
+    // 图片完成，等待选择（或当前图片没有模型）
+    if (task?.status === "IMAGE_COMPLETED" || (imageIndex !== null && !latestModel)) {
+      setStatus("idle");
+      setProgress(0);
+      console.log("📋 等待选择图片或当前图片无模型");
+      return;
+    }
+
+    // 任务失败
+    if (task?.status === "FAILED") {
+      setStatus("failed");
+      console.log("❌ 任务失败");
+      return;
+    }
+
+    // 默认空闲状态
+    setStatus("idle");
+    setProgress(0);
   }, [
     task?.status,
     latestModel?.progress,
     latestModel?.generationStatus,
+    latestModel?.modelUrl,
+    latestModel?.failedAt,
     latestModel,
+    imageIndex,
   ]);
 
   return (
@@ -340,93 +380,135 @@ export default function ModelPreview({
               </p>
             </div>
           ) : (
-            // 空闲状态:根据任务状态显示不同的引导内容
+            // 空闲状态：根据条件优先级显示不同的引导内容
             <div className="text-center max-w-sm px-6">
-              {/* 图片生成中 - 提前告知接下来要做什么 */}
-              {(task?.status === "IMAGE_PENDING" ||
-                task?.status === "IMAGE_GENERATING") && (
-                <div className="flex flex-col items-center gap-4">
-                  {/* 3D旋转动画图标 */}
-                  <div className="relative h-20 w-20">
-                    <div className="absolute inset-0 animate-spin-slow">
-                      <div className="h-full w-full rounded-xl bg-gradient-to-br from-yellow-1/20 to-yellow-1/5 border-2 border-yellow-1/30" />
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center text-3xl">
-                      🎨
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-base font-semibold text-white">
-                      接下来要做什么？
-                    </h3>
-                    <div className="glass-panel px-4 py-3 text-left space-y-2">
-                      <div className="flex items-start gap-2.5">
-                        <span className="text-lg shrink-0">💡</span>
-                        <div className="text-sm text-white/80">
-                          <p className="font-medium mb-0.5">图片生成完成后</p>
-                          <p className="text-xs text-white/60">
-                            点击任意图片立即生成 3D 模型
-                          </p>
+              {(() => {
+                // 优先级1：图片生成中 - 提前告知接下来要做什么
+                if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
+                  return (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative h-20 w-20">
+                        <div className="absolute inset-0 animate-spin-slow">
+                          <div className="h-full w-full rounded-xl bg-gradient-to-br from-yellow-1/20 to-yellow-1/5 border-2 border-yellow-1/30" />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center text-3xl">
+                          🎨
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-lg shrink-0">⏱️</span>
-                        <p className="text-xs text-white/60">预计 15-30 秒</p>
+                      <div className="space-y-3">
+                        <h3 className="text-base font-semibold text-white">
+                          接下来要做什么？
+                        </h3>
+                        <div className="glass-panel px-4 py-3 text-left space-y-2">
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-lg shrink-0">💡</span>
+                            <div className="text-sm text-white/80">
+                              <p className="font-medium mb-0.5">图片生成完成后</p>
+                              <p className="text-xs text-white/60">
+                                点击任意图片立即生成 3D 模型
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-lg shrink-0">⏱️</span>
+                            <p className="text-xs text-white/60">预计 15-30 秒</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                }
 
-              {/* 等待选择图片 - 引导用户点击左侧图片 */}
-              {task?.status === "IMAGE_COMPLETED" &&
-                task.selectedImageIndex === null && (
-                  <div className="flex flex-col items-center gap-4">
-                    {/* 手指点击动画 */}
-                    <div className="relative h-20 w-20">
-                      <div className="absolute inset-0 flex items-center justify-center text-5xl animate-bounce-slow">
-                        👈
+                // 优先级2：已选中图片但该图片没有模型 - 引导用户生成模型
+                if (imageIndex !== null && imageIndex !== undefined && !latestModel) {
+                  return (
+                    <div className="flex flex-col items-center gap-6">
+                      <div className="relative h-24 w-24">
+                        <div className="absolute inset-0 animate-spin-slow">
+                          <div className="h-full w-full rounded-2xl bg-gradient-to-br from-yellow-1/30 to-yellow-1/10 border-3 border-yellow-1/40 shadow-lg shadow-yellow-1/20" />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center text-4xl">
+                          🎯
+                        </div>
                       </div>
-                      {/* 光圈动画 */}
-                      <div className="absolute inset-0 animate-ping-slow">
-                        <div className="h-full w-full rounded-full bg-yellow-1/20" />
+                      <div className="space-y-3 text-center">
+                        <h3 className="text-lg font-bold text-white">
+                          该图片还没有 3D 模型
+                        </h3>
+                        <p className="text-sm text-white/70 max-w-xs">
+                          点击下方按钮，为选中的图片生成 3D 模型
+                        </p>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-base font-semibold text-white">
-                        选择左侧图片
-                      </h3>
-                      <p className="text-sm text-white/60">
-                        点击任意图片开始生成 3D 模型
-                      </p>
-                    </div>
-
-                    {/* 可选：箭头指示动画 */}
-                    <div className="flex items-center gap-2 text-yellow-1/60 animate-pulse">
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onGenerate3D && imageIndex !== null) {
+                            onGenerate3D(imageIndex);
+                          }
+                        }}
+                        className="btn-primary flex items-center justify-center gap-2.5 px-8 py-3.5 text-base font-semibold shadow-lg shadow-yellow-1/25 hover:shadow-xl hover:shadow-yellow-1/30 transition-all duration-300"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 19l-7-7 7-7"
-                        />
-                      </svg>
-                      <span className="text-xs">查看左侧图片</span>
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.5}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"
+                          />
+                        </svg>
+                        生成 3D 模型
+                      </button>
+                      <div className="glass-panel px-4 py-2.5 text-xs text-white/60 flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4 text-yellow-1"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span>生成过程约需 15-30 秒</span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                }
 
-              {/* 其他空闲状态（兜底） */}
-              {task?.status !== "IMAGE_PENDING" &&
-                task?.status !== "IMAGE_GENERATING" &&
-                task?.status !== "IMAGE_COMPLETED" && (
+                // 优先级3：图片已完成但没有选中任何图片 - 引导用户选择图片
+                if (task?.status === "IMAGE_COMPLETED" && (imageIndex === null || imageIndex === undefined)) {
+                  return (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative h-20 w-20">
+                        <div className="absolute inset-0 flex items-center justify-center text-5xl animate-bounce-slow">
+                          👈
+                        </div>
+                        <div className="absolute inset-0 animate-ping-slow">
+                          <div className="h-full w-full rounded-full bg-yellow-1/20" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-base font-semibold text-white">
+                          选择左侧图片
+                        </h3>
+                        <p className="text-sm text-white/60">
+                          点击任意图片查看或生成 3D 模型
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 默认：其他空闲状态
+                return (
                   <div className="flex flex-col items-center gap-3">
                     <div className="text-5xl text-foreground-subtle">🎨</div>
                     <p className="text-sm text-foreground-subtle">
@@ -436,12 +518,14 @@ export default function ModelPreview({
                       选择图片后开始生成
                     </p>
                   </div>
-                )}
+                );
+              })()}
             </div>
           )}
         </div>
 
-        {/* 控制按钮 */}
+        {/* 控制按钮 - 只在模型已完成时显示 */}
+        {status === "completed" && (
         <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#242424] p-1.5">
           <Tooltip
             content={showGrid ? "隐藏网格" : "显示网格"}
@@ -537,6 +621,7 @@ export default function ModelPreview({
             </Tooltip>
           ))}
         </div>
+        )}
       </div>
 
       {/* 生成进度和操作区域 */}
@@ -718,26 +803,7 @@ export default function ModelPreview({
               </button>
             </div>
           </>
-        ) : (
-          <>
-            <div className="mb-3 w-full max-w-md">
-              <h3 className="mb-1.5 text-sm font-semibold text-white">
-                模型信息
-              </h3>
-              <div className="text-xs text-white/60">等待生成模型...</div>
-            </div>
-
-            <div className="w-full max-w-md">
-              <button
-                type="button"
-                disabled
-                className="w-full cursor-not-allowed rounded-lg bg-surface-3 py-2.5 text-sm font-medium text-foreground opacity-50"
-              >
-                下载模型
-              </button>
-            </div>
-          </>
-        )}
+        ) : null}
       </div>
 
       {/* Toast 提示 */}

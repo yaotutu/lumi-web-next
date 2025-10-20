@@ -103,25 +103,9 @@ export function adaptGenerationRequest(
     .map((img) => img.generatedModel)
     .filter((model): model is GeneratedModel => model !== null);
 
-  // 推导 selectedImageIndex：找到有模型的图片，取最新创建的模型对应的图片
-  let selectedImageIndex: number | null = null;
-  if (models.length > 0) {
-    const latestModel = models.sort((a, b) => {
-      const dateA =
-        a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
-      const dateB =
-        b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
-      return dateB.getTime() - dateA.getTime();
-    })[0];
-
-    // 从 images 中找到对应的 index
-    const sourceImage = request.images.find(
-      (img) => img.generatedModel?.id === latestModel.id,
-    );
-    if (sourceImage) {
-      selectedImageIndex = sourceImage.index;
-    }
-  }
+  // selectedImageIndex 不由后端推导，保持为 undefined
+  // 这是前端 UI 状态，由用户点击图片来设置，不应该被后端数据覆盖
+  const selectedImageIndex = undefined;
 
   // 推导 modelGenerationStartedAt：所有模型中最早创建的时间
   let modelGenerationStartedAt: Date | null = null;

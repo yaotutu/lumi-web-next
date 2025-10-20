@@ -79,11 +79,15 @@ export async function createModelForImage(
   );
 
   if (existingModel) {
+    console.error(
+      `❌ 该图片已有关联模型: requestId=${requestId}, sourceImageId=${sourceImageId}, existingModelId=${existingModel.id}`,
+    );
     throw new AppError(
       "INVALID_STATE",
-      `该图片已有关联模型: ${existingModel.id}`,
+      `该图片已有关联模型，每张图片只能生成一个3D模型`,
       {
         existingModelId: existingModel.id,
+        sourceImageId,
       },
     );
   }
