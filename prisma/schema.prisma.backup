@@ -27,10 +27,10 @@ model User {
 }
 
 // ============================================
-// 业务层：以图像为中心
+// 业务层：用户视角的生成请求
 // ============================================
 
-// GenerationRequest - 容器（无状态，只管理请求元信息）
+// GenerationRequest - 用户的生成请求（顶层聚合根）
 model GenerationRequest {
   id        String   @id @default(cuid())
   userId    String
@@ -39,37 +39,67 @@ model GenerationRequest {
   // 请求输入
   prompt    String
 
-  // 时间戳（无 status 和 phase 字段）
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  completedAt DateTime?  // 所有图片都完成时设置
+  // 请求整体状态（业务语义）
+  status    RequestStatus @default(IMAGE_GENERATION_PENDING)
 
-  // 关联（核心是图片）
-  images          GeneratedImage[]      // 一对多：生成的图片
-  generatedModels GeneratedModel[]     // 一对多：通过 images 访问（保留以支持查询）
+  // 当前所处阶段
+  phase     RequestPhase @default(IMAGE_GENERATION)
+
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  failedAt  DateTime?
+  errorMessage String?
+
+  // 关联
+  imageGenerationJob  ImageGenerationJob?  // 一对一：图片生成任务
+  images              GeneratedImage[]      // 一对多：生成的图片
+  generatedModels     GeneratedModel[]     // 一对多：AI生成的模型（通过 generatedModel.generationJob 可访问 ModelGenerationJob）
 
   @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([phase])
 }
 
-// GeneratedImage - 核心实体（有独立状态）
+// GeneratedImage - AI生成的图片（属于Request）
 model GeneratedImage {
-  id        String @id @default(cuid())
-  requestId String
-  request   GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id         String  @id @default(cuid())
+  requestId  String
+  request    GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  // 图片索引（0-3）
-  index     Int
-
-  // 图片数据
-  imageUrl    String? // ✅ 可选：待生成时为 null
-  imagePrompt String? // LLM优化后的提示词
-
-  // ✅ 图片状态（核心字段）
-  imageStatus ImageStatus @default(PENDING)
+  url        String
+  index      Int     // 0-3
+  prompt     String? // 实际使用的提示词（经过LLM优化）
 
   // Provider相关
   providerTaskId    String?
   providerRequestId String?
+
+  createdAt  DateTime @default(now())
+
+  // 关联：该图片生成的模型（一对一）
+  generatedModel GeneratedModel? @relation("ImageToModel")
+
+  @@unique([requestId, index])
+  @@index([requestId])
+}
+
+// GeneratedModel - AI生成的3D模型（属于Request）
+model GeneratedModel {
+  id        String  @id @default(cuid())
+  requestId String
+  request   GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  sourceImageId String  @unique
+  sourceImage   GeneratedImage @relation("ImageToModel", fields: [sourceImageId], references: [id], onDelete: Cascade)
+
+  // 基本信息
+  name      String
+  modelUrl  String?
+  previewImageUrl String?
+  format    String @default("OBJ")
+  fileSize  Int?
 
   // 时间戳
   createdAt   DateTime @default(now())
@@ -77,68 +107,40 @@ model GeneratedImage {
   failedAt    DateTime?
   errorMessage String?
 
-  // 关联
-  generationJob  ImageGenerationJob? // 1:1 图片生成任务
-  generatedModel GeneratedModel?     // 1:1 可选的3D模型（通过 relation name）
+  // 关联：生成任务
+  generationJob ModelGenerationJob?
 
-  @@unique([requestId, index])
-  @@index([requestId])
-  @@index([imageStatus])
-}
-
-// GeneratedModel - 图片的3D模型（属于图片）
-model GeneratedModel {
-  id        String  @id @default(cuid())
-  requestId String
-  request   GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  sourceImageId String  @unique
-  sourceImage   GeneratedImage @relation(fields: [sourceImageId], references: [id], onDelete: Cascade)
-
-  // 基本信息
-  name            String
-  modelUrl        String?
-  previewImageUrl String?
-  format          String @default("OBJ")
-  fileSize        Int?
-
-  // 时间戳（状态通过 generationJob 体现）
-  createdAt   DateTime @default(now())
-  completedAt DateTime?
-  failedAt    DateTime?
-  errorMessage String?
-
-  // 关联
-  generationJob ModelGenerationJob? // 1:1 模型生成任务
-  userAsset     UserAsset?          // 1:1 用户资产
+  // 关联：用户资产
+  userAsset UserAsset?
 
   @@index([requestId, createdAt])
 }
 
 // ============================================
-// 执行层：每张图片一个Job
+// 执行层：队列中的任务单元
 // ============================================
 
-// ImageGenerationJob - 图片生成任务（1:1 with Image）
+// ImageGenerationJob - 图片生成任务（Queue单元）
 model ImageGenerationJob {
-  id      String @id @default(cuid())
-  imageId String @unique  // ✅ 改为 imageId（1:1 with Image）
-  image   GeneratedImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  id         String  @id @default(cuid())
+  requestId  String  @unique  // 一对一关系
+  request    GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   // 执行状态
-  status   JobStatus @default(PENDING)
-  priority Int       @default(0)  // 优先级（数字越大优先级越高）
+  status     JobStatus @default(PENDING)
+  priority   Int       @default(0)     // 优先级（数字越大优先级越高）
+  progress   Int       @default(0)     // 0-100
 
   // 重试控制
-  retryCount  Int       @default(0)  // 已重试次数
-  maxRetries  Int       @default(3)  // 最大重试次数
-  nextRetryAt DateTime?              // 下次重试时间
+  retryCount    Int @default(0)         // 已重试次数
+  maxRetries    Int @default(3)         // 最大重试次数
+  nextRetryAt   DateTime?               // 下次重试时间
 
   // 超时控制
-  timeoutAt   DateTime?              // 超时时间点
+  timeoutAt     DateTime?               // 超时时间点
 
   // Provider相关
-  providerName      String?  // 使用的供应商（aliyun/siliconflow）
+  providerName      String?             // 使用的供应商（aliyun/siliconflow）
   providerJobId     String?
   providerRequestId String?
 
@@ -153,34 +155,34 @@ model ImageGenerationJob {
 
   // 错误信息
   errorMessage String?
-  errorCode    String?  // 错误码（用于判断是否可重试）
-  errorStack   String?  // 错误堆栈（调试用）
+  errorCode    String?   // 错误码（用于判断是否可重试）
+  errorStack   String?   // 错误堆栈（调试用）
 
   // 执行信息
-  executionDuration Int?    // 执行时长（毫秒）
-  workerNodeId      String? // 执行的Worker节点ID（多实例部署时有用）
+  executionDuration Int?  // 执行时长（毫秒）
+  workerNodeId String?    // 执行的Worker节点ID（多实例部署时有用）
 
   @@index([status, priority(sort: Desc), createdAt])  // Worker查询优化：状态+优先级+时间
   @@index([status, nextRetryAt])                       // 重试任务查询
   @@index([status, timeoutAt])                         // 超时检测查询
 }
 
-// ModelGenerationJob - 模型生成任务（1:1 with Model）
+// ModelGenerationJob - 模型生成任务（Queue单元）
 model ModelGenerationJob {
-  id      String  @id @default(cuid())
-  modelId String  @unique  // 一对一关系
-  model   GeneratedModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  modelId   String  @unique  // 一对一关系
+  model     GeneratedModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
   // 执行状态
-  status   JobStatus @default(PENDING)
-  priority Int       @default(0)
-  progress Int       @default(0)  // 0-100（仅模型生成需要进度）
+  status     JobStatus @default(PENDING)
+  priority   Int       @default(0)
+  progress   Int       @default(0)
 
   // 重试控制
-  retryCount  Int       @default(0)
-  maxRetries  Int       @default(3)
-  nextRetryAt DateTime?
-  timeoutAt   DateTime?
+  retryCount    Int @default(0)
+  maxRetries    Int @default(3)
+  nextRetryAt   DateTime?
+  timeoutAt     DateTime?
 
   // Provider相关
   providerName      String?
@@ -203,7 +205,7 @@ model ModelGenerationJob {
 
   // 执行信息
   executionDuration Int?
-  workerNodeId      String?
+  workerNodeId String?
 
   @@index([status, priority(sort: Desc), createdAt])
   @@index([status, nextRetryAt])
@@ -226,9 +228,9 @@ model QueueConfig {
   jobTimeout Int @default(300000)  // 单个Job超时时间（毫秒），默认5分钟
 
   // 重试策略
-  maxRetries     Int @default(3)      // 最大重试次数
-  retryDelayBase Int @default(5000)   // 重试基础延迟（毫秒）
-  retryDelayMax  Int @default(60000)  // 重试最大延迟（毫秒）
+  maxRetries     Int @default(3)   // 最大重试次数
+  retryDelayBase Int @default(5000) // 重试基础延迟（毫秒）
+  retryDelayMax  Int @default(60000) // 重试最大延迟（毫秒）
 
   // 优先级
   enablePriority Boolean @default(false)  // 是否启用优先级
@@ -261,12 +263,12 @@ model UserAsset {
   generatedModel   GeneratedModel? @relation(fields: [generatedModelId], references: [id])
 
   // 基本信息
-  name            String
-  description     String?
-  modelUrl        String
+  name        String
+  description String?
+  modelUrl    String
   previewImageUrl String?
-  format          String
-  fileSize        Int?
+  format      String
+  fileSize    Int?
 
   // 模型元数据
   faceCount   Int?
@@ -274,8 +276,8 @@ model UserAsset {
   quality     String?
 
   // 模型广场
-  visibility  AssetVisibility @default(PRIVATE)
-  publishedAt DateTime?
+  visibility    AssetVisibility @default(PRIVATE)
+  publishedAt   DateTime?
 
   // 统计
   viewCount     Int @default(0)
@@ -299,12 +301,31 @@ model UserAsset {
 // 枚举类型
 // ============================================
 
-// ✅ 图片状态（简洁明了）
-enum ImageStatus {
-  PENDING      // 等待生成
-  GENERATING   // 生成中
-  COMPLETED    // 已完成
-  FAILED       // 失败
+// 请求状态（完整的业务状态）
+enum RequestStatus {
+  // 图片生成阶段
+  IMAGE_GENERATION_PENDING    // 等待生成图片
+  IMAGE_GENERATION_RUNNING    // 图片生成中
+  IMAGE_GENERATION_COMPLETED  // 图片已完成，等待用户操作
+  IMAGE_GENERATION_FAILED     // 图片生成失败
+
+  // 模型生成阶段
+  MODEL_GENERATION_PENDING    // 等待生成模型（至少有一个Job在PENDING）
+  MODEL_GENERATION_RUNNING    // 模型生成中（至少有一个Job在RUNNING）
+  MODEL_GENERATION_PARTIAL    // 部分模型已完成
+  MODEL_GENERATION_COMPLETED  // 所有模型已完成
+  MODEL_GENERATION_FAILED     // 模型生成失败
+
+  // 终态
+  COMPLETED    // 请求完成（至少生成了一个模型）
+  CANCELLED    // 用户取消
+}
+
+// 请求所处阶段
+enum RequestPhase {
+  IMAGE_GENERATION   // 图片生成阶段
+  MODEL_GENERATION   // 模型生成阶段
+  COMPLETED          // 已完成
 }
 
 // Job状态

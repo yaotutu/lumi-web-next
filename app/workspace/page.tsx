@@ -5,6 +5,10 @@ import { Suspense, useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 import type { TaskWithDetails } from "@/types";
+import {
+  adaptTaskResponse,
+  adaptTasksResponse,
+} from "@/lib/utils/task-adapter-client";
 import ImageGrid from "./components/ImageGrid";
 import ModelPreview from "./components/ModelPreview";
 
@@ -26,27 +30,29 @@ function WorkspaceContent() {
         if (taskId) {
           // 场景 1: 有 taskId，加载已存在的任务
           const response = await fetch(`/api/tasks/${taskId}`);
-          const data = await response.json();
+          const rawData = await response.json();
+          const data = adaptTaskResponse(rawData); // ✅ 适配后端数据
 
           if (data.success) {
             setTask(data.data);
-            if (data.data.selectedImageIndex !== null) {
+            if (data.data.selectedImageIndex !== null && data.data.selectedImageIndex !== undefined) {
               setSelectedImageIndex(data.data.selectedImageIndex);
             }
           } else {
-            console.error("Failed to load task:", data.error);
+            console.error("Failed to load task:", rawData.error);
           }
         } else {
           // 场景 2: 无任何参数，加载最新的任务
           const response = await fetch("/api/tasks?limit=1");
-          const data = await response.json();
+          const rawData = await response.json();
+          const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
           if (data.success && data.data.length > 0) {
             const latestTask = data.data[0];
             // 更新 URL 为最新任务 ID
             router.replace(`/workspace?taskId=${latestTask.id}`);
             setTask(latestTask);
-            if (latestTask.selectedImageIndex !== null) {
+            if (latestTask.selectedImageIndex !== null && latestTask.selectedImageIndex !== undefined) {
               setSelectedImageIndex(latestTask.selectedImageIndex);
             }
           } else {
@@ -84,7 +90,8 @@ function WorkspaceContent() {
       try {
         // 获取任务状态（Worker架构下不需要队列状态）
         const taskResponse = await fetch(`/api/tasks/${task.id}`);
-        const taskData = await taskResponse.json();
+        const rawTaskData = await taskResponse.json();
+        const taskData = adaptTaskResponse(rawTaskData); // ✅ 适配后端数据
 
         if (taskData.success) {
           setTask(taskData.data);
@@ -92,9 +99,8 @@ function WorkspaceContent() {
           // 如果任务完成，确保获取到最新数据后再停止轮询
           // 对于 MODEL_COMPLETED 状态，检查是否已有完成的模型
           if (taskData.data.status === "MODEL_COMPLETED") {
-            const hasCompletedModel = taskData.data.models?.some(
-              (m: { generationStatus: string }) =>
-                m.generationStatus === "COMPLETED",
+            const hasCompletedModel = taskData.data.models.some(
+              (m) => m.generationStatus === "COMPLETED",
             );
             if (hasCompletedModel) {
               console.log("模型生成完成，已获取到最新模型数据，停止轮询");
@@ -156,7 +162,8 @@ function WorkspaceContent() {
           body: JSON.stringify({ selectedImageIndex: imageIndex }),
         });
 
-        const data = await response.json();
+        const rawData = await response.json();
+        const data = adaptTaskResponse(rawData); // ✅ 适配后端数据
 
         if (data.success) {
           // 后台队列会自动处理3D模型生成，前端轮询Task状态即可
@@ -164,7 +171,7 @@ function WorkspaceContent() {
           // 立即更新任务数据
           setTask(data.data);
         } else {
-          console.error("Failed to select image:", data.error);
+          console.error("Failed to select image:", data.message || "Unknown error");
           // 回滚乐观更新
           setTask({ ...task, selectedImageIndex: imageIndex });
         }

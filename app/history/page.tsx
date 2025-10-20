@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import type { TaskWithDetails } from "@/types";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -15,7 +16,8 @@ export default function HistoryPage() {
     const fetchTasks = async () => {
       try {
         const response = await fetch("/api/tasks");
-        const data = await response.json();
+        const rawData = await response.json();
+        const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
         if (data.success) {
           setTasks(data.data);
@@ -108,8 +110,10 @@ export default function HistoryPage() {
                     {task.images.length > 0 ? (
                       <img
                         src={getProxiedImageUrl(
-                          task.images[task.selectedImageIndex ?? 0]?.url ||
-                            task.images[0].url,
+                          (task.images[task.selectedImageIndex ?? 0] as any)?.url ||
+                            task.images[task.selectedImageIndex ?? 0]?.imageUrl ||
+                            (task.images[0] as any)?.url ||
+                            task.images[0].imageUrl,
                         )}
                         alt="Task thumbnail"
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
@@ -136,7 +140,7 @@ export default function HistoryPage() {
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">
                       <span>{task.images.length} 张图片</span>
-                      {task.models.length > 0 && <span>• 已生成3D</span>}
+                      {task.models?.length > 0 && <span>• 已生成3D</span>}
                     </div>
 
                     <div className="text-xs text-white/40">

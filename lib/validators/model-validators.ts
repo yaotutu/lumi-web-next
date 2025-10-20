@@ -132,3 +132,17 @@ export const likeActionSchema = z.object({
  * 推导点赞操作的输入类型
  */
 export type LikeActionInput = z.infer<typeof likeActionSchema>;
+
+/**
+ * 创建AI生成模型请求验证器
+ * 用于用户选择图片生成3D模型
+ */
+export const createAIModelSchema = z.object({
+  taskId: z.string().cuid("无效的任务ID格式"),
+  sourceImageId: z.string().cuid("无效的图片ID格式"),
+});
+
+/**
+ * 推导创建AI生成模型的输入类型
+ */
+export type CreateAIModelInput = z.infer<typeof createAIModelSchema>;

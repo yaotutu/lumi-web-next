@@ -18,7 +18,7 @@ export type FileType = "image" | "model";
  * 保存图片参数
  */
 export interface SaveImageParams {
-  taskId: string; // 任务 ID
+  requestId: string; // 生成请求 ID
   index: number; // 图片索引 (0-3)
   imageData: Buffer | string; // 图片 Buffer 或 Base64 字符串
 }
@@ -81,10 +81,10 @@ export interface StorageProvider {
   saveFile(params: SaveFileParams): Promise<string>;
 
   /**
-   * 删除任务的所有资源
-   * @param taskId 任务 ID
+   * 删除请求的所有资源
+   * @param requestId 生成请求 ID
    */
-  deleteTaskResources(taskId: string): Promise<void>;
+  deleteRequestResources(requestId: string): Promise<void>;
 
   /**
    * 获取文件信息
@@ -102,18 +102,18 @@ export interface StorageProvider {
 
   /**
    * 生成 Mock 图片（用于开发测试）
-   * @param taskId 任务 ID
+   * @param requestId 生成请求 ID
    * @param index 图片索引
    * @returns URL 路径
    */
-  saveMockImage(taskId: string, index: number): Promise<string>;
+  saveMockImage(requestId: string, index: number): Promise<string>;
 
   /**
    * 生成 Mock 3D 模型（用于开发测试）
-   * @param taskId 任务 ID
+   * @param modelId 模型 ID
    * @returns URL 路径
    */
-  saveMockModel(taskId: string): Promise<string>;
+  saveMockModel(modelId: string): Promise<string>;
 
   /**
    * 获取 Provider 名称

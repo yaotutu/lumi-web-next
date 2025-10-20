@@ -1,15 +1,17 @@
 /**
- * 3D模型生成Worker
+ * 3D 模型生成 Worker（Job-Based 架构）
  *
- * 职责：监听数据库中状态为MODEL_PENDING的任务，执行3D模型生成流程
+ * 职责：
+ * - 监听 ModelGenerationJob 表中的待处理任务
+ * - 三层任务处理：超时检测 → 重试调度 → 新任务执行
+ * - 使用 WorkerConfigManager 获取动态配置
  *
  * 架构原则：
- * - API层只负责状态变更
- * - Worker层监听状态变化并执行业务逻辑
- * - 解耦API请求和后台任务处理
+ * - API 层创建 GeneratedModel 和 ModelGenerationJob
+ * - Worker 层监听 Job 状态并执行 3D 生成
+ * - Job 状态独立于 GeneratedModel 状态
  */
 
-import type { ModelGenerationStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
 import type { ModelTaskStatus } from "@/lib/providers/model3d";
@@ -19,7 +21,12 @@ import {
   downloadAndUploadModel,
   downloadAndUploadPreviewImage,
 } from "@/lib/utils/image-storage";
-import * as ModelService from "@/lib/services/model-service";
+import {
+  workerConfigManager,
+  QUEUE_NAMES,
+  type WorkerConfig,
+} from "./worker-config-manager";
+import type { ModelGenerationJob } from "@prisma/client";
 
 // 创建日志器
 const log = createLogger("Model3DWorker");
@@ -30,255 +37,410 @@ const log = createLogger("Model3DWorker");
 
 /**
  * 3D 模型导出格式配置
- * - OBJ: 通用格式，支持材质和纹理（当前使用）
- * - GLB: glTF 二进制格式，适合 Web 展示
- *
- * TODO: 后期支持通过参数动态选择格式
  */
-const MODEL_FORMAT = "OBJ" as const; // 当前硬编码为 OBJ
-const SUPPORTED_FORMATS = ["OBJ", "GLB"] as const; // 未来支持的格式
+const MODEL_FORMAT = "OBJ" as const;
 
 const CONFIG = {
-  POLL_INTERVAL: 2000, // Worker轮询数据库间隔（2秒）
+  POLL_INTERVAL: 2000, // Worker 轮询数据库间隔（2秒）
   TENCENT_POLL_INTERVAL: 5000, // 轮询腾讯云状态间隔（5秒）
   MAX_TENCENT_POLL_TIME: 600000, // 最大轮询腾讯云时间（10分钟）
-  MAX_CONCURRENT: 1, // 最大并发3D任务数
-  // 重试配置（使用统一的重试工具）
-  RETRY_CONFIG: {
-    ...DEFAULT_RETRY_CONFIG,
-    maxRetries: 3, // 最大重试3次
-    baseDelay: 3000, // 普通错误基础延迟3秒
-    rateLimitDelay: 30000, // 并发限制延迟30秒（与图像生成一致）
-  },
 } as const;
-
-// ============================================
-// 状态映射
-// ============================================
-
-/**
- * 将 Provider 的技术状态映射为业务状态
- * Provider 状态（技术层）：WAIT/RUN/DONE/FAIL
- * 业务状态（数据库层）：PENDING/GENERATING/COMPLETED/FAILED
- */
-const PROVIDER_STATUS_MAP: Record<ModelTaskStatus, ModelGenerationStatus> = {
-  WAIT: "PENDING", // Provider: 等待处理 → 业务: 等待中
-  RUN: "GENERATING", // Provider: 运行中 → 业务: 生成中
-  DONE: "COMPLETED", // Provider: 完成 → 业务: 已完成
-  FAIL: "FAILED", // Provider: 失败 → 业务: 失败
-};
-
-/**
- * 映射 Provider 状态为业务状态
- */
-function mapProviderStatus(
-  providerStatus: ModelTaskStatus,
-): ModelGenerationStatus {
-  return PROVIDER_STATUS_MAP[providerStatus];
-}
 
 // ============================================
 // 状态管理
 // ============================================
 
-// 当前正在处理的任务ID集合（避免重复处理）
-const processingTasks = new Set<string>();
+// 当前正在处理的 Job ID 集合（避免重复处理）
+const processingJobs = new Set<string>();
 
-// Worker是否正在运行
+// Worker 是否正在运行
 let isRunning = false;
+
+// Worker 配置缓存
+let workerConfig: WorkerConfig | null = null;
+
+// ============================================
+// 三层任务处理
+// ============================================
+
+/**
+ * Layer 1: 超时任务检测
+ * 查询 RUNNING 状态且已超时的任务，标记为 TIMEOUT
+ */
+async function detectTimeoutJobs(): Promise<void> {
+  try {
+    const now = new Date();
+
+    // 查询已超时的 RUNNING 任务
+    const timeoutJobs = await prisma.modelGenerationJob.findMany({
+      where: {
+        status: "RUNNING",
+        timeoutAt: {
+          lte: now,
+        },
+      },
+      include: {
+        model: {
+          include: {
+            request: true,
+            sourceImage: true,
+          },
+        },
+      },
+    });
+
+    if (timeoutJobs.length > 0) {
+      log.warn("detectTimeoutJobs", "检测到超时任务", {
+        count: timeoutJobs.length,
+        jobIds: timeoutJobs.map((j) => j.id),
+      });
+
+      for (const job of timeoutJobs) {
+        // 判断是否可以重试
+        if (
+          workerConfig &&
+          workerConfigManager.canRetry(job.retryCount, workerConfig.maxRetries)
+        ) {
+          // 计算下次重试时间
+          const retryDelay = workerConfigManager.calculateRetryDelay(
+            job.retryCount,
+            workerConfig,
+          );
+          const nextRetryAt = new Date(Date.now() + retryDelay);
+
+          log.info("detectTimeoutJobs", "任务超时，安排重试", {
+            jobId: job.id,
+            modelId: job.modelId,
+            retryCount: job.retryCount + 1,
+            nextRetryAt,
+          });
+
+          // 更新 Job 状态为 RETRYING
+          await prisma.modelGenerationJob.update({
+            where: { id: job.id },
+            data: {
+              status: "RETRYING",
+              retryCount: job.retryCount + 1,
+              nextRetryAt,
+              timeoutedAt: now,
+              errorMessage: "任务执行超时",
+              errorCode: "TIMEOUT",
+            },
+          });
+
+          // 更新 GeneratedModel 状态
+          await prisma.generatedModel.update({
+            where: { id: job.modelId },
+            data: {
+              errorMessage: "任务执行超时，正在重试",
+            },
+          });
+        } else {
+          // 超过最大重试次数，标记为 FAILED
+          log.error("detectTimeoutJobs", "任务超时且超过最大重试次数", null, {
+            jobId: job.id,
+            modelId: job.modelId,
+            retryCount: job.retryCount,
+          });
+
+          await prisma.modelGenerationJob.update({
+            where: { id: job.id },
+            data: {
+              status: "FAILED",
+              failedAt: now,
+              timeoutedAt: now,
+              errorMessage: "任务执行超时，已达最大重试次数",
+              errorCode: "MAX_RETRIES_EXCEEDED",
+            },
+          });
+
+          // 更新 GeneratedModel 状态
+          await prisma.generatedModel.update({
+            where: { id: job.modelId },
+            data: {
+              failedAt: now,
+              errorMessage: "3D 模型生成超时失败",
+            },
+          });
+        }
+      }
+    }
+  } catch (error) {
+    log.error("detectTimeoutJobs", "超时检测失败", error);
+  }
+}
+
+/**
+ * Layer 2: 重试任务调度
+ * 查询 RETRYING 状态且到达重试时间的任务，重新执行
+ */
+async function scheduleRetryJobs(): Promise<void> {
+  try {
+    const now = new Date();
+
+    // 查询到达重试时间的 RETRYING 任务
+    const retryJobs = await prisma.modelGenerationJob.findMany({
+      where: {
+        status: "RETRYING",
+        nextRetryAt: {
+          lte: now,
+        },
+        id: {
+          notIn: Array.from(processingJobs),
+        },
+      },
+      include: {
+        model: {
+          include: {
+            request: true,
+            sourceImage: true,
+          },
+        },
+      },
+      take: workerConfig?.maxConcurrency || 1,
+    });
+
+    if (retryJobs.length > 0) {
+      log.info("scheduleRetryJobs", "发现待重试任务", {
+        count: retryJobs.length,
+        jobIds: retryJobs.map((j) => j.id),
+      });
+
+      // 并发处理重试任务
+      await Promise.all(retryJobs.map((job) => processJob(job)));
+    }
+  } catch (error) {
+    log.error("scheduleRetryJobs", "重试调度失败", error);
+  }
+}
+
+/**
+ * Layer 3: 新任务执行
+ * 查询 PENDING 状态的任务，执行 3D 模型生成
+ */
+async function executeNewJobs(): Promise<void> {
+  try {
+    // 查询 PENDING 状态的任务
+    const pendingJobs = await prisma.modelGenerationJob.findMany({
+      where: {
+        status: "PENDING",
+        id: {
+          notIn: Array.from(processingJobs),
+        },
+      },
+      include: {
+        model: {
+          include: {
+            request: true,
+            sourceImage: true,
+          },
+        },
+      },
+      orderBy: workerConfig?.enablePriority
+        ? [{ priority: "desc" }, { createdAt: "asc" }]
+        : { createdAt: "asc" },
+      take: workerConfig?.maxConcurrency || 1,
+    });
+
+    if (pendingJobs.length > 0) {
+      log.info("executeNewJobs", "发现待处理任务", {
+        count: pendingJobs.length,
+        jobIds: pendingJobs.map((j) => j.id),
+      });
+
+      // 并发处理新任务
+      await Promise.all(pendingJobs.map((job) => processJob(job)));
+    }
+  } catch (error) {
+    log.error("executeNewJobs", "新任务执行失败", error);
+  }
+}
 
 // ============================================
 // 核心业务逻辑
 // ============================================
 
 /**
- * 处理单个3D模型生成任务
- * 职责：从提交腾讯云到轮询完成的完整流程
+ * 处理单个 3D 模型生成 Job
  */
-async function processTask(taskId: string): Promise<void> {
+async function processJob(
+  job: ModelGenerationJob & {
+    model: {
+      id: string;
+      name: string;
+      requestId: string;
+      sourceImage: { id: string; imageUrl: string | null };
+    };
+  },
+): Promise<void> {
   const t = timer();
-  log.info("processTask", "开始处理3D模型生成任务", { taskId });
+  log.info("processJob", "开始处理 3D 模型生成任务", {
+    jobId: job.id,
+    modelId: job.modelId,
+    requestId: job.model.requestId,
+    retryCount: job.retryCount,
+  });
 
   // 防止重复处理
-  if (processingTasks.has(taskId)) {
-    log.warn("processTask", "任务正在处理中，跳过", { taskId });
+  if (processingJobs.has(job.id)) {
+    log.warn("processJob", "任务正在处理中，跳过", { jobId: job.id });
     return;
   }
 
-  processingTasks.add(taskId);
-
-  let createdModelId: string | null = null; // 跟踪已创建的模型 ID
+  processingJobs.add(job.id);
 
   try {
-    // 1. 查询任务详情
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        images: { orderBy: { index: "asc" } },
-        models: { orderBy: { createdAt: "desc" } }, // 获取所有模型，按时间倒序
-      },
-    });
+    // 1. 更新 Job 状态为 RUNNING
+    const timeoutDuration = workerConfig?.jobTimeout || 600000; // 默认 10 分钟
+    const timeoutAt = new Date(Date.now() + timeoutDuration);
 
-    // 验证任务存在
-    if (!task) {
-      log.error("processTask", "任务不存在", null, { taskId });
-      return;
-    }
-
-    // 验证任务状态（必须是MODEL_PENDING）
-    if (task.status !== "MODEL_PENDING") {
-      log.warn("processTask", "任务状态已变化，跳过处理", {
-        taskId,
-        currentStatus: task.status,
-      });
-      return;
-    }
-
-    // 立即更新任务状态为 MODEL_GENERATING
-    await prisma.task.update({
-      where: { id: taskId },
+    await prisma.modelGenerationJob.update({
+      where: { id: job.id },
       data: {
-        status: "MODEL_GENERATING",
-        modelGenerationStartedAt: new Date(),
+        status: "RUNNING",
+        startedAt: new Date(),
+        timeoutAt,
+        workerNodeId: process.env.WORKER_NODE_ID || "default",
       },
     });
 
-    log.info("processTask", "任务状态已更新为 MODEL_GENERATING", { taskId });
-
-    // 验证必须已选择图片
-    if (
-      task.selectedImageIndex === null ||
-      task.selectedImageIndex === undefined
-    ) {
-      throw new Error("任务未选择图片");
-    }
-
-    // 🔄 允许同一个任务生成多个模型（针对不同的图片）
-    // 只检查是否已有正在生成中的模型（避免重复提交同一任务）
-    const hasGenerating = await ModelService.hasGeneratingModel(taskId);
-    if (hasGenerating) {
-      log.warn("processTask", "已有正在生成中的模型，跳过", { taskId });
-      return;
-    }
-
-    // 注：允许有多个 COMPLETED 模型，用户可以从不同图片生成多个模型
-
-    // 获取选中的图片
-    const selectedImage = task.images[task.selectedImageIndex];
-    if (!selectedImage) {
+    // 2. 验证源图片 URL 是否存在
+    const sourceImageUrl = job.model.sourceImage.imageUrl;
+    if (!sourceImageUrl) {
       throw new Error(
-        `选中的图片不存在: index=${task.selectedImageIndex}, total=${task.images.length}`,
+        `源图片 URL 缺失: sourceImageId=${job.model.sourceImage.id}`,
       );
     }
 
-    log.info("processTask", "验证通过，准备创建模型记录", {
-      taskId,
-      selectedImageIndex: task.selectedImageIndex,
-      imageUrl: selectedImage.url,
-    });
-
-    // 2. 先创建 Model 记录（获取 model.id，作为存储标识）
-    const model = await ModelService.createAIGeneratedModel(
-      task.userId,
-      taskId,
-      {
-        name: `${task.prompt.slice(0, 30)} - 3D模型`,
-        prompt: task.prompt,
-      },
-    );
-
-    createdModelId = model.id; // 记录已创建的模型 ID
-
-    log.info("processTask", "模型记录创建成功", {
-      taskId,
-      modelId: model.id,
-      source: "AI_GENERATED",
-      initialStatus: "PENDING",
-    });
-
-    // 3. 提交3D生成任务（使用统一的重试工具）
+    // 3. 提交 3D 生成任务
     const model3DProvider = createModel3DProvider();
-    const tencentResponse = await retryWithBackoff(
-      async () => {
-        return await model3DProvider.submitModelGenerationJob({
-          imageUrl: selectedImage.url,
-        });
+    const tencentResponse = await model3DProvider.submitModelGenerationJob({
+      imageUrl: sourceImageUrl,
+    });
+
+    log.info("processJob", "3D 任务提交成功", {
+      jobId: job.id,
+      modelId: job.modelId,
+      providerJobId: tencentResponse.jobId,
+    });
+
+    // 4. 更新 Job，保存 Provider 的 jobId
+    await prisma.modelGenerationJob.update({
+      where: { id: job.id },
+      data: {
+        providerJobId: tencentResponse.jobId,
+        providerRequestId: tencentResponse.requestId,
+        providerName: "tencent",
       },
-      CONFIG.RETRY_CONFIG,
-      taskId,
-      "提交3D生成任务",
-    );
-
-    log.info("processTask", "3D任务提交成功", {
-      taskId,
-      modelId: model.id,
-      jobId: tencentResponse.jobId,
-      requestId: tencentResponse.requestId,
     });
 
-    // 4. 更新 Model 记录，保存 Provider 返回的 jobId
-    await ModelService.updateModelProviderJobId(
-      model.id,
-      tencentResponse.jobId,
-      tencentResponse.requestId,
-    );
+    // 5. 轮询 3D 生成状态直到完成
+    await pollModel3DStatus(job.id, job.modelId, tencentResponse.jobId);
 
-    log.info("processTask", "模型记录已更新 jobId", {
-      taskId,
-      modelId: model.id,
-      jobId: tencentResponse.jobId,
-    });
-
-    // 5. 轮询3D生成状态直到完成（传入 modelId）
-    await pollModel3DStatus(taskId, model.id, tencentResponse.jobId);
-
-    log.info("processTask", "3D模型生成完成", {
-      taskId,
+    log.info("processJob", "3D 模型生成完成", {
+      jobId: job.id,
+      modelId: job.modelId,
       duration: t(),
     });
   } catch (error) {
     // 处理错误
     const errorMsg = error instanceof Error ? error.message : "未知错误";
-    log.error("processTask", "3D模型生成失败", error, { taskId });
+    const errorCode = (error as any)?.code || "UNKNOWN_ERROR";
 
-    // 更新任务状态为FAILED
-    await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        status: "FAILED",
-        failedAt: new Date(),
-        errorMessage: errorMsg,
-      },
+    log.error("processJob", "3D 模型生成失败", error, {
+      jobId: job.id,
+      modelId: job.modelId,
     });
 
-    // 如果已创建模型记录，标记为失败
-    if (createdModelId) {
-      await ModelService.markModelFailed(createdModelId, errorMsg);
+    // 判断是否可以重试
+    if (
+      workerConfig &&
+      workerConfigManager.canRetry(job.retryCount, workerConfig.maxRetries)
+    ) {
+      // 计算下次重试时间
+      const retryDelay = workerConfigManager.calculateRetryDelay(
+        job.retryCount,
+        workerConfig,
+      );
+      const nextRetryAt = new Date(Date.now() + retryDelay);
+
+      log.info("processJob", "任务失败，安排重试", {
+        jobId: job.id,
+        modelId: job.modelId,
+        retryCount: job.retryCount + 1,
+        nextRetryAt,
+      });
+
+      // 更新 Job 状态为 RETRYING
+      await prisma.modelGenerationJob.update({
+        where: { id: job.id },
+        data: {
+          status: "RETRYING",
+          retryCount: job.retryCount + 1,
+          nextRetryAt,
+          failedAt: new Date(),
+          errorMessage: errorMsg,
+          errorCode,
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+      });
+
+      // 更新 GeneratedModel 状态
+      await prisma.generatedModel.update({
+        where: { id: job.modelId },
+        data: {
+          errorMessage: `${errorMsg}（正在重试）`,
+        },
+      });
+    } else {
+      // 超过最大重试次数，标记为 FAILED
+      log.error("processJob", "任务失败且超过最大重试次数", null, {
+        jobId: job.id,
+        modelId: job.modelId,
+        retryCount: job.retryCount,
+      });
+
+      await prisma.modelGenerationJob.update({
+        where: { id: job.id },
+        data: {
+          status: "FAILED",
+          failedAt: new Date(),
+          errorMessage: errorMsg,
+          errorCode,
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+      });
+
+      // 更新 GeneratedModel 状态
+      await prisma.generatedModel.update({
+        where: { id: job.modelId },
+        data: {
+          failedAt: new Date(),
+          errorMessage: errorMsg,
+        },
+      });
     }
   } finally {
-    processingTasks.delete(taskId);
+    processingJobs.delete(job.id);
   }
 }
 
 /**
- * 轮询3D模型生成任务状态直到完成
- * @param taskId 任务 ID
- * @param modelId 模型 ID（数据库记录的主键，用于存储标识）
- * @param jobId Provider 任务 ID（腾讯云返回的 jobId）
+ * 轮询 3D 模型生成任务状态直到完成
  */
 async function pollModel3DStatus(
-  taskId: string,
-  modelId: string,
   jobId: string,
+  modelId: string,
+  providerJobId: string,
 ): Promise<void> {
   const startTime = Date.now();
   let pollCount = 0;
   const model3DProvider = createModel3DProvider();
 
-  log.info("pollModel3DStatus", "开始轮询3D生成状态", {
-    taskId,
-    modelId,
+  log.info("pollModel3DStatus", "开始轮询 3D 生成状态", {
     jobId,
+    modelId,
+    providerJobId,
   });
 
   while (true) {
@@ -288,187 +450,157 @@ async function pollModel3DStatus(
     // 检查是否超时
     if (elapsed > CONFIG.MAX_TENCENT_POLL_TIME) {
       throw new Error(
-        `轮询超时：已等待${Math.floor(elapsed / 1000)}秒，超过最大限制`,
+        `轮询超时：已等待 ${Math.floor(elapsed / 1000)} 秒，超过最大限制`,
       );
     }
 
-    // 等待后查询（避免首次立即查询）
+    // 等待后查询
     await sleep(CONFIG.TENCENT_POLL_INTERVAL);
 
-    // 查询3D生成状态
-    const status = await model3DProvider.queryModelTaskStatus(jobId);
+    // 查询 3D 生成状态
+    const status = await model3DProvider.queryModelTaskStatus(providerJobId);
 
-    log.info("pollModel3DStatus", "3D生成状态查询", {
-      taskId,
+    log.info("pollModel3DStatus", "3D 生成状态查询", {
       jobId,
+      modelId,
+      providerJobId,
       status: status.status,
       pollCount,
       elapsedSeconds: Math.floor(elapsed / 1000),
     });
-
-    // 映射 Provider 状态为业务状态
-    const businessStatus = mapProviderStatus(status.status);
 
     // 计算进度
     let progress = 0;
     if (status.status === "WAIT") progress = 0;
     else if (status.status === "RUN") progress = 50;
     else if (status.status === "DONE") progress = 100;
-    else if (status.status === "FAIL") progress = 0;
 
-    // 🔒 原子更新策略：只在 WAIT/RUN 状态时更新 generationStatus
-    // DONE 状态不在此处更新，避免 generationStatus=COMPLETED 先于 modelUrl 设置
-    // 这样可以保证前端查询时，COMPLETED 状态必然伴随有效的 modelUrl
+    // 更新 Job 进度
     if (status.status === "WAIT" || status.status === "RUN") {
-      await ModelService.updateModelProgress(modelId, businessStatus, progress);
+      await prisma.modelGenerationJob.update({
+        where: { id: jobId },
+        data: { progress },
+      });
     }
 
     // 处理完成状态
     if (status.status === "DONE") {
-      // 🔍 调试：打印所有返回的文件
       log.info("pollModel3DStatus", "腾讯云返回的所有文件", {
-        taskId,
         jobId,
+        modelId,
         resultFiles: status.resultFiles?.map((f) => ({
           type: f.type,
-          url: f.url?.substring(0, 100),
-          previewImageUrl: f.previewImageUrl?.substring(0, 100),
+          hasUrl: !!f.url,
+          hasPreview: !!f.previewImageUrl,
         })),
       });
 
-      // 提取模型文件URL（根据配置的格式查找）
+      // 提取模型文件 URL
       const modelFile = status.resultFiles?.find(
         (file) => file.type?.toUpperCase() === MODEL_FORMAT,
       );
 
       if (!modelFile?.url) {
-        throw new Error(`3D生成返回的结果中没有${MODEL_FORMAT}文件`);
+        throw new Error(`3D 生成返回的结果中没有 ${MODEL_FORMAT} 文件`);
       }
 
-      log.info(
-        "pollModel3DStatus",
-        "3D模型生成成功，准备下载并上传到存储服务",
-        {
-          taskId,
-          jobId,
-          format: MODEL_FORMAT,
-          remoteModelUrlPreview: modelFile.url.substring(0, 80) + "...",
-          hasPreviewImage: !!modelFile.previewImageUrl,
-        },
-      );
+      log.info("pollModel3DStatus", "准备下载并上传模型文件", {
+        jobId,
+        modelId,
+        format: MODEL_FORMAT,
+      });
 
-      // 🎯 下载模型并上传到配置的存储服务（本地/OSS/COS）
-      // 返回永久可访问的 URL
-      // 使用 modelId 作为存储标识（数据库主键，语义清晰）
+      // 下载模型并上传到存储服务
       const storageUrl = await downloadAndUploadModel(
         modelFile.url,
-        modelId, // 使用 modelId 作为存储标识
-        MODEL_FORMAT.toLowerCase(), // 转为小写作为文件扩展名
+        modelId,
+        MODEL_FORMAT.toLowerCase(),
       );
 
       log.info("pollModel3DStatus", "模型上传成功", {
-        taskId,
-        modelId,
         jobId,
+        modelId,
         storageUrl,
       });
 
-      // 🎯 下载并保存预览图（如果有）
+      // 下载并保存预览图（如果有）
       let previewImageStorageUrl: string | undefined;
       if (modelFile.previewImageUrl) {
         try {
-          log.info("pollModel3DStatus", "开始下载并保存预览图", {
-            taskId,
-            modelId,
-            jobId,
-            previewImageUrlPreview:
-              modelFile.previewImageUrl.substring(0, 80) + "...",
-          });
-
           previewImageStorageUrl = await downloadAndUploadPreviewImage(
             modelFile.previewImageUrl,
-            modelId, // 使用 modelId 作为存储标识
+            modelId,
           );
 
           log.info("pollModel3DStatus", "预览图上传成功", {
-            taskId,
-            modelId,
             jobId,
+            modelId,
             previewImageStorageUrl,
           });
         } catch (error) {
-          // 预览图下载失败不应阻塞主流程，只记录警告
-          log.warn("pollModel3DStatus", "预览图下载失败，但不影响模型保存", {
-            taskId,
-            modelId,
+          log.warn("pollModel3DStatus", "预览图下载失败", {
             jobId,
+            modelId,
             error: error instanceof Error ? error.message : String(error),
           });
         }
-      } else {
-        log.info("pollModel3DStatus", "腾讯云未返回预览图", {
-          taskId,
-          modelId,
-          jobId,
-        });
       }
 
-      // 更新模型状态为COMPLETED（存储持久化的 URL，而不是临时 URL）
-      // 使用 ModelService 统一管理数据库更新
-      await ModelService.markModelCompleted(modelId, {
-        modelUrl: storageUrl, // 持久化的存储 URL
-        previewImageUrl: previewImageStorageUrl, // 预览图 URL（可能为 undefined）
-        format: MODEL_FORMAT, // 明确设置模型格式
+      // 更新 Job 状态为 COMPLETED
+      const completedAt = new Date();
+      const job = await prisma.modelGenerationJob.findUnique({
+        where: { id: jobId },
       });
+      const executionDuration = job?.startedAt
+        ? completedAt.getTime() - job.startedAt.getTime()
+        : 0;
 
-      // 更新任务状态为MODEL_COMPLETED
-      await prisma.task.update({
-        where: { id: taskId },
+      await prisma.modelGenerationJob.update({
+        where: { id: jobId },
         data: {
-          status: "MODEL_COMPLETED",
-          modelGenerationCompletedAt: new Date(),
-          completedAt: new Date(),
+          status: "COMPLETED",
+          progress: 100,
+          completedAt,
+          executionDuration,
         },
       });
 
-      log.info("pollModel3DStatus", "任务完成", { taskId, jobId });
+      // 更新 GeneratedModel 状态
+      await prisma.generatedModel.update({
+        where: { id: modelId },
+        data: {
+          modelUrl: storageUrl,
+          previewImageUrl: previewImageStorageUrl,
+          format: MODEL_FORMAT,
+          completedAt,
+          errorMessage: null, // 清除之前的错误信息
+        },
+      });
+
+      log.info("pollModel3DStatus", "模型生成完成", { jobId, modelId });
       return;
     }
 
     // 处理失败状态
     if (status.status === "FAIL") {
-      const errorMsg = status.errorMessage || "3D模型生成失败（返回失败状态）";
+      const errorMsg = status.errorMessage || "3D 模型生成失败（返回失败状态）";
 
-      log.error("pollModel3DStatus", "3D生成任务失败", null, {
-        taskId,
-        modelId,
+      log.error("pollModel3DStatus", "3D 生成任务失败", null, {
         jobId,
+        modelId,
         errorCode: status.errorCode,
         errorMessage: errorMsg,
-      });
-
-      // 更新模型状态为FAILED
-      await ModelService.markModelFailed(modelId, errorMsg);
-
-      // 更新任务状态为FAILED
-      await prisma.task.update({
-        where: { id: taskId },
-        data: {
-          status: "FAILED",
-          failedAt: new Date(),
-          errorMessage: errorMsg,
-        },
       });
 
       throw new Error(errorMsg);
     }
 
-    // 继续轮询（WAIT或RUN状态）
+    // 继续轮询（WAIT 或 RUN 状态）
   }
 }
 
 // ============================================
-// Worker主循环
+// Worker 主循环
 // ============================================
 
 /**
@@ -479,92 +611,87 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Worker主循环：持续监听MODEL_PENDING状态的任务
+ * Worker 主循环：三层任务处理
  */
 async function workerLoop(): Promise<void> {
-  log.info("workerLoop", "Worker启动，开始监听MODEL_PENDING状态任务");
+  log.info("workerLoop", "Worker 启动，开始监听任务状态");
 
   while (isRunning) {
     try {
-      // 查询所有状态为MODEL_PENDING且未被处理的任务
-      const tasks = await prisma.task.findMany({
-        where: {
-          status: "MODEL_PENDING",
-          id: {
-            notIn: Array.from(processingTasks), // 排除正在处理的任务
-          },
-        },
-        orderBy: {
-          updatedAt: "asc", // 优先处理更早的任务
-        },
-        take: CONFIG.MAX_CONCURRENT, // 限制并发数
-      });
+      // 刷新配置
+      workerConfig = await workerConfigManager.getConfig(
+        QUEUE_NAMES.MODEL_GENERATION,
+      );
 
-      // 处理每个任务（并发执行）
-      if (tasks.length > 0) {
-        log.info("workerLoop", "发现待处理任务", {
-          count: tasks.length,
-          taskIds: tasks.map((t) => t.id),
-        });
-
-        // 并发处理所有任务（受MAX_CONCURRENT限制）
-        await Promise.all(tasks.map((task) => processTask(task.id)));
+      // 检查队列是否激活
+      if (!workerConfig.isActive) {
+        log.info("workerLoop", "队列已暂停，等待重新激活");
+        await sleep(CONFIG.POLL_INTERVAL);
+        continue;
       }
+
+      // 三层任务处理
+      await detectTimeoutJobs(); // Layer 1: 超时检测
+      await scheduleRetryJobs(); // Layer 2: 重试调度
+      await executeNewJobs(); // Layer 3: 新任务执行
 
       // 等待后继续下一轮轮询
       await sleep(CONFIG.POLL_INTERVAL);
     } catch (error) {
-      log.error("workerLoop", "Worker循环出错", error);
-      // 出错后等待一段时间再继续
+      log.error("workerLoop", "Worker 循环出错", error);
       await sleep(5000);
     }
   }
 
-  log.info("workerLoop", "Worker已停止");
+  log.info("workerLoop", "Worker 已停止");
 }
 
 // ============================================
-// 导出的公共API
+// 导出的公共 API
 // ============================================
 
 /**
- * 启动Worker
+ * 启动 Worker
  */
-export function startWorker(): void {
+export async function startWorker(): Promise<void> {
   if (isRunning) {
-    log.warn("startWorker", "Worker已在运行中");
+    log.warn("startWorker", "Worker 已在运行中");
     return;
   }
 
+  // 初始化配置管理器
+  await workerConfigManager.initialize();
+
   isRunning = true;
   workerLoop().catch((error) => {
-    log.error("startWorker", "Worker崩溃", error);
+    log.error("startWorker", "Worker 崩溃", error);
     isRunning = false;
   });
 
-  log.info("startWorker", "Worker已启动");
+  log.info("startWorker", "Worker 已启动");
 }
 
 /**
- * 停止Worker
+ * 停止 Worker
  */
 export function stopWorker(): void {
   if (!isRunning) {
-    log.warn("stopWorker", "Worker未在运行");
+    log.warn("stopWorker", "Worker 未在运行");
     return;
   }
 
   isRunning = false;
-  log.info("stopWorker", "Worker停止信号已发送");
+  log.info("stopWorker", "Worker 停止信号已发送");
 }
 
 /**
- * 获取Worker状态
+ * 获取 Worker 状态
  */
 export function getWorkerStatus() {
   return {
     isRunning,
-    processingCount: processingTasks.size,
-    processingTaskIds: Array.from(processingTasks),
+    processingCount: processingJobs.size,
+    processingJobIds: Array.from(processingJobs),
+    config: workerConfig,
   };
 }

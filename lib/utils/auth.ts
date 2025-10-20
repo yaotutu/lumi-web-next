@@ -39,7 +39,7 @@ export function getCurrentUserId(): string {
   // }
   // return session.user.id;
 
-  // 当前返回固定的开发用户 ID
+  // 当前返回固定的开发用户 ID（与数据库中创建的测试用户匹配）
   return "user_dev_001";
 }
 

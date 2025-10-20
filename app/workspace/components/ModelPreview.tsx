@@ -551,7 +551,7 @@ export default function ModelPreview({
               <div className="flex-1">
                 <h3 className="mb-3 text-sm font-bold text-white">模型信息</h3>
 
-                {/* 格式和质量徽章 */}
+                {/* 格式徽章 */}
                 <div className="mb-3 flex gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-yellow-1/10 px-2.5 py-1 text-xs font-medium text-yellow-1 border border-yellow-1/20">
                     <svg
@@ -569,102 +569,32 @@ export default function ModelPreview({
                     </svg>
                     {latestModel?.format || "OBJ"}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-yellow-1/10 to-yellow-1/5 px-2.5 py-1 text-xs font-medium text-yellow-1 border border-yellow-1/20">
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                      />
-                    </svg>
-                    {latestModel?.quality || "高清"}
-                  </span>
                 </div>
 
-                {/* 详细信息 - 只显示有数据的字段 */}
-                {(latestModel?.fileSize ||
-                  (latestModel?.faceCount !== null &&
-                    latestModel?.faceCount !== undefined) ||
-                  (latestModel?.vertexCount !== null &&
-                    latestModel?.vertexCount !== undefined)) && (
+                {/* 详细信息 - 只显示文件大小 */}
+                {latestModel?.fileSize && (
                   <div className="space-y-2 text-xs text-white/70">
-                    {latestModel?.fileSize && (
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1.5">
-                          <svg
-                            className="h-3.5 w-3.5 text-white/50"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
-                            />
-                          </svg>
-                          文件大小
-                        </span>
-                        <span className="text-white font-medium tabular-nums">
-                          {(latestModel.fileSize / (1024 * 1024)).toFixed(2)} MB
-                        </span>
-                      </div>
-                    )}
-                    {latestModel?.faceCount !== null &&
-                      latestModel?.faceCount !== undefined && (
-                        <div className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5">
-                            <svg
-                              className="h-3.5 w-3.5 text-white/50"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z"
-                              />
-                            </svg>
-                            面数
-                          </span>
-                          <span className="text-white font-medium tabular-nums">
-                            {latestModel.faceCount.toLocaleString()}
-                          </span>
-                        </div>
-                      )}
-                    {latestModel?.vertexCount !== null &&
-                      latestModel?.vertexCount !== undefined && (
-                        <div className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5">
-                            <svg
-                              className="h-3.5 w-3.5 text-white/50"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-                              />
-                            </svg>
-                            顶点数
-                          </span>
-                          <span className="text-white font-medium tabular-nums">
-                            {latestModel.vertexCount.toLocaleString()}
-                          </span>
-                        </div>
-                      )}
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5">
+                        <svg
+                          className="h-3.5 w-3.5 text-white/50"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                          />
+                        </svg>
+                        文件大小
+                      </span>
+                      <span className="text-white font-medium tabular-nums">
+                        {(latestModel.fileSize / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>

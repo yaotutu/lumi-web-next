@@ -7,14 +7,24 @@
  * - 不包含业务逻辑
  *
  * 使用示例：
- * import { ModelRepository, TaskRepository } from '@/lib/repositories';
+ * import { GenerationRequestRepository, GeneratedModelRepository } from '@/lib/repositories';
  *
- * const model = await ModelRepository.findModelById(id);
- * const task = await TaskRepository.createTask({ userId, prompt });
+ * const request = await GenerationRequestRepository.findRequestById(id);
+ * const model = await GeneratedModelRepository.createModelWithJob({ ... });
  */
 
-import * as ModelRepository from "./model.repository";
-import * as TaskRepository from "./task.repository";
-import * as TaskImageRepository from "./task-image.repository";
+import * as GenerationRequestRepository from "./generation-request.repository";
+import * as GeneratedImageRepository from "./generated-image.repository";
+import * as GeneratedModelRepository from "./generated-model.repository";
+import * as JobRepository from "./job.repository";
+import * as UserAssetRepository from "./user-asset.repository";
+import * as QueueConfigRepository from "./queue-config.repository";
 
-export { ModelRepository, TaskRepository, TaskImageRepository };
+export {
+  GenerationRequestRepository,
+  GeneratedImageRepository,
+  GeneratedModelRepository,
+  JobRepository,
+  UserAssetRepository,
+  QueueConfigRepository,
+};

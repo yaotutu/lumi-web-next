@@ -1,76 +1,65 @@
-import type { TaskStatus } from "@prisma/client";
+/**
+ * Tasks API - 新架构（Image-Centric）
+ *
+ * 直接返回 GenerationRequest 数据，无适配层
+ */
+
 import { type NextRequest, NextResponse } from "next/server";
-import * as TaskService from "@/lib/services/task-service";
-import { getCurrentUserId } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import {
-  createTaskSchema,
-  listTasksQuerySchema,
-} from "@/lib/validators/task-validators";
+import { getCurrentUserId } from "@/lib/utils/auth";
+import * as GenerationRequestService from "@/lib/services/generation-request-service";
 
 /**
  * GET /api/tasks
- * 获取用户的任务列表
+ * 获取用户的生成请求列表
+ *
+ * 返回格式：
+ * - GenerationRequest（无 status/phase）
+ * - images: GeneratedImage[]（每个有 imageStatus）
+ * - generatedModels: GeneratedModel[]
  */
 export const GET = withErrorHandler(async (request: NextRequest) => {
-  const { searchParams } = new URL(request.url);
-
-  // 提取查询参数
-  const statusParam = searchParams.get("status");
-  const limitParam = searchParams.get("limit");
-
-  const queryParams = {
-    status: statusParam === null ? undefined : (statusParam as TaskStatus),
-    limit: limitParam === null ? undefined : limitParam,
-  };
-
-  // 使用Zod验证查询参数（错误会被withErrorHandler自动捕获）
-  const validatedParams = listTasksQuerySchema.parse(queryParams);
-  const { status, limit } = validatedParams;
-
-  // 获取当前用户ID
   const userId = getCurrentUserId();
-
-  // 调用Service层获取任务列表
-  const tasks = await TaskService.listTasks(userId, { status, limit });
+  const requests = await GenerationRequestService.listRequests(userId);
 
   return NextResponse.json({
     success: true,
-    data: tasks,
-    count: tasks.length,
+    data: requests,
+    count: requests.length,
   });
 });
 
 /**
  * POST /api/tasks
- * 创建新任务
+ * 创建新的生成请求
  *
- * 职责：只负责创建任务并设置状态为IMAGE_GENERATING
- * Worker会监听状态变化并执行图片生成操作
+ * 自动创建：
+ * - 1 个 GenerationRequest
+ * - 4 个 GeneratedImage（imageStatus=PENDING）
+ * - 4 个 ImageGenerationJob（status=PENDING）
  */
 export const POST = withErrorHandler(async (request: NextRequest) => {
   const body = await request.json();
+  const { prompt } = body;
 
-  // 使用Zod验证输入（错误会被withErrorHandler自动捕获）
-  const validatedData = createTaskSchema.parse(body);
-  const { prompt } = validatedData;
+  if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+    return NextResponse.json(
+      { success: false, error: "提示词不能为空" },
+      { status: 400 },
+    );
+  }
 
-  // 获取当前用户ID
   const userId = getCurrentUserId();
-
-  // 创建任务并直接设置状态为IMAGE_GENERATING
-  // Worker会自动检测并处理此状态的任务
-  const task = await TaskService.createTaskWithStatus(
+  const generationRequest = await GenerationRequestService.createRequest(
     userId,
-    prompt,
-    "IMAGE_GENERATING",
+    prompt.trim(),
   );
 
   return NextResponse.json(
     {
       success: true,
-      data: task,
-      message: "任务已创建，图片生成已启动",
+      data: generationRequest,
+      message: "任务已创建，4个图片生成任务已启动",
     },
     { status: 201 },
   );

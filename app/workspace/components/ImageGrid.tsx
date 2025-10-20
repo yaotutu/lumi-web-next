@@ -48,9 +48,31 @@ export default function ImageGrid({
         { length: IMAGE_GENERATION.COUNT },
         (_, index) => {
           const image = task.images.find((img) => img.index === index);
+          if (!image) {
+            return { url: null, status: "pending" };
+          }
+
+          // ✅ 根据 imageStatus 映射到组件状态
+          let slotStatus: ImageSlotStatus = "pending";
+          switch (image.imageStatus) {
+            case "COMPLETED":
+              slotStatus = "completed";
+              break;
+            case "GENERATING":
+              slotStatus = "loading";
+              break;
+            case "FAILED":
+              slotStatus = "failed";
+              break;
+            case "PENDING":
+            default:
+              slotStatus = "pending";
+              break;
+          }
+
           return {
-            url: image ? image.url : null,
-            status: image ? "completed" : "pending",
+            url: (image as any).url || image.imageUrl, // 兼容适配器的 url 字段
+            status: slotStatus,
           };
         },
       );
@@ -64,7 +86,7 @@ export default function ImageGrid({
       }
 
       // 如果任务已有选中的图片，设置选中状态
-      if (task.selectedImageIndex !== null) {
+      if (task.selectedImageIndex !== null && task.selectedImageIndex !== undefined) {
         setSelectedImage(task.selectedImageIndex);
       }
     } else if (task?.status === "IMAGE_PENDING") {

@@ -11,21 +11,21 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("WorkerManager");
 
 /**
- * 启动所有Worker
+ * 启动所有Worker（异步）
  */
-export function startAllWorkers(): void {
+export async function startAllWorkers(): Promise<void> {
   log.info("startAllWorkers", "正在启动所有Worker...");
 
   try {
-    // 启动图片生成Worker
-    startImageWorker();
+    // 启动图片生成Worker（异步，需要初始化 WorkerConfigManager）
+    await startImageWorker();
 
-    // 启动3D模型生成Worker
-    startModel3DWorker();
+    // 启动3D模型生成Worker（异步）
+    await startModel3DWorker();
 
     // 未来可以在这里添加更多Worker
-    // startNotificationWorker();
-    // startEmailWorker();
+    // await startNotificationWorker();
+    // await startEmailWorker();
 
     log.info("startAllWorkers", "所有Worker已启动");
   } catch (error) {

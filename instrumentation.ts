@@ -29,8 +29,8 @@ export async function register() {
       // 动态导入以避免在其他运行时加载
       const { startAllWorkers } = await import("@/lib/workers");
 
-      // 启动所有后台 Worker
-      startAllWorkers();
+      // 启动所有后台 Worker（异步）
+      await startAllWorkers();
 
       log.info("register", "服务端初始化完成");
     } catch (error) {
