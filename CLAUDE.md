@@ -949,203 +949,376 @@ export async function register() {
 - ✅ 不依赖任何 HTTP 请求
 - ✅ 自动启动,无需手动干预
 
-### Worker 工作流程
+### Worker 工作流程：三层任务处理
 
-项目包含两个 Worker:
+项目包含两个 Worker，都采用**三层任务处理机制**：
+
+#### **三层任务处理架构**
+
+每个 Worker 的主循环包含三个独立的处理层，按优先级顺序执行：
+
+```typescript
+while (isRunning) {
+  // Layer 1: 超时检测（最高优先级）
+  await detectTimeoutJobs();
+
+  // Layer 2: 重试调度（中等优先级）
+  await scheduleRetryJobs();
+
+  // Layer 3: 新任务执行（最低优先级）
+  await executeNewJobs();
+
+  await sleep(POLL_INTERVAL);  // 2秒
+}
+```
 
 #### 1. **图片生成 Worker** (`lib/workers/image-worker.ts`)
 
-**监听状态**: `IMAGE_PENDING`（任务创建后的初始状态）
+**监听对象**：`ImageGenerationJob`（每张图片一个 Job）
 
+**三层处理流程**：
+
+**Layer 1: 超时检测**
 ```typescript
-// API 层创建任务
-POST /api/tasks
-{ prompt: "用户输入的提示词" }
-  ↓
-createTask(userId, prompt)  // 默认 status="IMAGE_PENDING"，立即返回
+// 查询 RUNNING 状态且已超时的任务
+const timeoutJobs = await prisma.imageGenerationJob.findMany({
+  where: {
+    status: "RUNNING",
+    timeoutAt: { lte: new Date() }
+  }
+});
 
-// Worker 自动监听并执行
-while (isRunning) {
-  // 每 2 秒查询数据库，查找待处理任务
-  const tasks = await prisma.task.findMany({
-    where: { status: "IMAGE_PENDING" },  // 监听 IMAGE_PENDING
-    take: 3  // 最大并发3个任务
+// 判断是否可以重试
+if (canRetry(job.retryCount, maxRetries)) {
+  // 更新为 RETRYING 状态，设置下次重试时间
+  await updateJob({
+    status: "RETRYING",
+    retryCount: job.retryCount + 1,
+    nextRetryAt: new Date(Date.now() + retryDelay)
   });
+} else {
+  // 超过最大重试次数，标记为 FAILED
+  await updateJob({ status: "FAILED" });
+  await updateImage({ imageStatus: "FAILED" });
+}
+```
 
-  // 发现任务后执行完整流程
-  for (const task of tasks) {
-    // 1. 更新状态为 IMAGE_GENERATING（标记为处理中）
-    await updateTask(task.id, {
-      status: "IMAGE_GENERATING",
-      imageGenerationStartedAt: new Date()
+**Layer 2: 重试调度**
+```typescript
+// 查询 RETRYING 状态且到达重试时间的任务
+const retryJobs = await prisma.imageGenerationJob.findMany({
+  where: {
+    status: "RETRYING",
+    nextRetryAt: { lte: new Date() }
+  },
+  take: maxConcurrency
+});
+
+// 并发处理重试任务
+await Promise.all(retryJobs.map(job => processJob(job)));
+```
+
+**Layer 3: 新任务执行**
+```typescript
+// 查询 PENDING 状态的任务
+const pendingJobs = await prisma.imageGenerationJob.findMany({
+  where: { status: "PENDING" },
+  orderBy: enablePriority
+    ? [{ priority: "desc" }, { createdAt: "asc" }]
+    : { createdAt: "asc" },
+  take: maxConcurrency
+});
+
+// 并发处理新任务
+await Promise.all(pendingJobs.map(job => processJob(job)));
+```
+
+**单个 Job 处理流程**：
+```typescript
+async function processJob(job: ImageGenerationJob) {
+  try {
+    // 1. 更新 Job 状态为 RUNNING
+    await updateJob({
+      status: "RUNNING",
+      startedAt: new Date(),
+      timeoutAt: new Date(Date.now() + jobTimeout)
     });
 
-    // 2. 生成4个风格变体提示词 (LLM Provider)
-    const variants = await llmProvider.generatePromptVariants(task.prompt, systemPrompt);
+    // 2. 更新 Image 状态为 GENERATING
+    await updateImage({ imageStatus: "GENERATING" });
 
-    // 3. 调用图片生成API生成4张图片 (Image Provider)
-    const imageUrls = await imageProvider.generateImages(variants[0], 4);
+    // 3. 生成单张图片
+    //    - 生成 4 个风格变体提示词（LLM Provider）
+    //    - 使用对应索引的提示词生成图片（Image Provider）
+    //    - 下载并上传到存储（Storage Provider）
+    const imageUrl = await generateSingleImage(prompt, requestId, imageIndex);
 
-    // 4. 保存图片到存储 (Storage Provider)
-    for (let i = 0; i < imageUrls.length; i++) {
-      await storageProvider.saveTaskImage({ taskId: task.id, index: i, imageData: imageUrls[i] });
+    // 4. 更新 Job 状态为 COMPLETED
+    await updateJob({
+      status: "COMPLETED",
+      completedAt: new Date(),
+      executionDuration
+    });
+
+    // 5. 更新 Image 状态为 COMPLETED
+    await updateImage({
+      imageStatus: "COMPLETED",
+      imageUrl,
+      completedAt: new Date()
+    });
+  } catch (error) {
+    // 判断是否可以重试
+    if (canRetry(job.retryCount, maxRetries)) {
+      // 安排重试
+      await updateJob({
+        status: "RETRYING",
+        retryCount: job.retryCount + 1,
+        nextRetryAt: new Date(Date.now() + retryDelay)
+      });
+    } else {
+      // 标记为失败
+      await updateJob({ status: "FAILED" });
+      await updateImage({ imageStatus: "FAILED" });
     }
-
-    // 5. 更新数据库记录
-    await createTaskImages(task.id, imageUrls);
-
-    // 6. 更新状态为 IMAGE_COMPLETED
-    await updateTask(task.id, {
-      status: "IMAGE_COMPLETED",
-      imageGenerationCompletedAt: new Date()
-    });
   }
 }
 ```
 
-**关键设计**:
-- ✅ 断点续传：检查已生成的图片数量，仅生成缺失的图片
-- ✅ 失败重试：支持最大3次重试，限流错误延迟30秒
-- ✅ 并发控制：最多同时处理3个任务，防止资源耗尽
-- ✅ 状态追踪：记录开始和完成时间戳
+**关键特性**:
+- ✅ **每张图片独立生成**：4 张图片并发处理，互不影响
+- ✅ **独立重试**：某张图片失败不影响其他图片
+- ✅ **超时保护**：超时自动重试或标记失败
+- ✅ **优先级支持**：高优先级任务优先执行
+- ✅ **动态并发**：根据配置动态调整并发数（默认 3）
 
 #### 2. **3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`)
 
-**监听状态**: `MODEL_PENDING`（用户选择图片后触发）
+**监听对象**：`ModelGenerationJob`（每个 Model 一个 Job）
 
+**三层处理流程**（同图片生成 Worker）：
+
+**单个 Job 处理流程**（关键在于轮询腾讯云状态）：
 ```typescript
-// API 层只改状态（触发 Worker）
-PATCH /api/tasks/{id}
-{ selectedImageIndex: 2 }
-  ↓
-// API 检测到选中图片，自动设置 status="MODEL_PENDING"
-await updateTask(taskId, {
-  selectedImageIndex: 2,
-  status: "MODEL_PENDING"  // 触发 Model3D Worker
-});
-
-// Worker 自动监听并执行
-while (isRunning) {
-  // 每 2 秒查询数据库，查找待处理任务
-  const tasks = await prisma.task.findMany({
-    where: { status: "MODEL_PENDING" },  // 监听 MODEL_PENDING
-    take: 1  // 最大并发1个3D任务（3D生成耗时较长）
-  });
-
-  // 发现任务后执行完整流程
-  for (const task of tasks) {
-    // 1. 更新状态为 MODEL_GENERATING（标记为处理中）
-    await updateTask(task.id, {
-      status: "MODEL_GENERATING",
-      modelGenerationStartedAt: new Date()
+async function processJob(job: ModelGenerationJob) {
+  try {
+    // 1. 更新 Job 状态为 RUNNING
+    await updateJob({
+      status: "RUNNING",
+      startedAt: new Date(),
+      timeoutAt: new Date(Date.now() + jobTimeout)  // 默认 10 分钟
     });
 
-    // 2. 获取选中的图片 URL
-    const selectedImage = task.images[task.selectedImageIndex!];
+    // 2. 验证源图片 URL
+    const sourceImageUrl = job.model.sourceImage.imageUrl;
+    if (!sourceImageUrl) {
+      throw new Error("源图片 URL 缺失");
+    }
 
-    // 3. 提交腾讯云混元 3D 任务 (Model3D Provider)
+    // 3. 提交腾讯云混元 3D 任务
+    const model3DProvider = createModel3DProvider();
     const { jobId } = await model3DProvider.submitModelGenerationJob({
-      imageUrl: selectedImage.url
+      imageUrl: sourceImageUrl
     });
 
-    // 4. 创建本地模型记录（初始状态 PENDING）
-    await prisma.taskModel.create({
-      data: {
-        taskId: task.id,
-        name: `${task.prompt.substring(0, 20)}.glb`,
-        status: "PENDING",
-        apiTaskId: jobId,
-        format: "GLB"
-      }
+    // 4. 保存 Provider 的 jobId
+    await updateJob({
+      providerJobId: jobId,
+      providerName: "tencent"
     });
 
     // 5. 轮询腾讯云任务状态（每 5 秒，最多 10 分钟）
-    let finalStatus: "DONE" | "FAIL" = "FAIL";
-    while (elapsed < MAX_POLL_TIME) {
-      const statusResponse = await model3DProvider.queryModelTaskStatus(jobId);
+    await pollModel3DStatus(job.id, job.modelId, jobId);
 
-      if (statusResponse.status === "DONE") {
-        finalStatus = "DONE";
-        break;
-      } else if (statusResponse.status === "FAIL") {
-        finalStatus = "FAIL";
-        break;
-      }
-
-      // 更新进度
-      await prisma.taskModel.update({
-        where: { taskId: task.id },
-        data: {
-          status: statusResponse.status === "RUN" ? "GENERATING" : "PENDING",
-          progress: calculateProgress(elapsed)
-        }
+  } catch (error) {
+    // 判断是否可以重试
+    if (canRetry(job.retryCount, maxRetries)) {
+      // 安排重试
+      await updateJob({
+        status: "RETRYING",
+        retryCount: job.retryCount + 1,
+        nextRetryAt: new Date(Date.now() + retryDelay)
       });
-
-      await sleep(5000);
-    }
-
-    // 6. 下载并保存模型文件（如果成功）
-    if (finalStatus === "DONE") {
-      const modelBuffer = await downloadModel(statusResponse.modelUrl);
-      const localUrl = await storageProvider.saveTaskModel({
-        taskId: task.id,
-        modelData: modelBuffer,
-        format: "glb"
-      });
-
-      // 7. 更新模型记录和任务状态为 MODEL_COMPLETED
-      await prisma.taskModel.update({
-        where: { taskId: task.id },
-        data: {
-          status: "COMPLETED",
-          modelUrl: localUrl,
-          completedAt: new Date()
-        }
-      });
-
-      await updateTask(task.id, {
-        status: "MODEL_COMPLETED",
-        modelGenerationCompletedAt: new Date(),
-        completedAt: new Date()
+      await updateModel({
+        errorMessage: "生成失败，正在重试"
       });
     } else {
-      // 8. 失败处理
-      await updateTask(task.id, {
-        status: "FAILED",
-        failedAt: new Date(),
-        errorMessage: "3D 模型生成失败"
-      });
+      // 标记为失败
+      await updateJob({ status: "FAILED" });
+      await updateModel({ failedAt: new Date(), errorMessage });
     }
+  }
+}
+
+// 轮询腾讯云状态
+async function pollModel3DStatus(jobId, modelId, providerJobId) {
+  const startTime = Date.now();
+
+  while (true) {
+    const elapsed = Date.now() - startTime;
+
+    // 检查是否超时（10 分钟）
+    if (elapsed > MAX_POLL_TIME) {
+      throw new Error("轮询超时");
+    }
+
+    await sleep(5000);  // 等待 5 秒
+
+    // 查询腾讯云状态
+    const status = await model3DProvider.queryModelTaskStatus(providerJobId);
+
+    // 计算进度
+    let progress = 0;
+    if (status.status === "WAIT") progress = 0;
+    else if (status.status === "RUN") progress = 50;
+    else if (status.status === "DONE") progress = 100;
+
+    // 更新 Job 进度
+    await updateJob({ progress });
+
+    // 处理完成状态
+    if (status.status === "DONE") {
+      // 提取 OBJ 文件 URL
+      const modelFile = status.resultFiles?.find(f => f.type === "OBJ");
+      if (!modelFile?.url) {
+        throw new Error("返回结果中没有 OBJ 文件");
+      }
+
+      // 下载并上传到存储服务
+      const storageUrl = await downloadAndUploadModel(
+        modelFile.url,
+        modelId,
+        "obj"
+      );
+
+      // 下载预览图（如果有）
+      let previewImageUrl;
+      if (modelFile.previewImageUrl) {
+        previewImageUrl = await downloadAndUploadPreviewImage(
+          modelFile.previewImageUrl,
+          modelId
+        );
+      }
+
+      // 更新 Job 状态为 COMPLETED
+      await updateJob({
+        status: "COMPLETED",
+        progress: 100,
+        completedAt: new Date(),
+        executionDuration
+      });
+
+      // 更新 Model 状态
+      await updateModel({
+        modelUrl: storageUrl,
+        previewImageUrl,
+        format: "OBJ",
+        completedAt: new Date(),
+        errorMessage: null  // 清除之前的错误信息
+      });
+
+      return;
+    }
+
+    // 处理失败状态
+    if (status.status === "FAIL") {
+      throw new Error(status.errorMessage || "3D 模型生成失败");
+    }
+
+    // 继续轮询（WAIT 或 RUN 状态）
   }
 }
 ```
 
-**关键设计**:
-- ✅ 自动触发：用户选择图片后，API 自动设置 `MODEL_PENDING` 触发 Worker
-- ✅ 状态同步：TaskModel 的 status（PENDING/GENERATING/COMPLETED/FAILED）与腾讯云 API 的状态（WAIT/RUN/DONE/FAIL）对应
-- ✅ 轮询机制：每 5 秒查询一次任务状态，最多轮询 10 分钟
-- ✅ 进度追踪：根据轮询时间计算进度百分比
-- ✅ 并发限制：最多同时处理 1 个 3D 任务（3D 生成耗时长、资源消耗大）
+**关键特性**:
+- ✅ **腾讯云状态轮询**：WAIT → RUN → DONE/FAIL
+- ✅ **进度追踪**：Job.progress（0 → 50 → 100）
+- ✅ **超时保护**：轮询超时（10 分钟）+ Job 超时
+- ✅ **独立重试**：失败后自动重试或标记失败
+- ✅ **动态并发**：根据配置调整并发数（默认 1，3D 生成耗时长）
 
-### Worker 配置
+### Worker 配置（动态可调整）
 
-**图片生成 Worker** (`lib/workers/image-worker.ts`):
+Worker 使用 **WorkerConfigManager** 管理配置，支持运行时动态调整。
+
+#### QueueConfig 表字段
+
 ```typescript
-POLL_INTERVAL: 2000      // Worker 轮询数据库间隔 (2秒)
-MAX_CONCURRENT: 3        // 最大并发图片生成任务数
-RETRY_CONFIG: {
-  maxRetries: 3,         // 最大重试3次
-  baseDelay: 2000,       // 普通错误基础延迟2秒
-  rateLimitDelay: 30000  // 限流错误延迟30秒
+{
+  queueName: "image_generation" | "model_generation",
+
+  // 并发控制
+  maxConcurrency: number,     // 最大并发数（图片: 3, 模型: 1）
+
+  // 超时控制
+  jobTimeout: number,         // 单个 Job 超时时间（图片: 5分钟, 模型: 10分钟）
+
+  // 重试策略
+  maxRetries: number,         // 最大重试次数（默认 3）
+  retryDelayBase: number,     // 重试基础延迟（默认 5秒）
+  retryDelayMax: number,      // 重试最大延迟（默认 60秒）
+
+  // 优先级
+  enablePriority: boolean,    // 是否启用优先级（默认 false）
+
+  // 队列状态
+  isActive: boolean,          // 队列是否激活（默认 true）
 }
 ```
 
-**3D 模型生成 Worker** (`lib/workers/model3d-worker.ts`):
+#### Worker 配置示例
+
+**图片生成 Worker**:
 ```typescript
+{
+  queueName: "image_generation",
+  maxConcurrency: 3,          // 并发 3 个图片任务
+  jobTimeout: 300000,         // 5 分钟超时
+  maxRetries: 3,
+  retryDelayBase: 5000,
+  retryDelayMax: 60000,
+  enablePriority: false,
+  isActive: true
+}
+```
+
+**3D 模型生成 Worker**:
+```typescript
+{
+  queueName: "model_generation",
+  maxConcurrency: 1,          // 并发 1 个模型任务（耗时长）
+  jobTimeout: 600000,         // 10 分钟超时
+  maxRetries: 3,
+  retryDelayBase: 5000,
+  retryDelayMax: 60000,
+  enablePriority: false,
+  isActive: true
+}
+```
+
+#### 静态配置
+
+```typescript
+// lib/workers/image-worker.ts
+POLL_INTERVAL: 2000           // Worker 轮询数据库间隔 (2秒)
+
+// lib/workers/model3d-worker.ts
 POLL_INTERVAL: 2000           // Worker 轮询数据库间隔 (2秒)
 TENCENT_POLL_INTERVAL: 5000   // 轮询腾讯云状态间隔 (5秒)
-MAX_TENCENT_POLL_TIME: 600000 // 最大轮询时间 (10分钟)
-MAX_CONCURRENT: 1              // 最大并发3D任务数
+MAX_TENCENT_POLL_TIME: 600000 // 最大轮询腾讯云时间 (10分钟)
+```
+
+#### 动态调整配置
+
+```bash
+# 暂停队列
+POST /api/admin/queues/image_generation/pause
+
+# 恢复队列
+POST /api/admin/queues/image_generation/resume
+
+# 调整并发数
+PATCH /api/admin/queues/image_generation
+{ maxConcurrency: 5 }
 ```
 
 ### Worker 监控
@@ -1172,94 +1345,135 @@ MAX_CONCURRENT: 1              // 最大并发3D任务数
 
 ### 完整状态流转示例
 
-#### 图片生成流程
+#### 图片生成流程（Job-Based 架构）
 
 ```
-用户输入提示词 → API 创建任务 → Worker 监听执行
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+用户输入提示词 → API 创建 Request + Images + Jobs → Worker 监听并执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. 用户输入: "一只可爱的猫咪"
    ↓
-2. POST /api/tasks
-   → createTask(userId, prompt)
-   → status = IMAGE_PENDING (立即返回)
+2. POST /api/test/requests
+   { prompt: "一只可爱的猫咪" }
    ↓
-3. ImageWorker: 检测到 IMAGE_PENDING 状态
+3. API 事务创建:
+   - GenerationRequest (无 status 字段)
+   - 4 个 GeneratedImage (imageStatus=PENDING, imageUrl=null)
+   - 4 个 ImageGenerationJob (status=PENDING)
+   ↓ (立即返回)
+4. ImageWorker 轮询检测到 4 个 Job.status=PENDING
    ↓
-4. ImageWorker: status → IMAGE_GENERATING（标记处理中）
+5. ImageWorker 并发处理 3 个 Job（第 4 个等待）
    ↓
-5. ImageWorker: 生成4个风格变体提示词 (LLM Provider)
+   每个 Job 独立执行:
+   ├─ Job: PENDING → RUNNING
+   ├─ Image: PENDING → GENERATING
+   ├─ 生成 4 个风格变体提示词 (LLM Provider)
+   ├─ 使用对应索引的提示词生成图片 (Image Provider)
+   ├─ 下载并上传到存储 (Storage Provider)
+   ├─ Job: RUNNING → COMPLETED
+   └─ Image: GENERATING → COMPLETED (imageUrl 设置)
    ↓
-6. ImageWorker: 调用图片生成API (Image Provider: SiliconFlow 或阿里云)
-   ↓
-7. ImageWorker: 保存图片到存储 (Storage Provider: COS/OSS/Local)
-   ↓
-8. ImageWorker: 创建数据库记录 (TaskImage × 4)
-   ↓
-9. ImageWorker: status → IMAGE_COMPLETED
-   ↓
-10. 前端轮询: 获取到4张图片，用户选择一张
+6. 前端轮询: 获取到 4 张图片，用户选择一张
 ```
 
 **数据库状态变化**:
 ```sql
-Task:
-  status: IMAGE_PENDING → IMAGE_GENERATING → IMAGE_COMPLETED
-  imageGenerationStartedAt: null → 2025-01-15 10:00:00
-  imageGenerationCompletedAt: null → 2025-01-15 10:00:05
+GenerationRequest:
+  prompt: "一只可爱的猫咪"
+  createdAt: 2025-01-15 10:00:00
+  # 无 status 字段
 
-TaskImage: (创建 4 条记录)
-  taskId, index, url, prompt
+GeneratedImage[0]: (4 张图片独立状态)
+  imageStatus: PENDING → GENERATING → COMPLETED
+  imageUrl: null → "https://storage.com/request-123/0.png"
+  completedAt: null → 2025-01-15 10:00:05
+
+ImageGenerationJob[0]: (4 个 Job 独立状态)
+  status: PENDING → RUNNING → COMPLETED
+  startedAt: null → 2025-01-15 10:00:01
+  completedAt: null → 2025-01-15 10:00:05
+  executionDuration: null → 4000 (毫秒)
+  retryCount: 0
 ```
 
-#### 3D 模型生成流程
+**失败重试示例**（某张图片生成失败）:
+```sql
+GeneratedImage[1]:
+  imageStatus: PENDING → GENERATING (保持)
+
+ImageGenerationJob[1]:
+  status: PENDING → RUNNING → RETRYING → RUNNING → COMPLETED
+  retryCount: 0 → 1 → 1 → 1
+  nextRetryAt: null → 2025-01-15 10:00:10 → null
+  startedAt: 10:00:01 → 10:00:10
+  completedAt: null → 10:00:15
+```
+
+#### 3D 模型生成流程（Job-Based 架构）
 
 ```
-用户选择图片 → API 更新状态 → Worker 监听执行
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. 用户选择第2张图片
+用户选择图片 → API 创建 Model + Job → Worker 监听并执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 用户选择第 2 张图片
    ↓
-2. PATCH /api/tasks/{id}
-   { selectedImageIndex: 2 }
-   → API 自动设置 status = MODEL_PENDING (立即返回)
+2. POST /api/test/models/generate
+   { imageId: "image-123", name: "我的猫咪模型" }
    ↓
-3. Model3DWorker: 检测到 MODEL_PENDING 状态
+3. API 事务创建:
+   - GeneratedModel (sourceImageId, 无 status 字段)
+   - ModelGenerationJob (status=PENDING, priority=0)
+   ↓ (立即返回)
+4. Model3DWorker 检测到 Job.status=PENDING
    ↓
-4. Model3DWorker: status → MODEL_GENERATING（标记处理中）
+5. Model3DWorker 处理 Job:
+   ├─ Job: PENDING → RUNNING
+   ├─ 提交腾讯云混元 3D 任务（获得 providerJobId）
+   ├─ Job: 保存 providerJobId
+   ├─ 轮询腾讯云状态（每 5 秒）:
+   │  ├─ WAIT → Job.progress=0
+   │  ├─ RUN  → Job.progress=50
+   │  └─ DONE → Job.progress=100
+   ├─ 下载模型文件（OBJ 格式）
+   ├─ 上传到存储服务
+   ├─ Job: RUNNING → COMPLETED
+   └─ Model: modelUrl 设置, completedAt 设置
    ↓
-5. Model3DWorker: 提交腾讯云混元 3D 任务（获得 jobId）
-   ↓
-6. Model3DWorker: 创建 TaskModel 记录（status=PENDING, apiTaskId=jobId）
-   ↓
-7. Model3DWorker: 轮询腾讯云状态（每 5 秒）
-   ├─ WAIT → TaskModel.status = PENDING
-   ├─ RUN  → TaskModel.status = GENERATING (更新 progress)
-   └─ DONE → 继续下一步
-   ↓
-8. Model3DWorker: 下载模型文件（GLB 格式）
-   ↓
-9. Model3DWorker: 保存到存储 (Storage Provider)
-   ↓
-10. Model3DWorker: 更新记录
-    ├─ TaskModel.status → COMPLETED, modelUrl 设置
-    └─ Task.status → MODEL_COMPLETED
-   ↓
-11. 前端轮询: 获取到3D模型，显示预览和下载按钮
+6. 前端轮询: 获取到 3D 模型，显示预览和下载按钮
 ```
 
 **数据库状态变化**:
 ```sql
-Task:
-  selectedImageIndex: null → 2
-  status: IMAGE_COMPLETED → MODEL_PENDING → MODEL_GENERATING → MODEL_COMPLETED
-  modelGenerationStartedAt: null → 2025-01-15 10:05:00
-  modelGenerationCompletedAt: null → 2025-01-15 10:07:30
+GeneratedModel:
+  sourceImageId: "image-123"
+  name: "我的猫咪模型.obj"
+  modelUrl: null → "https://storage.com/model-456.obj"
+  previewImageUrl: null → "https://storage.com/model-456-preview.png"
+  format: "OBJ"
   completedAt: null → 2025-01-15 10:07:30
+  # 无 status 字段
 
-TaskModel: (创建 1 条记录)
-  status: PENDING → GENERATING → COMPLETED
-  progress: 0 → 30 → 60 → 90 → 100
-  apiTaskId: "tencent-job-xxx"
-  modelUrl: "/generated/models/task-123.glb" (或 COS URL)
+ModelGenerationJob:
+  status: PENDING → RUNNING → COMPLETED
+  progress: 0 → 0 → 50 → 100
+  providerJobId: null → "tencent-job-xxx"
+  providerName: null → "tencent"
+  startedAt: null → 2025-01-15 10:05:00
+  completedAt: null → 2025-01-15 10:07:30
+  executionDuration: null → 150000 (2.5 分钟)
+  retryCount: 0
+```
+
+**失败重试示例**（3D 生成失败）:
+```sql
+ModelGenerationJob:
+  status: PENDING → RUNNING → RETRYING → RUNNING → COMPLETED
+  retryCount: 0 → 1 → 1 → 1
+  nextRetryAt: null → 2025-01-15 10:07:40 → null
+  errorMessage: "腾讯云生成失败" → "腾讯云生成失败" → null
+
+GeneratedModel:
+  errorMessage: null → "生成失败，正在重试" → null
+  completedAt: null → null → 2025-01-15 10:08:00
 ```
 
 ### Worker 目录结构
@@ -1275,11 +1489,51 @@ instrumentation.ts          # Next.js 启动钩子
 
 ### Worker 开发规范
 
-1. **Worker 只监听状态,不暴露手动触发接口**
-2. **使用统一的重试工具** (`lib/utils/retry.ts`)
-3. **记录详细日志** (使用 `createLogger`)
-4. **防止重复处理** (使用 `Set` 跟踪处理中的任务)
-5. **完整的错误处理** (更新数据库状态为 FAILED)
+1. **Worker 只监听 Job 状态，不暴露手动触发接口**
+   - Worker 通过轮询数据库中的 Job 状态自动触发
+   - API 层只负责创建 Job（PENDING 状态），不直接调用 Worker
+
+2. **三层任务处理顺序**
+   - Layer 1: 超时检测（最高优先级）
+   - Layer 2: 重试调度（中等优先级）
+   - Layer 3: 新任务执行（最低优先级）
+
+3. **业务状态和执行状态分离**
+   - 业务状态：Image.imageStatus, Model（通过 Job 体现）
+   - 执行状态：Job.status（PENDING/RUNNING/RETRYING/COMPLETED/FAILED/TIMEOUT）
+
+4. **使用 WorkerConfigManager 动态配置**
+   - 每次轮询时刷新配置
+   - 支持运行时调整并发数、超时时间、重试策略
+
+5. **防止重复处理**
+   - 使用 `Set` 跟踪 `processingJobs`
+   - 查询时排除正在处理的 Job ID
+
+6. **记录详细日志**
+   - 使用 `createLogger` 统一日志格式
+   - 记录 jobId、imageId/modelId、retryCount、duration 等关键信息
+
+7. **完整的错误处理**
+   - 捕获所有异常
+   - 判断是否可以重试（根据 retryCount 和 maxRetries）
+   - 更新 Job 状态为 RETRYING 或 FAILED
+   - 更新业务实体状态（Image/Model）
+
+8. **重试策略**
+   - 使用指数退避算法（retryDelayBase * 2^retryCount）
+   - 限制最大延迟（retryDelayMax）
+   - 记录 nextRetryAt、retryCount、errorMessage、errorCode
+
+9. **超时控制**
+   - 设置 Job.timeoutAt（startedAt + jobTimeout）
+   - 超时检测：查询 RUNNING 状态且 timeoutAt <= now 的任务
+   - 超时后自动重试或标记失败
+
+10. **优先级支持**
+    - Job.priority 字段（数字越大优先级越高）
+    - enablePriority 控制是否启用优先级排序
+    - 高优先级任务优先执行
 
 ## 重要提示
 - 每一行代码必须有注释，解释代码的作用和目的。
