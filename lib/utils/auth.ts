@@ -1,46 +1,213 @@
 /**
  * 认证工具函数
- * 职责：用户身份验证和获取当前用户信息
+ * 职责：JWT 生成/验证、用户身份认证
  *
- * 当前实现：使用固定的测试用户 ID
- * 未来实现：从 Session/JWT 中获取真实用户 ID
+ * 技术栈：
+ * - jose: Next.js 官方推荐的 JWT 库（支持 Edge Runtime）
+ * - HTTP-only Cookie: 存储 JWT token
  */
 
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { AppError } from "./errors";
+
+// ============================================
+// 配置常量
+// ============================================
+
 /**
- * 获取当前用户 ID
+ * JWT 密钥（从环境变量读取）
+ * 必须是 32 字节以上的随机字符串
+ */
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("环境变量 JWT_SECRET 未设置");
+}
+
+/**
+ * JWT 过期时间（默认 7 天）
+ */
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+
+/**
+ * Cookie 名称
+ */
+const AUTH_COOKIE_NAME = "auth-token";
+
+/**
+ * JWT 算法
+ */
+const JWT_ALGORITHM = "HS256";
+
+// ============================================
+// JWT Payload 类型定义
+// ============================================
+
+/**
+ * JWT Payload 结构
+ */
+export interface JWTPayload {
+  userId: string;
+  email: string;
+  iat?: number; // issued at（签发时间）
+  exp?: number; // expiration time（过期时间）
+}
+
+// ============================================
+// JWT 工具函数
+// ============================================
+
+/**
+ * 生成 JWT token
  *
- * **当前实现（开发阶段）**：
- * - 返回固定的测试用户 ID: `user_dev_001`
- * - 该用户在 `prisma/seed.ts` 中创建
+ * @param payload - JWT 载荷数据
+ * @returns JWT 字符串
  *
- * **未来实现**：
- * - 从 Session（如 NextAuth.js）或 JWT 中获取真实用户 ID
- * - 添加用户认证检查（未登录抛出 UNAUTHORIZED 错误）
+ * @example
+ * ```typescript
+ * const jwt = await generateJWT({
+ *   userId: "user-123",
+ *   email: "user@example.com"
+ * });
+ * ```
+ */
+export async function generateJWT(payload: {
+  userId: string;
+  email: string;
+}): Promise<string> {
+  // 将密钥字符串转换为 Uint8Array
+  const secret = new TextEncoder().encode(JWT_SECRET);
+
+  // 解析过期时间（支持 "7d", "24h" 等格式）
+  const expiresIn = parseExpireTime(JWT_EXPIRES_IN);
+
+  // 生成 JWT
+  const jwt = await new SignJWT(payload as Record<string, unknown>)
+    .setProtectedHeader({ alg: JWT_ALGORITHM }) // 设置算法
+    .setIssuedAt() // 设置签发时间
+    .setExpirationTime(Math.floor(Date.now() / 1000) + expiresIn) // 设置过期时间
+    .sign(secret); // 签名
+
+  return jwt;
+}
+
+/**
+ * 验证并解析 JWT token
+ *
+ * @param token - JWT 字符串
+ * @returns 解析后的 JWT Payload
+ * @throws AppError UNAUTHORIZED - Token 无效或已过期
+ *
+ * @example
+ * ```typescript
+ * const payload = await verifyJWT(token);
+ * console.log(payload.userId); // "user-123"
+ * ```
+ */
+export async function verifyJWT(token: string): Promise<JWTPayload> {
+  try {
+    // 将密钥字符串转换为 Uint8Array
+    const secret = new TextEncoder().encode(JWT_SECRET);
+
+    // 验证并解析 JWT
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: [JWT_ALGORITHM],
+    });
+
+    return payload as JWTPayload;
+  } catch (error) {
+    throw new AppError(
+      "UNAUTHORIZED",
+      "登录已过期或无效，请重新登录",
+      error,
+    );
+  }
+}
+
+/**
+ * 解析过期时间字符串（支持 "7d", "24h", "60m" 等格式）
+ *
+ * @param timeString - 时间字符串（如 "7d", "24h"）
+ * @returns 秒数
+ */
+function parseExpireTime(timeString: string): number {
+  const regex = /^(\d+)([dhms])$/;
+  const match = timeString.match(regex);
+
+  if (!match) {
+    throw new Error(`无效的过期时间格式: ${timeString}`);
+  }
+
+  const value = Number.parseInt(match[1], 10);
+  const unit = match[2];
+
+  switch (unit) {
+    case "d":
+      return value * 24 * 60 * 60; // 天 → 秒
+    case "h":
+      return value * 60 * 60; // 小时 → 秒
+    case "m":
+      return value * 60; // 分钟 → 秒
+    case "s":
+      return value; // 秒
+    default:
+      throw new Error(`不支持的时间单位: ${unit}`);
+  }
+}
+
+// ============================================
+// Cookie 工具函数
+// ============================================
+
+/**
+ * 从请求的 Cookie 中获取当前用户 ID
  *
  * @returns 当前用户 ID
- * @throws AppError UNAUTHORIZED - 用户未认证（未来实现）
+ * @throws AppError UNAUTHORIZED - 用户未登录或 Token 无效
  *
  * @example
  * ```typescript
  * // API 路由中使用
  * export const POST = withErrorHandler(async (request: NextRequest) => {
- *   const userId = getCurrentUserId();
+ *   const userId = await getCurrentUserId();
  *   const task = await createTask(userId, prompt);
  *   return NextResponse.json({ success: true, data: task });
  * });
  * ```
  */
-export function getCurrentUserId(): string {
-  // TODO: 替换为真实的用户认证逻辑
-  // 示例实现（NextAuth.js）：
-  // const session = await getServerSession(authOptions);
-  // if (!session?.user?.id) {
-  //   throw new AppError("UNAUTHORIZED", "用户未登录");
-  // }
-  // return session.user.id;
+export async function getCurrentUserId(): Promise<string> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  // 当前返回固定的开发用户 ID（与数据库中创建的测试用户匹配）
-  return "user_dev_001";
+  if (!token) {
+    throw new AppError("UNAUTHORIZED", "用户未登录，请先登录");
+  }
+
+  const payload = await verifyJWT(token);
+  return payload.userId;
+}
+
+/**
+ * 从请求的 Cookie 中获取当前用户完整信息
+ *
+ * @returns JWT Payload（包含 userId 和 email）
+ * @throws AppError UNAUTHORIZED - 用户未登录或 Token 无效
+ *
+ * @example
+ * ```typescript
+ * const user = await getCurrentUser();
+ * console.log(user.email); // "user@example.com"
+ * ```
+ */
+export async function getCurrentUser(): Promise<JWTPayload> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+
+  if (!token) {
+    throw new AppError("UNAUTHORIZED", "用户未登录，请先登录");
+  }
+
+  return await verifyJWT(token);
 }
 
 /**

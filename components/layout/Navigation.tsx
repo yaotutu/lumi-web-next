@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { getCurrentUser, logout, type User } from "@/lib/auth-client";
 
 type NavLink = {
   label: string;
@@ -58,6 +60,62 @@ function IconBell() {
 
 export default function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // 获取当前用户信息
+  useEffect(() => {
+    const fetchUser = async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      setLoading(false);
+    };
+    fetchUser();
+  }, []);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    if (!showUserMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // 检查点击是否在菜单外部
+      if (!target.closest('[data-user-menu]')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showUserMenu]);
+
+  // 退出登录
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      const success = await logout();
+      if (success) {
+        setUser(null);
+        setShowUserMenu(false);
+        // 先跳转，再刷新
+        router.push("/");
+        // 延迟一点时间，确保跳转完成后再刷新
+        setTimeout(() => {
+          router.refresh();
+        }, 100);
+      } else {
+        alert("退出登录失败，请重试");
+      }
+    } catch (error) {
+      console.error("退出登录失败：", error);
+      alert("退出登录失败，请重试");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <header className="sticky inset-x-0 top-0 z-50 pt-3">
@@ -101,12 +159,65 @@ export default function Navigation() {
               <IconBell />
             </button>
 
-            <Link
-              href="/auth"
-              className="flex h-9 items-center justify-center rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
-            >
-              Sign up/Log in
-            </Link>
+            {/* 用户菜单 */}
+            {loading ? (
+              // 加载中
+              <div className="h-9 w-24 animate-pulse rounded-full bg-surface-3" />
+            ) : user ? (
+              // 已登录：显示用户邮箱和下拉菜单
+              <div className="relative" data-user-menu>
+                <button
+                  type="button"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex h-9 items-center justify-center gap-2 rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
+                >
+                  <span className="max-w-[150px] truncate">{user.email}</span>
+                  <svg
+                    className={`h-4 w-4 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+
+                {/* 下拉菜单 */}
+                {showUserMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-border-subtle bg-surface-2/95 backdrop-blur-sm shadow-lg">
+                    <div className="p-3 border-b border-border-subtle">
+                      <p className="text-xs text-text-muted">登录身份</p>
+                      <p className="mt-1 text-sm text-text-strong truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    <div className="p-2">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
+                        className="w-full rounded-md px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-3 hover:text-text-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoggingOut ? "退出中..." : "退出登录"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // 未登录：显示登录按钮
+              <Link
+                href="/login"
+                className="flex h-9 items-center justify-center rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
+              >
+                登录
+              </Link>
+            )}
           </div>
         </div>
       </div>

@@ -14,16 +14,34 @@ datasource db {
 // 用户层
 // ============================================
 
+// 邮箱验证码表
+model EmailVerificationCode {
+  id         String    @id @default(cuid())
+  email      String    // 邮箱（可能是新用户，不强制关联 userId）
+  code       String    // 验证码（开发环境硬编码 0000）
+  expiresAt  DateTime  // 过期时间
+  verifiedAt DateTime? // 验证时间（验证后设置）
+  createdAt  DateTime  @default(now())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, createdAt(sort: Desc)])
+  @@index([email, expiresAt])
+}
+
 // 用户表
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  lastLoginAt DateTime?  // 最后登录时间
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  requests  GenerationRequest[]  // 用户的生成请求
-  assets    UserAsset[]          // 用户的模型资产
+  requests           GenerationRequest[]       // 用户的生成请求
+  assets             UserAsset[]               // 用户的模型资产
+  emailVerifications EmailVerificationCode[]   // 邮箱验证码
 }
 
 // ============================================
