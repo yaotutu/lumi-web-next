@@ -35,7 +35,10 @@ function WorkspaceContent() {
 
           if (data.success) {
             setTask(data.data);
-            if (data.data.selectedImageIndex !== null && data.data.selectedImageIndex !== undefined) {
+            if (
+              data.data.selectedImageIndex !== null &&
+              data.data.selectedImageIndex !== undefined
+            ) {
               setSelectedImageIndex(data.data.selectedImageIndex);
             }
           } else {
@@ -52,7 +55,10 @@ function WorkspaceContent() {
             // 更新 URL 为最新任务 ID
             router.replace(`/workspace?taskId=${latestTask.id}`);
             setTask(latestTask);
-            if (latestTask.selectedImageIndex !== null && latestTask.selectedImageIndex !== undefined) {
+            if (
+              latestTask.selectedImageIndex !== null &&
+              latestTask.selectedImageIndex !== undefined
+            ) {
               setSelectedImageIndex(latestTask.selectedImageIndex);
             }
           } else {
@@ -81,7 +87,10 @@ function WorkspaceContent() {
     // 2. 模型生成中（检查 task.status）
     // 3. 有任何模型正在生成（检查 task.models）
     const hasGeneratingModels = task.models?.some(
-      (m) => !m.generationStatus || m.generationStatus === "PENDING" || m.generationStatus === "GENERATING"
+      (m) =>
+        !m.generationStatus ||
+        m.generationStatus === "PENDING" ||
+        m.generationStatus === "GENERATING",
     );
 
     const needsPolling =
@@ -99,11 +108,11 @@ function WorkspaceContent() {
     console.log("▶️ 启动轮询：", {
       taskStatus: task.status,
       hasGeneratingModels,
-      modelsStatus: task.models?.map(m => ({
+      modelsStatus: task.models?.map((m) => ({
         id: m.id,
         status: m.generationStatus,
-        modelUrl: m.modelUrl
-      }))
+        modelUrl: m.modelUrl,
+      })),
     });
 
     // 立即执行一次轮询（不等待首次interval触发）
@@ -127,7 +136,9 @@ function WorkspaceContent() {
               console.log("模型生成完成，已获取到最新模型数据，停止轮询");
               return false; // 有完成的模型，停止轮询
             }
-            console.log("任务状态为 MODEL_COMPLETED，但尚未获取到完成的模型，继续轮询");
+            console.log(
+              "任务状态为 MODEL_COMPLETED，但尚未获取到完成的模型，继续轮询",
+            );
             return true; // 没有完成的模型，继续轮询
           }
 
@@ -184,7 +195,9 @@ function WorkspaceContent() {
 
       try {
         // 只需要更新 selectedImageIndex，后台会自动检测并开始生成3D模型
-        console.log(`🔵 发送PATCH请求: taskId=${task.id}, imageIndex=${imageIndex}`);
+        console.log(
+          `🔵 发送PATCH请求: taskId=${task.id}, imageIndex=${imageIndex}`,
+        );
         const response = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -203,14 +216,21 @@ function WorkspaceContent() {
           // 让轮询来更新实际状态，避免状态闪烁
           console.log("⏳ 保持 MODEL_PENDING 状态，等待轮询更新");
         } else {
-          console.error("❌ 图片选择失败:", data.message || rawData.message || "Unknown error");
-          alert(`选择图片失败: ${data.message || rawData.message || "Unknown error"}`);
+          console.error(
+            "❌ 图片选择失败:",
+            data.message || rawData.message || "Unknown error",
+          );
+          alert(
+            `选择图片失败: ${data.message || rawData.message || "Unknown error"}`,
+          );
           // 回滚乐观更新
           setTask({ ...task, selectedImageIndex: imageIndex });
         }
       } catch (error) {
         console.error("❌ 请求异常:", error);
-        alert(`请求失败: ${error instanceof Error ? error.message : "网络错误"}`);
+        alert(
+          `请求失败: ${error instanceof Error ? error.message : "网络错误"}`,
+        );
         // 回滚乐观更新
         setTask({ ...task, selectedImageIndex: imageIndex });
       }

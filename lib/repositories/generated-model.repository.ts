@@ -207,7 +207,9 @@ export async function deleteModel(modelId: string): Promise<void> {
 /**
  * 删除请求的所有模型
  */
-export async function deleteModelsByRequestId(requestId: string): Promise<void> {
+export async function deleteModelsByRequestId(
+  requestId: string,
+): Promise<void> {
   await prisma.generatedModel.deleteMany({
     where: { requestId },
   });

@@ -242,7 +242,9 @@ export async function deleteImage(imageId: string): Promise<void> {
 /**
  * 删除请求的所有图片
  */
-export async function deleteImagesByRequestId(requestId: string): Promise<void> {
+export async function deleteImagesByRequestId(
+  requestId: string,
+): Promise<void> {
   await prisma.generatedImage.deleteMany({
     where: { requestId },
   });

@@ -7,7 +7,12 @@
  * - 不包含业务逻辑
  */
 
-import type { UserAsset, AssetSource, AssetVisibility, Prisma } from "@prisma/client";
+import type {
+  UserAsset,
+  AssetSource,
+  AssetVisibility,
+  Prisma,
+} from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 // ============================================
@@ -104,9 +109,7 @@ export async function findPublicAssets(options?: {
       },
     },
     orderBy:
-      sortBy === "latest"
-        ? { publishedAt: "desc" }
-        : { likeCount: "desc" },
+      sortBy === "latest" ? { publishedAt: "desc" } : { likeCount: "desc" },
     take: limit,
     skip: offset,
   });
@@ -267,5 +270,19 @@ export async function incrementDownloadCount(assetId: string): Promise<void> {
 export async function deleteAsset(assetId: string): Promise<void> {
   await prisma.userAsset.delete({
     where: { id: assetId },
+  });
+}
+
+/**
+ * 统计公开资产总数（用于分页）
+ */
+export async function countPublicAssets(): Promise<number> {
+  return prisma.userAsset.count({
+    where: {
+      visibility: "PUBLIC",
+      publishedAt: {
+        not: null,
+      },
+    },
   });
 }

@@ -14,7 +14,7 @@ import * as GeneratedModelService from "@/lib/services/generated-model-service";
 export const POST = withErrorHandler(
   async (
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;
 
@@ -23,7 +23,7 @@ export const POST = withErrorHandler(
 
     // 2. 找到已完成的模型
     const completedModel = request.generatedModels?.find(
-      (model) => model.generationJob?.status === "COMPLETED" && model.modelUrl
+      (model) => model.generationJob?.status === "COMPLETED" && model.modelUrl,
     );
 
     if (!completedModel || !completedModel.modelUrl) {
@@ -64,7 +64,7 @@ export const POST = withErrorHandler(
     if (!response.ok) {
       throw new AppError(
         "EXTERNAL_API_ERROR",
-        `打印服务错误: ${response.status}`
+        `打印服务错误: ${response.status}`,
       );
     }
 
@@ -76,10 +76,10 @@ export const POST = withErrorHandler(
       try {
         await GeneratedModelService.updateSliceTaskId(
           completedModel.id,
-          sliceTaskId
+          sliceTaskId,
         );
         console.log(
-          `✅ [打印接口] 已保存切片任务ID: modelId=${completedModel.id}, sliceTaskId=${sliceTaskId}`
+          `✅ [打印接口] 已保存切片任务ID: modelId=${completedModel.id}, sliceTaskId=${sliceTaskId}`,
         );
       } catch (saveError) {
         // 保存失败只记录日志，不影响返回
@@ -97,7 +97,7 @@ export const POST = withErrorHandler(
       },
       message: "打印任务已提交",
     });
-  }
+  },
 );
 
 /**

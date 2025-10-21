@@ -1,0 +1,39 @@
+/**
+ * 模型画廊 API - 增加下载计数
+ *
+ * POST /api/gallery/models/[id]/download
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { withErrorHandler, AppError } from "@/lib/utils/errors";
+import {
+  findAssetById,
+  incrementDownloadCount,
+} from "@/lib/repositories/user-asset.repository";
+
+// POST /api/gallery/models/[id]/download - 增加下载计数
+export const POST = withErrorHandler(
+  async (
+    request: NextRequest,
+    context: { params: Promise<{ id: string }> },
+  ) => {
+    // 等待 params（Next.js 15 要求）
+    const params = await context.params;
+    const { id } = params;
+
+    // 检查模型是否存在
+    const model = await findAssetById(id);
+    if (!model) {
+      throw new AppError("NOT_FOUND", `模型不存在: ${id}`);
+    }
+
+    // 增加下载计数
+    await incrementDownloadCount(id);
+
+    // 返回成功响应
+    return NextResponse.json({
+      success: true,
+      message: "下载计数已更新",
+    });
+  },
+);

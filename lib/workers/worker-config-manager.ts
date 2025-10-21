@@ -102,9 +102,7 @@ class WorkerConfigManager {
       });
 
       if (!existingConfig) {
-        console.log(
-          `[WorkerConfigManager] 创建默认配置: ${queueName}`,
-        );
+        console.log(`[WorkerConfigManager] 创建默认配置: ${queueName}`);
 
         await prisma.queueConfig.create({
           data: {
@@ -195,10 +193,7 @@ class WorkerConfigManager {
     queueName: QueueName,
     updates: Partial<WorkerConfig>,
   ): Promise<QueueConfig> {
-    console.log(
-      `[WorkerConfigManager] 更新队列配置: ${queueName}`,
-      updates,
-    );
+    console.log(`[WorkerConfigManager] 更新队列配置: ${queueName}`, updates);
 
     const updatedConfig = await prisma.queueConfig.update({
       where: { queueName },
@@ -217,10 +212,7 @@ class WorkerConfigManager {
    * @param config 队列配置
    * @returns 延迟毫秒数
    */
-  public calculateRetryDelay(
-    retryCount: number,
-    config: WorkerConfig,
-  ): number {
+  public calculateRetryDelay(retryCount: number, config: WorkerConfig): number {
     // 指数退避：baseDelay * (2 ^ retryCount)
     const delay = config.retryDelayBase * Math.pow(2, retryCount);
 
@@ -241,9 +233,7 @@ class WorkerConfigManager {
   /**
    * 获取所有队列的配置（用于监控）
    */
-  public async getAllConfigs(): Promise<
-    Map<QueueName, WorkerConfig>
-  > {
+  public async getAllConfigs(): Promise<Map<QueueName, WorkerConfig>> {
     await this.refreshConfigs();
     return new Map(this.configCache);
   }

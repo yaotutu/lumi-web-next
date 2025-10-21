@@ -63,20 +63,15 @@ export async function createModelForImage(
 
   // 2. 验证图片属于该请求
   if (image.requestId !== requestId) {
-    throw new AppError(
-      "INVALID_STATE",
-      `图片不属于该生成请求`,
-      {
-        imageRequestId: image.requestId,
-        providedRequestId: requestId,
-      },
-    );
+    throw new AppError("INVALID_STATE", `图片不属于该生成请求`, {
+      imageRequestId: image.requestId,
+      providedRequestId: requestId,
+    });
   }
 
   // 3. 检查该图片是否已有关联模型
-  const existingModel = await GeneratedModelRepository.findModelBySourceImageId(
-    sourceImageId,
-  );
+  const existingModel =
+    await GeneratedModelRepository.findModelBySourceImageId(sourceImageId);
 
   if (existingModel) {
     console.error(
@@ -138,10 +133,7 @@ export async function deleteModel(modelId: string) {
  * @param sliceTaskId 切片任务ID
  * @throws AppError NOT_FOUND - 模型不存在
  */
-export async function updateSliceTaskId(
-  modelId: string,
-  sliceTaskId: string,
-) {
+export async function updateSliceTaskId(modelId: string, sliceTaskId: string) {
   // 验证模型存在
   await getModelById(modelId);
 

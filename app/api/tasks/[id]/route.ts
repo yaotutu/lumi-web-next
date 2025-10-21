@@ -58,8 +58,7 @@ export const PATCH = withErrorHandler(
     }
 
     // 1. 获取请求详情
-    const generationRequest =
-      await GenerationRequestService.getRequestById(id);
+    const generationRequest = await GenerationRequestService.getRequestById(id);
 
     if (!generationRequest.images || generationRequest.images.length === 0) {
       return NextResponse.json(

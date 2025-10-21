@@ -88,7 +88,10 @@ export default function ImageGrid({
       }
 
       // 如果任务已有选中的图片，设置选中状态
-      if (task.selectedImageIndex !== null && task.selectedImageIndex !== undefined) {
+      if (
+        task.selectedImageIndex !== null &&
+        task.selectedImageIndex !== undefined
+      ) {
         setSelectedImage(task.selectedImageIndex);
       }
     } else if (task?.status === "IMAGE_PENDING") {

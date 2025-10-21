@@ -95,7 +95,6 @@ export function requireResourceAccess(resourceUserId: string): void {
   //   const { AppError } = require("./errors");
   //   throw new AppError("FORBIDDEN", "无权访问该资源");
   // }
-
   // 当前实现：始终通过验证
   // 未来实现时需要取消上面的注释
 }

@@ -35,37 +35,41 @@ export default function ModelPreview({
   // 策略：
   // 1. 如果有 imageIndex，查找该图片对应的模型（从 images[imageIndex].generatedModel）
   // 2. 如果没有 imageIndex，查找最新的模型
-  const selectedModel = task?.images && imageIndex !== null && imageIndex !== undefined
-    ? (() => {
-        const selectedImage = task.images.find((img) => img.index === imageIndex);
-        if (selectedImage && (selectedImage as any).generatedModel) {
-          const model = (selectedImage as any).generatedModel;
-          // 从 task.models 中找到完整的模型数据（包含 generationStatus 和 progress）
-          const fullModel = task.models?.find((m) => m.id === model.id);
-          return fullModel || model;
-        }
-        return undefined;
-      })()
-    : task?.models?.length
+  const selectedModel =
+    task?.images && imageIndex !== null && imageIndex !== undefined
       ? (() => {
-          const completedModels = task.models.filter(
-            (m) => m.generationStatus === "COMPLETED",
+          const selectedImage = task.images.find(
+            (img) => img.index === imageIndex,
           );
-          if (completedModels.length > 0) {
-            return completedModels.sort(
-              (a, b) =>
-                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-            )[0];
+          if (selectedImage && (selectedImage as any).generatedModel) {
+            const model = (selectedImage as any).generatedModel;
+            // 从 task.models 中找到完整的模型数据（包含 generationStatus 和 progress）
+            const fullModel = task.models?.find((m) => m.id === model.id);
+            return fullModel || model;
           }
-          return task.models
-            .slice()
-            .sort(
-              (a, b) =>
-                new Date(b.createdAt).getTime() -
-                new Date(a.createdAt).getTime(),
-            )[0];
+          return undefined;
         })()
-      : undefined;
+      : task?.models?.length
+        ? (() => {
+            const completedModels = task.models.filter(
+              (m) => m.generationStatus === "COMPLETED",
+            );
+            if (completedModels.length > 0) {
+              return completedModels.sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime(),
+              )[0];
+            }
+            return task.models
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime(),
+              )[0];
+          })()
+        : undefined;
 
   // 为了向后兼容，保留 latestModel 别名
   const latestModel = selectedModel;
@@ -255,7 +259,10 @@ export default function ModelPreview({
     // 如果有选中的模型（selectedModel），根据模型状态显示
     if (latestModel) {
       // 模型已完成且有 URL
-      if (latestModel.generationStatus === "COMPLETED" && latestModel.modelUrl) {
+      if (
+        latestModel.generationStatus === "COMPLETED" &&
+        latestModel.modelUrl
+      ) {
         setStatus("completed");
         setProgress(100);
         console.log("✅ 模型已完成，显示3D预览");
@@ -263,7 +270,11 @@ export default function ModelPreview({
       }
 
       // 模型生成中
-      if (!latestModel.generationStatus || latestModel.generationStatus === "PENDING" || latestModel.generationStatus === "GENERATING") {
+      if (
+        !latestModel.generationStatus ||
+        latestModel.generationStatus === "PENDING" ||
+        latestModel.generationStatus === "GENERATING"
+      ) {
         setStatus("generating");
         setProgress(latestModel.progress || 0);
         console.log("⏳ 模型生成中，显示进度:", latestModel.progress);
@@ -280,7 +291,10 @@ export default function ModelPreview({
 
     // 如果没有选中的模型，根据任务状态决定
     // 模型生成中（即使 latestModel 还没创建，只要 task.status 是生成中）
-    if (task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING") {
+    if (
+      task?.status === "MODEL_PENDING" ||
+      task?.status === "MODEL_GENERATING"
+    ) {
       setStatus("generating");
       setProgress(0);
       console.log("⏳ 模型生成中（等待后端创建记录）");
@@ -288,7 +302,10 @@ export default function ModelPreview({
     }
 
     // 图片生成中
-    if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
+    if (
+      task?.status === "IMAGE_PENDING" ||
+      task?.status === "IMAGE_GENERATING"
+    ) {
       setStatus("idle");
       setProgress(0);
       console.log("⏳ 图片生成中，等待选择");
@@ -296,7 +313,10 @@ export default function ModelPreview({
     }
 
     // 图片完成，等待选择（或当前图片没有模型）
-    if (task?.status === "IMAGE_COMPLETED" || (imageIndex !== null && !latestModel)) {
+    if (
+      task?.status === "IMAGE_COMPLETED" ||
+      (imageIndex !== null && !latestModel)
+    ) {
       setStatus("idle");
       setProgress(0);
       console.log("📋 等待选择图片或当前图片无模型");
@@ -384,7 +404,10 @@ export default function ModelPreview({
             <div className="text-center max-w-sm px-6">
               {(() => {
                 // 优先级1：图片生成中 - 提前告知接下来要做什么
-                if (task?.status === "IMAGE_PENDING" || task?.status === "IMAGE_GENERATING") {
+                if (
+                  task?.status === "IMAGE_PENDING" ||
+                  task?.status === "IMAGE_GENERATING"
+                ) {
                   return (
                     <div className="flex flex-col items-center gap-4">
                       <div className="relative h-20 w-20">
@@ -403,7 +426,9 @@ export default function ModelPreview({
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">💡</span>
                             <div className="text-sm text-white/80">
-                              <p className="font-medium mb-0.5">图片生成完成后</p>
+                              <p className="font-medium mb-0.5">
+                                图片生成完成后
+                              </p>
                               <p className="text-xs text-white/60">
                                 点击任意图片立即生成 3D 模型
                               </p>
@@ -411,7 +436,9 @@ export default function ModelPreview({
                           </div>
                           <div className="flex items-center gap-2.5">
                             <span className="text-lg shrink-0">⏱️</span>
-                            <p className="text-xs text-white/60">预计 15-30 秒</p>
+                            <p className="text-xs text-white/60">
+                              预计 15-30 秒
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -420,7 +447,11 @@ export default function ModelPreview({
                 }
 
                 // 优先级2：已选中图片但该图片没有模型 - 引导用户生成模型
-                if (imageIndex !== null && imageIndex !== undefined && !latestModel) {
+                if (
+                  imageIndex !== null &&
+                  imageIndex !== undefined &&
+                  !latestModel
+                ) {
                   return (
                     <div className="flex flex-col items-center gap-6">
                       <div className="relative h-24 w-24">
@@ -484,7 +515,10 @@ export default function ModelPreview({
                 }
 
                 // 优先级3：图片已完成但没有选中任何图片 - 引导用户选择图片
-                if (task?.status === "IMAGE_COMPLETED" && (imageIndex === null || imageIndex === undefined)) {
+                if (
+                  task?.status === "IMAGE_COMPLETED" &&
+                  (imageIndex === null || imageIndex === undefined)
+                ) {
                   return (
                     <div className="flex flex-col items-center gap-4">
                       <div className="relative h-20 w-20">
@@ -526,101 +560,101 @@ export default function ModelPreview({
 
         {/* 控制按钮 - 只在模型已完成时显示 */}
         {status === "completed" && (
-        <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#242424] p-1.5">
-          <Tooltip
-            content={showGrid ? "隐藏网格" : "显示网格"}
-            disabled={status !== "completed"}
-          >
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={status !== "completed"}
-              onClick={() => setShowGrid(!showGrid)}
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-              </svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="重置视角" disabled={status !== "completed"}>
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={status !== "completed"}
-              onClick={handleResetCamera}
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </button>
-          </Tooltip>
-          <Tooltip
-            content={isFullscreen ? "退出全屏 (F)" : "全屏预览 (F)"}
-            disabled={status !== "completed"}
-          >
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={status !== "completed"}
-              onClick={handleToggleFullscreen}
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
-                />
-              </svg>
-            </button>
-          </Tooltip>
-
-          {/* 分隔线 */}
-          <div className="h-6 w-px bg-white/10" />
-
-          {/* 材质颜色切换 */}
-          {MATERIAL_COLORS.map((color) => (
+          <div className="absolute bottom-5 right-5 flex items-center gap-2 rounded-xl border border-white/10 bg-[#242424] p-1.5">
             <Tooltip
-              key={color.name}
-              content={color.name}
+              content={showGrid ? "隐藏网格" : "显示网格"}
               disabled={status !== "completed"}
             >
               <button
                 type="button"
-                onClick={() => handleMaterialChange(color.value)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={status !== "completed"}
-                className={`flex h-9 w-9 items-center justify-center rounded-lg border-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
-                  currentMaterial === color.value
-                    ? "bg-yellow-1/20 ring-2 ring-yellow-1"
-                    : "bg-transparent hover:bg-white/10"
-                }`}
+                onClick={() => setShowGrid(!showGrid)}
               >
-                <span className="text-lg">{color.icon}</span>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+                </svg>
               </button>
             </Tooltip>
-          ))}
-        </div>
+            <Tooltip content="重置视角" disabled={status !== "completed"}>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={status !== "completed"}
+                onClick={handleResetCamera}
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={isFullscreen ? "退出全屏 (F)" : "全屏预览 (F)"}
+              disabled={status !== "completed"}
+            >
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-foreground-subtle transition-all duration-200 hover:bg-white/10 hover:text-yellow-1 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={status !== "completed"}
+                onClick={handleToggleFullscreen}
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
+
+            {/* 分隔线 */}
+            <div className="h-6 w-px bg-white/10" />
+
+            {/* 材质颜色切换 */}
+            {MATERIAL_COLORS.map((color) => (
+              <Tooltip
+                key={color.name}
+                content={color.name}
+                disabled={status !== "completed"}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleMaterialChange(color.value)}
+                  disabled={status !== "completed"}
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg border-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    currentMaterial === color.value
+                      ? "bg-yellow-1/20 ring-2 ring-yellow-1"
+                      : "bg-transparent hover:bg-white/10"
+                  }`}
+                >
+                  <span className="text-lg">{color.icon}</span>
+                </button>
+              </Tooltip>
+            ))}
+          </div>
         )}
       </div>
 
