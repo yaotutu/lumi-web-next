@@ -53,7 +53,7 @@ export const POST = withErrorHandler(
       moonraker_url: "http://192.168.200.209:7125",
     };
 
-    const response = await fetch("http://192.168.110.87:8010/api/v1/tasks", {
+    const response = await fetch("http://192.168.200.86:8010/api/v1/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(printRequest),

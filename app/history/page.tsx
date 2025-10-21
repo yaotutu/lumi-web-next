@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Navigation from "@/components/layout/Navigation";
 import type { TaskWithDetails } from "@/types";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
@@ -107,22 +108,29 @@ export default function HistoryPage() {
                 >
                   {/* 缩略图 */}
                   <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-white/5 to-[#0d0d0d]">
-                    {task.images.length > 0 ? (
-                      <img
-                        src={getProxiedImageUrl(
-                          (task.images[task.selectedImageIndex ?? 0] as any)?.url ||
-                            task.images[task.selectedImageIndex ?? 0]?.imageUrl ||
-                            (task.images[0] as any)?.url ||
-                            task.images[0].imageUrl,
-                        )}
-                        alt="Task thumbnail"
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <span className="text-4xl">🎨</span>
-                      </div>
-                    )}
+                    {(() => {
+                      // 查找第一张有 URL 的图片
+                      const firstImageWithUrl = task.images.find(
+                        (img) => img.imageUrl || (img as any).url,
+                      );
+                      const imageUrl = firstImageWithUrl
+                        ? (firstImageWithUrl as any).url ||
+                          firstImageWithUrl.imageUrl
+                        : null;
+
+                      return imageUrl ? (
+                        <Image
+                          src={getProxiedImageUrl(imageUrl)}
+                          alt="Task thumbnail"
+                          fill
+                          className="object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <span className="text-4xl">🎨</span>
+                        </div>
+                      );
+                    })()}
 
                     {/* 状态标签 */}
                     <div

@@ -375,7 +375,7 @@ export default function ImageGrid({
             </div>
 
             {/* 底部按钮区域 - 禁用状态 */}
-            <div className="mt-3 shrink-0">
+            <div className="mt-3 shrink-0 hidden">
               <Tooltip content="图片生成中，请稍候...">
                 <button
                   type="button"
@@ -518,7 +518,7 @@ export default function ImageGrid({
             </div>
 
             {/* 底部按钮 - 固定高度,不参与flex */}
-            <div className="mt-3 shrink-0">
+            <div className="mt-3 shrink-0 hidden">
               <Tooltip content={getGenerate3DTooltip()}>
                 <button
                   type="button"
