@@ -19,7 +19,7 @@ import * as GenerationRequestService from "@/lib/services/generation-request-ser
  * - generatedModels: GeneratedModel[]
  */
 export const GET = withErrorHandler(async (request: NextRequest) => {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const requests = await GenerationRequestService.listRequests(userId);
 
   return NextResponse.json({
@@ -49,7 +49,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     );
   }
 
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const generationRequest = await GenerationRequestService.createRequest(
     userId,
     prompt.trim(),
