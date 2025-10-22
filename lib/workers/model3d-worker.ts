@@ -26,6 +26,7 @@ import {
   QUEUE_NAMES,
   type WorkerConfig,
 } from "./worker-config-manager";
+import { createAssetFromModel } from "@/lib/repositories/user-asset.repository";
 import type { ModelGenerationJob } from "@prisma/client";
 
 // 创建日志器
@@ -576,6 +577,38 @@ async function pollModel3DStatus(
           errorMessage: null, // 清除之前的错误信息
         },
       });
+
+      // 自动创建 UserAsset 并发布到模型画廊
+      try {
+        const generatedModel = await prisma.generatedModel.findUnique({
+          where: { id: modelId },
+          include: { request: true },
+        });
+
+        if (generatedModel) {
+          await createAssetFromModel({
+            userId: generatedModel.request.userId,
+            generatedModelId: modelId,
+            name: generatedModel.name,
+            modelUrl: storageUrl,
+            previewImageUrl: previewImageStorageUrl,
+            format: MODEL_FORMAT,
+          });
+
+          log.info("pollModel3DStatus", "UserAsset 已创建并发布到模型画廊", {
+            jobId,
+            modelId,
+            userId: generatedModel.request.userId,
+          });
+        }
+      } catch (error) {
+        // UserAsset 创建失败不影响主流程
+        log.warn("pollModel3DStatus", "UserAsset 创建失败", {
+          jobId,
+          modelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       log.info("pollModel3DStatus", "模型生成完成", { jobId, modelId });
       return;

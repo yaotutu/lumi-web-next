@@ -8,16 +8,43 @@ Lumi Web Next 是一个 AI 3D 模型生成平台,允许用户通过文本描述�
 
 ## 技术栈
 
+### 前端框架
 - **Next.js 15.5.4** - 使用 App Router 和 Turbopack
 - **React 19.1.0** 和 React DOM 19.1.0
 - **TypeScript 5** - 启用严格模式
 - **Tailwind CSS 4** - 使用 PostCSS
+
+### 3D 渲染
+- **Three.js 0.180.0** - 核心 3D 引擎
+- **@react-three/fiber 9.3.0** - React Three.js 渲染器
+- **@react-three/drei 10.7.6** - Three.js 辅助工具库
+
+### 数据库与 ORM
+- **Prisma 6.16.3** - 数据库 ORM 和迁移工具
+- **SQLite** - 开发环境数据库（生产环境可切换到 PostgreSQL/MySQL）
+
+### 外部服务集成
+- **OpenAI SDK 6.3.0** - LLM 提示词优化（兼容 SiliconFlow、阿里云通义千问）
+- **腾讯云 SDK** - 3D 模型生成服务（tencentcloud-sdk-nodejs-ai3d）
+- **腾讯云 COS SDK** - 对象存储服务（cos-nodejs-sdk-v5）
+
+### 验证与工具
+- **Zod 4.1.11** - 类型安全的数据验证库
+- **Jose 6.1.0** - JWT 认证（邮箱验证码登录）
+- **JSZip 3.10.1** - 模型文件打包下载
+
+### 日志与开发工具
+- **Pino 10.0.0** - 高性能日志库
+- **Pino-Pretty 13.1.1** - 美化日志输出
 - **Biome 2.2.0** - 代码检查和格式化工具（替代 ESLint/Prettier）
+- **tsx 4.20.6** - TypeScript 脚本执行工具
 
 ## 开发命令
 
+### 基础命令
+
 ```bash
-# 启动开发服务器（使用 Turbopack）
+# 启动开发服务器（端口 4000，使用 Turbopack，带美化日志）
 npm run dev
 
 # 构建生产版本（使用 Turbopack）
@@ -33,16 +60,66 @@ npm run lint
 npm run format
 ```
 
+### 数据库命令
+
+```bash
+# 应用数据库迁移
+npx prisma migrate dev
+
+# 生成 Prisma Client
+npx prisma generate
+
+# 打开 Prisma Studio（可视化数据库管理）
+npx prisma studio
+
+# 重置数据库（清空所有数据）
+npx prisma migrate reset
+
+# 运行种子数据
+npx prisma db seed
+```
+
+### 测试脚本
+
+```bash
+# 初始化存储服务
+npm run init:storage
+
+# 测试存储服务
+npm run test:storage
+
+# 测试 API 接口
+npm run test:api
+
+# 测试图片生成
+npm run test:image-gen
+
+# 测试工作台集成
+npm run test:workspace
+
+# 测试历史记录
+npm run test:history
+
+# 测试队列服务
+npm run test:queue
+
+# 测试错误处理
+npm run test:error-handler
+
+# 调试 API 接口
+npm run debug:api
+```
+
 ## 核心架构
 
 ### 数据库架构：Image-Centric + Job 执行层分离
 
 项目采用**分层架构**，将业务状态和执行状态分离，支持细粒度的任务控制和重试。
 
-#### 四层架构设计
+#### 五层架构设计
 
 ```
-用户层 (User)
+用户层 (User, EmailVerificationCode)
    ↓
 业务层 (GenerationRequest → GeneratedImage → GeneratedModel)
    ↓
@@ -52,6 +129,18 @@ npm run format
 ```
 
 #### 核心实体说明
+
+**0. 用户层（User Layer）**
+
+- **User（用户）**
+  - 作用：管理用户账户信息
+  - 字段：email（唯一）, name, lastLoginAt, createdAt, updatedAt
+  - 认证：使用邮箱验证码登录，JWT Token 维持会话
+
+- **EmailVerificationCode（邮箱验证码）**
+  - 作用：邮箱验证码登录和注册
+  - 字段：email, code（开发环境固定 0000）, expiresAt（5分钟有效期）, verifiedAt
+  - 流程：发送验证码 → 验证验证码 → 创建/更新用户 → 返回 JWT Token
 
 **1. 业务层（Business Layer）**
 
@@ -136,13 +225,35 @@ Job (PENDING → RUNNING) + Model (创建)
 
 项目采用 Next.js App Router 架构:
 
-- **`/`** (首页) - 展示 Hero 区域和模型画廊
+- **`/`** (首页 `app/page.tsx`) - 展示 Hero 区域和模型画廊
+  - 组件位于 `app/home/components/`
   - `HeroSection` - 主搜索框和功能卡片展示
-  - `ModelGallery` - 3D 模型展示画廊
+  - `HeroSearchBar` - 搜索框，点击导航到工作台
+  - `HeroFeatureCard` - 功能特性卡片
+  - `ModelGallery` - 公开的 3D 模型展示画廊
+  - `GalleryCard` - 单个模型卡片
 
 - **`/workspace`** (工作台) - 图片生成和 3D 模型生成主工作流
-  - 左侧:`ImageGrid` - 输入描述 → 生成4张图片 → 选择图片
-  - 右侧:`ModelPreview` - 3D 模型生成进度和预览
+  - 组件位于 `app/workspace/components/`
+  - 左侧: `ImageGrid` - 输入描述 → 生成4张图片 → 选择图片
+  - 右侧: `ModelPreview` - 3D 模型生成进度和预览
+  - `Model3DViewer` - Three.js 3D 模型查看器
+  - `GenerationProgress` - 进度条组件
+
+- **`/history`** (历史记录 `app/history/page.tsx`) - 用户的历史生成记录
+  - 展示用户所有的生成请求
+  - 查看历史生成的图片和 3D 模型
+  - 支持重新生成和下载
+
+- **`/gallery/[id]`** (模型详情 `app/gallery/[id]/page.tsx`) - 单个模型的详细页面
+  - 3D 模型预览和交互
+  - 模型信息展示
+  - 下载模型文件
+
+- **`/login`** (登录页面 `app/login/page.tsx`) - 邮箱验证码登录
+  - 输入邮箱 → 发送验证码 → 验证登录
+  - 开发环境验证码固定为 0000
+  - 登录后跳转到工作台
 
 ### 工作流程
 
@@ -164,26 +275,28 @@ Model3DWorker 监听并执行（轮询腾讯云状态，带进度条）
 
 ### 核心组件
 
-**工作台组件** (`components/workspace/`)
+**工作台组件** (`app/workspace/components/`)
 - `ImageGrid` - 管理文本输入、图片生成、图片选择的完整流程
-- `ModelPreview` - 3D模型生成状态、进度显示、模型信息展示
+- `ModelPreview` - 3D 模型生成状态、进度显示、模型信息展示
+- `Model3DViewer` - Three.js 3D 模型查看器（支持 GLB、OBJ 格式）
 - `GenerationProgress` - 进度条组件
 
-**首页页面** (`app/home/`)
-- `page.tsx` - 首页路由页面
-
-**首页组件** (`app/home/`)
-- `HeroSection` - 主页面英雄区,包含搜索框和标签云
-- `HeroSearchBar` - 主搜索框,支持标签注入,导航到工作台
+**首页组件** (`app/home/components/`)
+- `HeroSection` - 主页面英雄区，包含搜索框和功能卡片
+- `HeroSearchBar` - 主搜索框，支持标签注入，导航到工作台
 - `HeroFeatureCard` - 功能特性卡片
+- `ModelGallery` - 公开模型画廊展示
+- `GalleryCard` - 单个模型卡片组件
 
-**布局组件** (`components/layout/`)
-- `Navigation` - 顶部导航栏,响应式设计
+**全局布局组件** (`components/layout/`)
+- `Navigation` - 顶部导航栏，响应式设计，包含用户菜单
 
-**UI 组件** (`components/ui/`)
+**全局 UI 组件** (`components/ui/`)
+- `Toast` - 消息提示（成功、错误、警告）
 - `Skeleton` - 加载骨架屏
-- `Toast` - 消息提示
 - `EmptyState` - 空状态占位
+- `QueueStatus` - 队列状态指示器
+- `Tooltip` - 工具提示
 
 ### 常量配置 (`lib/constants.ts`)
 
@@ -288,52 +401,181 @@ lib/
   │   ├── generated-model.repository.ts     # GeneratedModel CRUD
   │   ├── job.repository.ts                 # Job CRUD
   │   ├── queue-config.repository.ts        # QueueConfig CRUD
-  │   └── user-asset.repository.ts          # UserAsset CRUD
+  │   ├── user-asset.repository.ts          # UserAsset CRUD
+  │   ├── user.repository.ts                # User CRUD
+  │   └── email-verification.repository.ts  # EmailVerificationCode CRUD
   ├── services/      # 业务逻辑层
   │   ├── generation-request-service.ts  # GenerationRequest 业务逻辑
   │   ├── generated-model-service.ts     # GeneratedModel 业务逻辑
+  │   ├── auth-service.ts                # 认证服务（邮箱验证码）
   │   └── prompt-optimizer.ts            # 提示词优化服务
   ├── providers/   # 外部API封装（适配器模式）
   │   ├── image/   # 图片生成服务（统一接口，多渠道适配器）
+  │   │   ├── types.ts              # 统一接口定义
+  │   │   ├── base.ts               # 抽象基类
+  │   │   ├── factory.ts            # 工厂函数
+  │   │   └── adapters/             # 渠道适配器
+  │   │       ├── siliconflow.ts   # SiliconFlow 适配器
+  │   │       ├── aliyun.ts        # 阿里云适配器
+  │   │       └── mock.ts          # Mock 适配器
   │   ├── llm/     # LLM服务（提示词优化）
+  │   │   ├── types.ts
+  │   │   ├── base.ts
+  │   │   ├── factory.ts
+  │   │   └── adapters/
+  │   │       ├── siliconflow.ts   # SiliconFlow DeepSeek-V3
+  │   │       ├── qwen.ts          # 阿里云通义千问
+  │   │       └── mock.ts
   │   ├── model3d/ # 3D模型生成服务
+  │   │   ├── types.ts
+  │   │   ├── base.ts
+  │   │   ├── factory.ts
+  │   │   └── adapters/
+  │   │       ├── tencent.ts       # 腾讯云混元 3D
+  │   │       └── mock.ts
   │   └── storage/ # 存储服务（本地/OSS/COS）
+  │       ├── types.ts
+  │       ├── base.ts
+  │       ├── factory.ts
+  │       └── adapters/
+  │           ├── local.ts         # 本地文件系统
+  │           ├── tencent-cos.ts   # 腾讯云 COS
+  │           └── aliyun-oss.ts    # 阿里云 OSS（占位符）
   ├── validators/  # Zod验证schemas
+  │   ├── model-validators.ts    # 模型验证
+  │   └── auth.validator.ts      # 认证验证
   ├── utils/       # 工具函数
-  │   ├── errors.ts      # 统一错误处理
-  │   ├── retry.ts       # 重试工具
-  │   └── image-storage.ts  # 图片存储工具
+  │   ├── errors.ts           # 统一错误处理
+  │   ├── retry.ts            # 重试工具
+  │   ├── auth.ts             # JWT 工具
+  │   ├── proxy-url.ts        # 代理 URL 工具
+  │   └── image-storage.ts    # 图片存储工具（已废弃）
   ├── workers/     # 后台任务处理（Job-Based 架构）
-  │   ├── index.ts              # Worker 统一启动入口
-  │   ├── image-worker.ts       # 图片生成 Worker
-  │   ├── model3d-worker.ts     # 3D 模型生成 Worker
-  │   └── worker-config-manager.ts  # Worker 配置管理器
-  └── constants.ts # 全局常量
+  │   ├── index.ts                   # Worker 统一启动入口
+  │   ├── image-worker.ts            # 图片生成 Worker
+  │   ├── model3d-worker.ts          # 3D 模型生成 Worker
+  │   └── worker-config-manager.ts   # Worker 配置管理器
+  ├── logger/      # 日志系统
+  │   ├── index.ts     # 日志创建器（基于 pino）
+  │   └── types.ts     # 日志类型定义
+  ├── prompts/     # LLM 提示词模板
+  │   ├── image-3d-print.ts          # 单提示词模板
+  │   └── image-3d-print-variants.ts # 变体提示词模板
+  ├── db/
+  │   └── prisma.ts  # Prisma 客户端单例
+  ├── constants.ts   # 全局常量
+  ├── init.ts        # 启动初始化
+  └── auth-client.ts # 客户端认证工具
 
 types/
   └── index.ts     # TypeScript 类型定义
 
 app/
-  ├── page.tsx           # 首页
+  ├── page.tsx           # 首页（重定向到 /home）
   ├── home/
   │   └── components/    # 首页专用组件
   ├── workspace/
   │   ├── page.tsx       # 工作台页面
   │   └── components/    # 工作台专用组件
+  ├── history/
+  │   └── page.tsx       # 历史记录页面
+  ├── gallery/
+  │   └── [id]/
+  │       └── page.tsx   # 模型详情页面
+  ├── login/
+  │   └── page.tsx       # 登录页面
   ├── api/               # API路由
-  │   ├── tasks/         # 任务相关API（已废弃，使用 test/requests）
+  │   ├── auth/          # 认证相关（新架构）
+  │   │   ├── send-code/     # 发送验证码
+  │   │   ├── verify-code/   # 验证验证码
+  │   │   ├── logout/        # 登出
+  │   │   └── me/            # 获取当前用户
   │   ├── test/          # 测试 API（新架构）
-  │   │   ├── requests/  # GenerationRequest CRUD
-  │   │   └── models/    # GeneratedModel CRUD
+  │   │   ├── requests/      # GenerationRequest CRUD
+  │   │   └── models/        # GeneratedModel CRUD
+  │   ├── gallery/       # 模型广场
+  │   │   └── models/        # 公开模型列表和详情
   │   ├── workers/       # Worker 状态监控
-  │   └── admin/         # 管理后台（队列配置等）
+  │   ├── admin/         # 管理后台（队列配置等）
+  │   ├── proxy/         # 代理服务（解决 CORS）
+  │   │   ├── image/         # 图片代理
+  │   │   └── model/         # 模型代理
+  │   └── tasks/         # 任务相关API（已废弃，使用 test/requests）
   ├── layout.tsx         # 根布局
   └── globals.css        # 全局样式
+
+prisma/
+  ├── schema.prisma      # 数据库模型定义
+  ├── migrations/        # 数据库迁移文件
+  └── seed.ts            # 种子数据
+
+scripts/                 # 测试和工具脚本
+  ├── init-storage.ts
+  ├── test-*.ts
+  └── debug-*.ts
 
 instrumentation.ts       # Next.js 启动钩子（启动 Workers）
 ```
 
 ## 开发注意事项
+
+### 用户认证系统
+
+项目使用**邮箱验证码登录**机制，无需密码，简化用户体验。
+
+#### 认证流程
+
+```
+用户输入邮箱 → 发送验证码 → 验证验证码 → 返回 JWT Token → 维持会话
+```
+
+**特性**：
+- ✅ 无密码登录，降低用户门槛
+- ✅ 验证码有效期 5 分钟
+- ✅ 开发环境验证码固定为 `0000`，方便测试
+- ✅ JWT Token 存储在 Cookie 中，自动携带
+- ✅ Token 有效期 7 天
+
+#### API 接口
+
+```typescript
+// 发送验证码
+POST /api/auth/send-code
+{ email: "user@example.com" }
+
+// 验证验证码（登录/注册）
+POST /api/auth/verify-code
+{ email: "user@example.com", code: "0000" }
+// 返回: { token: "jwt-token", user: { id, email, name } }
+
+// 获取当前用户
+GET /api/auth/me
+// 返回: { user: { id, email, name } }
+
+// 登出
+POST /api/auth/logout
+```
+
+#### 客户端使用
+
+```typescript
+import { getCurrentUser, logout } from '@/lib/auth-client';
+
+// 获取当前用户（自动从 Cookie 读取 Token）
+const user = await getCurrentUser();
+
+// 登出
+await logout();
+```
+
+#### 环境变量
+
+```bash
+# .env.local
+
+# JWT 密钥（生产环境必须设置，开发环境有默认值）
+JWT_SECRET=your-random-secret-key-here
+```
 
 ### 图片生成渠道配置
 
@@ -445,7 +687,121 @@ const variants = await generatePromptVariants(
 - 网络环境不佳时进行本地开发
 - 快速原型验证和 UI 调试
 
-**注意**: Mock 模式对所有渠道生效，无需配置具体的 API Key。
+**注意**: Mock 模式对所有 Provider 生效（Image、LLM、Model3D、Storage），无需配置具体的 API Key。
+
+### 代理服务
+
+为了解决跨域（CORS）和临时 URL 访问问题，项目提供了统一的代理服务。
+
+#### 图片代理
+
+```typescript
+// 原始 URL（可能有 CORS 限制）
+const originalUrl = "https://external.com/image.jpg";
+
+// 使用代理
+const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(originalUrl)}`;
+
+// 在 <img> 中使用
+<img src={proxyUrl} alt="Image" />
+```
+
+#### 模型代理
+
+```typescript
+// 代理模型文件下载
+const modelProxyUrl = `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
+
+// 在 Three.js 中加载
+const loader = new GLTFLoader();
+loader.load(modelProxyUrl, (gltf) => {
+  scene.add(gltf.scene);
+});
+```
+
+**特性**：
+- ✅ 解决跨域访问限制
+- ✅ 支持临时 URL（阿里云 24 小时 URL、腾讯云临时 URL）
+- ✅ 自动设置正确的 Content-Type
+- ✅ 支持大文件流式传输
+
+### 日志系统
+
+项目使用 **Pino** 作为日志库，提供高性能、结构化的日志记录。
+
+#### 创建 Logger
+
+```typescript
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('MyService');
+
+// 基础日志
+log.info('action', '操作成功');
+log.error('action', '操作失败', error);
+log.warn('action', '警告信息');
+log.debug('action', '调试信息');
+
+// 带上下文的日志
+log.info('generateImage', '开始生成图片', { requestId: '123', userId: 'user-456' });
+```
+
+#### 日志输出格式
+
+开发环境使用 `pino-pretty` 美化输出：
+
+```bash
+[13:45:32.123] INFO (ImageWorker): processJob - 开始处理任务
+    jobId: "job-123"
+    imageId: "img-456"
+    retryCount: 0
+```
+
+生产环境输出 JSON 格式（便于日志收集）：
+
+```json
+{"level":30,"time":1234567890,"name":"ImageWorker","msg":"processJob - 开始处理任务","jobId":"job-123"}
+```
+
+#### 日志级别
+
+- `debug` - 调试信息（开发环境）
+- `info` - 正常信息
+- `warn` - 警告信息
+- `error` - 错误信息
+
+### 数据库管理
+
+#### Prisma Studio
+
+```bash
+# 打开可视化数据库管理界面
+npx prisma studio
+
+# 访问 http://localhost:5555
+```
+
+#### 数据库迁移
+
+```bash
+# 创建新迁移
+npx prisma migrate dev --name your_migration_name
+
+# 应用迁移（生产环境）
+npx prisma migrate deploy
+
+# 重置数据库（危险操作！）
+npx prisma migrate reset
+```
+
+#### 数据库文件位置
+
+```
+prisma/dev.db        # SQLite 数据库文件
+prisma/dev.db-journal # SQLite 日志文件
+```
+
+**注意**：`.gitignore` 已配置忽略数据库文件，避免提交到版本控制。
 
 ### 路径别名
 
@@ -513,21 +869,30 @@ API路由层 (app/api/) → Service层 (lib/services/) → Repository层 (lib/re
   - `job.repository.ts` - ImageGenerationJob / ModelGenerationJob CRUD
   - `queue-config.repository.ts` - QueueConfig CRUD
   - `user-asset.repository.ts` - UserAsset CRUD
+  - `user.repository.ts` - User CRUD
+  - `email-verification.repository.ts` - EmailVerificationCode CRUD
 - `lib/services/` - **业务逻辑层**（调用 Repository 和 Provider）
   - `generation-request-service.ts` - GenerationRequest 业务逻辑
   - `generated-model-service.ts` - GeneratedModel 业务逻辑
+  - `auth-service.ts` - 认证服务（邮箱验证码登录）
   - `prompt-optimizer.ts` - 提示词优化服务
 - `lib/providers/` - **外部API封装**（采用适配器模式）
   - `image/` - 图片生成服务（统一接口，多渠道适配器）
   - `llm/` - LLM服务（提示词优化）
   - `model3d/` - 3D模型生成服务
-  - `storage/` - 存储服务（本地/OSS/COS）
+  - `storage/` - 存储服务（本地/腾讯云COS/阿里云OSS）
 - `lib/workers/` - **后台任务处理**（Job-Based 架构）
   - `image-worker.ts` - 图片生成 Worker（监听 ImageGenerationJob）
   - `model3d-worker.ts` - 3D 模型生成 Worker（监听 ModelGenerationJob）
   - `worker-config-manager.ts` - Worker 配置管理器
 - `lib/validators/` - Zod验证schemas
-- `lib/utils/errors.ts` - 统一错误处理
+  - `model-validators.ts` - 模型验证
+  - `auth.validator.ts` - 认证验证
+- `lib/utils/` - 工具函数
+  - `errors.ts` - 统一错误处理
+  - `auth.ts` - JWT 工具
+  - `retry.ts` - 重试工具
+  - `proxy-url.ts` - 代理 URL 工具
 
 ### Repository 层规范
 
@@ -1535,8 +1900,103 @@ instrumentation.ts          # Next.js 启动钩子
     - enablePriority 控制是否启用优先级排序
     - 高优先级任务优先执行
 
+## 环境变量配置总览
+
+以下是项目所有可配置的环境变量，创建 `.env.local` 文件进行配置：
+
+```bash
+# ============================================
+# 数据库配置
+# ============================================
+DATABASE_URL="file:./dev.db"  # SQLite（开发环境）
+
+# ============================================
+# 用户认证
+# ============================================
+JWT_SECRET=your-random-secret-key-here  # JWT 密钥（生产环境必须设置）
+
+# ============================================
+# Mock 模式（开发环境推荐开启）
+# ============================================
+NEXT_PUBLIC_MOCK_MODE=true  # 启用 Mock 模式，无需配置真实 API
+
+# ============================================
+# 图片生成服务（选择一个）
+# ============================================
+# 方式1: SiliconFlow（推荐）
+SILICONFLOW_API_KEY=sk-your-api-key-here
+
+# 方式2: 阿里云
+ALIYUN_IMAGE_API_KEY=sk-your-api-key-here
+
+# ============================================
+# LLM 提示词优化（选择一个）
+# ============================================
+# 方式1: SiliconFlow DeepSeek-V3（推荐）
+SILICONFLOW_LLM_API_KEY=sk-your-api-key-here
+SILICONFLOW_LLM_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_LLM_MODEL=deepseek-ai/DeepSeek-V3
+
+# 方式2: 阿里云通义千问
+QWEN_API_KEY=sk-your-api-key-here
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-max
+
+# ============================================
+# 3D 模型生成服务
+# ============================================
+# 腾讯云混元 3D
+TENCENTCLOUD_SECRET_ID=your-secret-id
+TENCENTCLOUD_SECRET_KEY=your-secret-key
+
+# ============================================
+# 存储服务（选择一个）
+# ============================================
+# 方式1: 本地文件系统（默认，开发环境推荐）
+# 无需配置，自动使用 public/generated/
+
+# 方式2: 腾讯云 COS（推荐生产环境）
+TENCENT_COS_SECRET_ID=your-secret-id
+TENCENT_COS_SECRET_KEY=your-secret-key
+TENCENT_COS_BUCKET=your-bucket-1234567890  # 包含 AppId
+TENCENT_COS_REGION=ap-beijing               # 默认北京
+
+# 方式3: 阿里云 OSS
+ALIYUN_OSS_ACCESS_KEY_ID=your-access-key-id
+ALIYUN_OSS_ACCESS_KEY_SECRET=your-access-key-secret
+ALIYUN_OSS_BUCKET=your-bucket
+ALIYUN_OSS_REGION=oss-cn-hangzhou
+```
+
+### 推荐配置方案
+
+**开发环境（最简配置）**：
+```bash
+# 仅需这两项即可启动开发
+DATABASE_URL="file:./dev.db"
+NEXT_PUBLIC_MOCK_MODE=true
+```
+
+**生产环境（完整配置）**：
+```bash
+DATABASE_URL="postgresql://user:password@host:5432/database"  # 使用 PostgreSQL
+JWT_SECRET=your-random-secret-key-here
+SILICONFLOW_API_KEY=sk-xxx                    # 图片生成
+SILICONFLOW_LLM_API_KEY=sk-xxx                # LLM 优化
+TENCENTCLOUD_SECRET_ID=xxx                     # 3D 生成
+TENCENTCLOUD_SECRET_KEY=xxx
+TENCENT_COS_SECRET_ID=xxx                      # COS 存储
+TENCENT_COS_SECRET_KEY=xxx
+TENCENT_COS_BUCKET=xxx
+```
+
 ## 重要提示
 - 每一行代码必须有注释，解释代码的作用和目的。
 - 代码注释必须使用中文。
 - 优先使用函数式编程范式。
 - 统一使用ESM模块化语法。
+- 所有 API 路由必须使用 `withErrorHandler` 包装，确保错误统一处理。
+- Service 层函数使用纯函数，避免类封装。
+- Repository 层只负责数据访问，不包含业务逻辑。
+- Provider 使用适配器模式，便于切换不同服务商。
+- Worker 通过监听 Job 状态自动触发，不暴露手动触发接口。

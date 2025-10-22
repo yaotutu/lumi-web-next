@@ -143,7 +143,8 @@ export async function createAssetFromModel(data: {
       previewImageUrl: data.previewImageUrl,
       format: data.format,
       fileSize: data.fileSize,
-      visibility: "PRIVATE", // 默认私有
+      visibility: "PUBLIC", // 默认公开（用户可后续设置为私有）
+      publishedAt: new Date(), // 自动发布到模型画廊
     },
   });
 }
