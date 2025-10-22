@@ -78,6 +78,14 @@ export default function ModelPreview({
   console.log("=== ModelPreview latestModel 选择 ===", {
     taskId: task?.id,
     taskStatus: task?.status,
+    imageIndex,
+    imageIndexType: typeof imageIndex,
+    imagesCount: task?.images?.length,
+    allImagesWithModels: task?.images?.map((img: any) => ({
+      index: img.index,
+      hasGeneratedModel: !!(img as any).generatedModel,
+      generatedModelId: (img as any).generatedModel?.id,
+    })),
     allModelsCount: task?.models?.length,
     allModels: task?.models?.map((m) => ({
       id: m.id,
@@ -255,6 +263,16 @@ export default function ModelPreview({
 
   // 当任务状态或模型数据改变时更新UI
   useEffect(() => {
+    console.log("🎨 ModelPreview useEffect 触发:", {
+      taskStatus: task?.status,
+      taskModelsCount: task?.models?.length || 0,
+      imageIndex,
+      latestModelId: latestModel?.id,
+      latestModelStatus: latestModel?.generationStatus,
+      latestModelProgress: latestModel?.progress,
+      latestModelUrl: latestModel?.modelUrl,
+    });
+
     // 优先根据当前选中图片的模型状态来决定UI
     // 如果有选中的模型（selectedModel），根据模型状态显示
     if (latestModel) {

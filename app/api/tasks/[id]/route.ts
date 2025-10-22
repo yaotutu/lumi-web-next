@@ -90,16 +90,18 @@ export const PATCH = withErrorHandler(
       );
     }
 
-    // 4. 创建 3D 模型生成任务
-    await GeneratedModelService.createModelForImage(id, selectedImage.id);
+    // 4. 创建 3D 模型生成任务，获取返回的模型对象
+    const newModel = await GeneratedModelService.createModelForImage(
+      id,
+      selectedImage.id,
+    );
 
-    // 5. 返回更新后的请求详情
-    const updatedRequest = await GenerationRequestService.getRequestById(id);
-
+    // 5. 直接返回新创建的模型（避免重新查询的缓存问题）
     return NextResponse.json({
       success: true,
-      data: updatedRequest,
-      message: "图片已选择，3D模型生成已启动",
+      model: newModel, // 新创建的模型（包含 generationJob 信息）
+      selectedImageIndex, // 告诉前端选中了哪张图片
+      message: "3D模型生成已启动",
     });
   },
 );

@@ -260,7 +260,102 @@ function WorkspaceContent() {
         if (taskData.success) {
           // 3. 更新本地任务状态
           // 注意：每次 fetch 返回的都是新对象，React 能检测到变化
-          setTask(taskData.data);
+
+          // ✅ 保留前端 UI 状态，避免乐观更新被后端数据覆盖
+
+          // 检查当前选中的图片是否有正在生成的模型
+          const currentSelectedImageIndex = task.selectedImageIndex ?? taskData.data.selectedImageIndex;
+          let currentImageHasGeneratingModel = false;
+
+          // ✅ 添加安全检查：确保 taskData.data.images 存在
+          if (
+            currentSelectedImageIndex !== null &&
+            currentSelectedImageIndex !== undefined &&
+            taskData.data.images &&
+            Array.isArray(taskData.data.images)
+          ) {
+            // 从后端返回的数据中找到当前选中的图片
+            const currentImage = taskData.data.images.find(
+              (img: any) => img.index === currentSelectedImageIndex
+            );
+
+            // 检查这张图片是否有正在生成的模型
+            if (currentImage) {
+              // 检查 images[].generatedModel
+              const imageModel = (currentImage as any).generatedModel;
+
+              // 如果这张图片有模型，检查模型状态
+              if (imageModel) {
+                // 从 task.models 中找到完整的模型数据（包含 generationStatus）
+                const fullModel = taskData.data.models?.find((m: any) => m.id === imageModel.id);
+                const modelStatus = fullModel?.generationStatus;
+
+                // 如果模型正在生成中（GENERATING 或刚创建还没状态）
+                currentImageHasGeneratingModel = (
+                  !modelStatus ||
+                  modelStatus === "GENERATING" ||
+                  modelStatus === "PENDING"
+                );
+              }
+            }
+          }
+
+          const preservedTask = {
+            ...taskData.data,
+
+            // 保留 selectedImageIndex（adapter 会强制设置为 undefined）
+            selectedImageIndex: currentSelectedImageIndex,
+
+            // 🔥 新的保留逻辑：基于当前图片的模型状态，而不是全局 task.status
+            //
+            // 关键问题：多张图片场景下，全局 task.status 无法准确反映单张图片的状态
+            //
+            // 场景1：单张图片生成模型
+            //   点击"生成模型" → 乐观更新 status="MODEL_PENDING" → 轮询立即触发
+            //   → 后端还没创建模型 → status="IMAGE_COMPLETED" → 保留 MODEL_PENDING
+            //
+            // 场景2：多张图片场景（第一张已有模型，生成第二张）
+            //   第一张图片有模型（已完成）→ task.status = "MODEL_COMPLETED"
+            //   点击第二张图片"生成模型" → 乐观更新 status="MODEL_PENDING"
+            //   → 轮询返回 status="MODEL_COMPLETED"（因为第一张图片的模型已完成！）
+            //   → ❌ 旧逻辑：检查 task.status === "MODEL_PENDING" → 失败！因为后端返回 "MODEL_COMPLETED"
+            //   → ✅ 新逻辑：检查当前图片是否有正在生成的模型 → 没有 → 保留 MODEL_PENDING
+            status: (() => {
+              // 如果当前是 MODEL_PENDING（乐观更新），且当前图片没有正在生成的模型
+              // 说明后端还没创建模型记录，保留 MODEL_PENDING
+              //
+              // 注意：不再检查 task.status === "MODEL_PENDING"，因为在多图片场景下可能是 "MODEL_COMPLETED"
+              if (
+                task.status === "MODEL_PENDING" &&
+                !currentImageHasGeneratingModel &&
+                currentSelectedImageIndex !== null
+              ) {
+                console.log("🔒 保留 MODEL_PENDING 状态（后端还没创建模型记录）", {
+                  当前选中图片: currentSelectedImageIndex,
+                  后端返回status: taskData.data.status,
+                  当前图片有生成中模型: currentImageHasGeneratingModel,
+                });
+                return "MODEL_PENDING";
+              }
+
+              // 否则使用后端返回的状态
+              return taskData.data.status;
+            })(),
+
+            // ✅ 保留乐观更新时添加的 modelGenerationStartedAt
+            modelGenerationStartedAt: task.modelGenerationStartedAt ?? taskData.data.modelGenerationStartedAt,
+          };
+
+          console.log("🔄 轮询更新 task 状态:", {
+            原始status: taskData.data.status,
+            保留后status: preservedTask.status,
+            原始selectedImageIndex: taskData.data.selectedImageIndex,
+            保留后selectedImageIndex: preservedTask.selectedImageIndex,
+            原始models数量: taskData.data.models?.length || 0,
+            保留后models数量: preservedTask.models?.length || 0,
+          });
+
+          setTask(preservedTask);
 
           // ========================================
           // 智能停止逻辑
@@ -377,10 +472,25 @@ function WorkspaceContent() {
     // 确保任务存在
     if (task) {
       // ========================================
+      // 第 0 步：保存当前状态（用于失败回滚）
+      // ========================================
+      const previousTaskState = {
+        status: task.status,
+        selectedImageIndex: task.selectedImageIndex,
+        modelGenerationStartedAt: task.modelGenerationStartedAt,
+      };
+
+      // ========================================
       // 第 1 步：乐观更新（立即反馈）
       // ========================================
       // 立即更新本地状态为"模型生成中"，让用户看到进度条
       // 实际状态会在轮询时自动更新
+      console.log("🚀 乐观更新: 设置 MODEL_PENDING 状态", {
+        imageIndex,
+        previousStatus: task.status,
+        newStatus: "MODEL_PENDING",
+      });
+
       setTask({
         ...task,                                 // 保留其他字段
         selectedImageIndex: imageIndex,          // 更新选中的图片
@@ -413,15 +523,48 @@ function WorkspaceContent() {
 
         if (data.success) {
           // ========================================
-          // 成功：保持乐观更新的状态
+          // 成功：立即合并新模型到 task 状态
           // ========================================
           // 后台 Worker 会自动生成 3D 模型
           // 前端通过轮询机制自动更新进度
           console.log("✅ 图片选择成功，3D 模型生成已加入队列");
-          console.log("⏳ 保持 MODEL_PENDING 状态，等待轮询更新");
 
-          // 注意：这里不立即更新 task，避免状态闪烁
-          // 让轮询机制来更新实际状态
+          // 从响应中提取新创建的模型
+          const newModel = rawData.model;
+
+          if (newModel) {
+            console.log("🔥 立即合并新模型到 task 状态", {
+              modelId: newModel.id,
+              sourceImageId: newModel.sourceImageId,
+              imageIndex
+            });
+
+            // 更新 task 状态，添加新模型
+            setTask(prev => {
+              // 安全检查：确保 prev 和 prev.images 存在
+              if (!prev || !prev.images) {
+                console.error("❌ task 状态异常，无法合并新模型");
+                return prev;
+              }
+
+              return {
+                ...prev,
+                selectedImageIndex: imageIndex,
+                status: "MODEL_GENERATING", // 明确设置为生成中
+                models: [...(prev.models || []), newModel], // 添加新模型到数组
+                images: prev.images.map(img =>
+                  img.index === imageIndex
+                    ? { ...img, generatedModel: newModel } // 关联到对应图片
+                    : img
+                ),
+                modelGenerationStartedAt: new Date(),
+              };
+            });
+
+            console.log("✅ 新模型已合并，轮询将继续更新进度");
+          } else {
+            console.warn("⚠️ API 响应中没有 model 字段");
+          }
         } else {
           // ========================================
           // 失败：回滚乐观更新
@@ -436,8 +579,14 @@ function WorkspaceContent() {
             `选择图片失败: ${data.message || rawData.message || "Unknown error"}`,
           );
 
-          // 回滚到之前的状态（仅更新图片索引）
-          setTask({ ...task, selectedImageIndex: imageIndex });
+          // 回滚到之前的状态
+          console.log("⏪ 回滚乐观更新（请求失败）", previousTaskState);
+          setTask({
+            ...task,
+            status: previousTaskState.status,
+            selectedImageIndex: imageIndex,  // 保留用户选择
+            modelGenerationStartedAt: previousTaskState.modelGenerationStartedAt,
+          });
         }
       } catch (error) {
         // ========================================
@@ -451,7 +600,13 @@ function WorkspaceContent() {
         );
 
         // 回滚到之前的状态
-        setTask({ ...task, selectedImageIndex: imageIndex });
+        console.log("⏪ 回滚乐观更新（请求异常）", previousTaskState);
+        setTask({
+          ...task,
+          status: previousTaskState.status,
+          selectedImageIndex: imageIndex,  // 保留用户选择
+          modelGenerationStartedAt: previousTaskState.modelGenerationStartedAt,
+        });
       }
     }
   };

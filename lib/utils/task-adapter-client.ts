@@ -124,11 +124,33 @@ export function adaptGenerationRequest(
   }));
 
   // 适配 models 字段：从 images[].generatedModel 收集，并添加 generationStatus 和 progress
-  const adaptedModels = models.map((model) => ({
-    ...model,
-    generationStatus: "COMPLETED", // 简化：如果有 completedAt 说明完成，否则根据 failedAt 判断
-    progress: model.completedAt ? 100 : model.failedAt ? 0 : 50,
-  }));
+  // ✅ 根据模型的实际状态推导 generationStatus
+  const adaptedModels = models.map((model) => {
+    // 根据 completedAt 和 failedAt 推导状态
+    let generationStatus: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED";
+    let progress: number;
+
+    if (model.completedAt) {
+      // 模型已完成
+      generationStatus = "COMPLETED";
+      progress = 100;
+    } else if (model.failedAt) {
+      // 模型生成失败
+      generationStatus = "FAILED";
+      progress = 0;
+    } else {
+      // 模型正在生成中（completedAt 和 failedAt 都是 null）
+      // Worker 监听到模型后会立即开始生成，所以这里统一认为是 GENERATING
+      generationStatus = "GENERATING";
+      progress = 50; // 默认进度 50%（实际进度由 Worker 更新）
+    }
+
+    return {
+      ...model,
+      generationStatus,
+      progress,
+    };
+  });
 
   return {
     ...request,
