@@ -24,6 +24,7 @@ import {
   type WorkerConfig,
 } from "./worker-config-manager";
 import type { ImageGenerationJob, JobStatus } from "@prisma/client";
+import { sseConnectionManager } from "@/lib/sse/connection-manager";
 
 // 创建日志器
 const log = createLogger("ImageWorker");
@@ -314,6 +315,16 @@ async function processJob(
       },
     });
 
+    // 2.1 推送 SSE 事件：图片开始生成
+    await sseConnectionManager.broadcast(
+      job.image.requestId,
+      "image:generating",
+      {
+        imageId: job.imageId,
+        index: job.image.index,
+      },
+    );
+
     // 3. 执行单张图片生成
     const imageUrl = await generateSingleImage(
       job.image.request.prompt,
@@ -344,6 +355,17 @@ async function processJob(
         completedAt,
       },
     });
+
+    // 5.1 推送 SSE 事件：图片生成完成
+    await sseConnectionManager.broadcast(
+      job.image.requestId,
+      "image:completed",
+      {
+        imageId: job.imageId,
+        index: job.image.index,
+        imageUrl,
+      },
+    );
 
     log.info("processJob", "图片生成完成", {
       jobId: job.id,
@@ -423,6 +445,17 @@ async function processJob(
           errorMessage: errorMsg,
         },
       });
+
+      // 推送 SSE 事件：图片生成失败
+      await sseConnectionManager.broadcast(
+        job.image.requestId,
+        "image:failed",
+        {
+          imageId: job.imageId,
+          index: job.image.index,
+          errorMessage: errorMsg,
+        },
+      );
     }
   } finally {
     processingJobs.delete(job.id);

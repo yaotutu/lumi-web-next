@@ -5,12 +5,12 @@
  * 1. 图片生成：输入文本描述 → 生成 4 张图片
  * 2. 图片选择：从 4 张图片中选择一张
  * 3. 3D 模型生成：将选中的图片转换为 3D 模型
- * 4. 实时更新：通过 SSE (Server-Sent Events) 实时获取任务状态
+ * 4. 实时更新：通过轮询机制实时获取任务状态
  *
  * 架构特点：
  * - 左右分栏布局：左侧图片生成，右侧模型预览
  * - 状态驱动：task 对象包含所有任务信息
- * - SSE 机制：服务器主动推送状态更新，实时性 < 100ms
+ * - 轮询机制：每秒检查任务状态，智能停止
  * - 乐观更新：用户操作后立即反馈，无需等待服务器响应
  */
 "use client";
@@ -39,7 +39,7 @@ import ModelPreview from "./components/ModelPreview";
  * 工作台核心内容组件
  *
  * 职责：
- * - 管理任务状态（加载、SSE 监听、更新）
+ * - 管理任务状态（加载、轮询、更新）
  * - 协调左右两侧组件的交互
  * - 处理图片选择和 3D 模型生成
  */
@@ -176,284 +176,257 @@ function WorkspaceContent() {
   }, [taskId]); // 依赖项：taskId 变化时重新执行
 
   // ============================================
-  // Effect 2: SSE 实时状态推送
+  // Effect 2: 任务状态轮询
   // ============================================
   /**
-   * SSE 实时推送：实时接收任务状态更新
+   * 触发条件：task.id 或 task.status 变化时
    *
    * 作用：实时更新任务状态
-   * - 图片生成进度（image:generating, image:completed）
-   * - 模型生成进度（model:generating, model:progress, model:completed）
-   * - 任务失败（image:failed, model:failed）
+   * - 图片生成进度
+   * - 模型生成进度
+   * - 任务完成/失败状态
    *
-   * SSE 机制：
-   * - 建立持久连接，服务器主动推送
-   * - 自动重连：网络断开后浏览器自动恢复连接
-   * - 实时性：Worker 完成操作立即推送，延迟 < 100ms
+   * 轮询机制：
+   * - 频率：每 1 秒请求一次
+   * - 智能停止：任务完成后自动停止轮询
+   * - 错误处理：请求失败时继续轮询，避免中断
    *
-   * 为什么用 SSE 而不是轮询？
-   * 1. 实时性更好：Worker 完成立即推送，无延迟
-   * 2. 减少服务器压力：不再每秒轮询数据库
-   * 3. 用户体验更好：进度更新更流畅
+   * 为什么用轮询而不是 WebSocket？
+   * 1. 简单可靠：兼容所有部署环境（包括 Serverless）
+   * 2. 任务周期长：图片生成 5-10 秒，模型生成 2-5 分钟
+   * 3. 智能停止：任务完成后立即停止，不浪费资源
    */
   useEffect(() => {
-    // 如果没有任务 ID，不建立连接
-    if (!taskId) return;
-
-    console.log("🔌 建立 SSE 连接", { taskId });
-
-    // 创建 EventSource 连接
-    const eventSource = new EventSource(`/api/tasks/${taskId}/events`);
+    // 如果没有任务 ID，不启动轮询
+    if (!task?.id) return;
 
     // ========================================
-    // 事件处理函数
+    // 第 1 步：判断是否需要轮询
     // ========================================
 
-    /**
-     * 处理 task:init 事件（连接建立后的初始状态）
-     * 注意：不直接 setTask，避免触发 useEffect 重新运行导致连接被关闭
-     * 如果需要同步最新状态，可以选择性更新字段
-     */
-    eventSource.addEventListener("task:init", (event) => {
-      const initialTask = JSON.parse(event.data);
-      console.log("📥 收到初始状态", initialTask);
+    // 检查是否有模型正在生成
+    // 遍历所有模型，只要有一个处于 PENDING 或 GENERATING 状态就需要轮询
+    const hasGeneratingModels = task.models?.some(
+      (m) =>
+        !m.generationStatus ||                  // 状态为空（刚创建）
+        m.generationStatus === "PENDING" ||     // 等待生成
+        m.generationStatus === "GENERATING",    // 生成中
+    );
 
-      // 只更新可能变化的字段，避免触发 useEffect 重新运行
-      setTask((prev) => {
-        if (!prev || prev.id !== initialTask.id) {
-          // 如果是新任务，完全替换
-          return initialTask;
-        }
-        // 如果是同一个任务，只更新需要同步的字段（如图片状态）
-        return {
-          ...prev,
-          images: initialTask.images || prev.images,
-          models: initialTask.models || prev.models,
-          status: initialTask.status || prev.status,
-        };
-      });
+    // 需要轮询的条件（任意一个满足即可）：
+    const needsPolling =
+      task.status === "IMAGE_PENDING" ||      // 图片等待生成
+      task.status === "IMAGE_GENERATING" ||   // 图片生成中
+      task.status === "MODEL_PENDING" ||      // 模型等待生成
+      task.status === "MODEL_GENERATING" ||   // 模型生成中
+      hasGeneratingModels;                     // 有任何模型正在生成
+
+    // 如果不需要轮询，提前退出
+    if (!needsPolling) {
+      console.log("⏸️ 无需轮询：所有任务已完成");
+      return;
+    }
+
+    // 打印轮询启动信息（调试用）
+    console.log("▶️ 启动轮询：", {
+      taskStatus: task.status,
+      hasGeneratingModels,
+      modelsStatus: task.models?.map((m) => ({
+        id: m.id,
+        status: m.generationStatus,
+        modelUrl: m.modelUrl,
+      })),
     });
 
+    // ========================================
+    // 第 2 步：定义轮询函数
+    // ========================================
     /**
-     * 处理 image:generating 事件
+     * 单次轮询：获取最新任务状态
+     *
+     * 返回值：
+     * - true：继续轮询
+     * - false：停止轮询
      */
-    eventSource.addEventListener("image:generating", (event) => {
-      const { imageId, index } = JSON.parse(event.data);
-      console.log(`🖼️ 图片 ${index} 开始生成`, { imageId });
+    const pollOnce = async () => {
+      try {
+        // 1. 请求任务最新状态
+        const taskResponse = await fetch(`/api/tasks/${task.id}`);
+        const rawTaskData = await taskResponse.json();
 
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          images: prev.images?.map((img) =>
-            img.index === index
-              ? { ...img, imageStatus: "GENERATING" }
-              : img
-          ),
-        };
-      });
-    });
+        // 2. 适配后端数据格式
+        const taskData = adaptTaskResponse(rawTaskData);
 
-    /**
-     * 处理 image:completed 事件
-     */
-    eventSource.addEventListener("image:completed", (event) => {
-      const { imageId, index, imageUrl } = JSON.parse(event.data);
-      console.log(`✅ 图片 ${index} 生成完成`, { imageId, imageUrl });
+        if (taskData.success) {
+          // 3. 更新本地任务状态
+          // 注意：每次 fetch 返回的都是新对象，React 能检测到变化
 
-      setTask((prev) => {
-        if (!prev) return prev;
+          // ✅ 保留前端 UI 状态，避免乐观更新被后端数据覆盖
 
-        const updatedImages = prev.images?.map((img) =>
-          img.index === index
-            ? {
-                ...img,
-                imageStatus: "COMPLETED",
-                imageUrl,
-                completedAt: new Date(),
+          // 检查当前选中的图片是否有正在生成的模型
+          const currentSelectedImageIndex = task.selectedImageIndex ?? taskData.data.selectedImageIndex;
+          let currentImageHasGeneratingModel = false;
+
+          // ✅ 添加安全检查：确保 taskData.data.images 存在
+          if (
+            currentSelectedImageIndex !== null &&
+            currentSelectedImageIndex !== undefined &&
+            taskData.data.images &&
+            Array.isArray(taskData.data.images)
+          ) {
+            // 从后端返回的数据中找到当前选中的图片
+            const currentImage = taskData.data.images.find(
+              (img: any) => img.index === currentSelectedImageIndex
+            );
+
+            // 检查这张图片是否有正在生成的模型
+            if (currentImage) {
+              // 检查 images[].generatedModel
+              const imageModel = (currentImage as any).generatedModel;
+
+              // 如果这张图片有模型，检查模型状态
+              if (imageModel) {
+                // 从 task.models 中找到完整的模型数据（包含 generationStatus）
+                const fullModel = taskData.data.models?.find((m: any) => m.id === imageModel.id);
+                const modelStatus = fullModel?.generationStatus;
+
+                // 如果模型正在生成中（GENERATING 或刚创建还没状态）
+                currentImageHasGeneratingModel = (
+                  !modelStatus ||
+                  modelStatus === "GENERATING" ||
+                  modelStatus === "PENDING"
+                );
               }
-            : img
-        );
+            }
+          }
 
-        // 检查是否所有图片都已完成
-        const allImagesCompleted = updatedImages?.every(
-          (img) => img.imageStatus === "COMPLETED"
-        );
+          const preservedTask = {
+            ...taskData.data,
 
-        return {
-          ...prev,
-          images: updatedImages,
-          status: allImagesCompleted ? "IMAGE_COMPLETED" : prev.status,
-        };
-      });
-    });
+            // 保留 selectedImageIndex（adapter 会强制设置为 undefined）
+            selectedImageIndex: currentSelectedImageIndex,
 
-    /**
-     * 处理 image:failed 事件
-     */
-    eventSource.addEventListener("image:failed", (event) => {
-      const { imageId, index, errorMessage } = JSON.parse(event.data);
-      console.error(`❌ 图片 ${index} 生成失败`, { imageId, errorMessage });
+            // 🔥 新的保留逻辑：基于当前图片的模型状态，而不是全局 task.status
+            //
+            // 关键问题：多张图片场景下，全局 task.status 无法准确反映单张图片的状态
+            //
+            // 场景1：单张图片生成模型
+            //   点击"生成模型" → 乐观更新 status="MODEL_PENDING" → 轮询立即触发
+            //   → 后端还没创建模型 → status="IMAGE_COMPLETED" → 保留 MODEL_PENDING
+            //
+            // 场景2：多张图片场景（第一张已有模型，生成第二张）
+            //   第一张图片有模型（已完成）→ task.status = "MODEL_COMPLETED"
+            //   点击第二张图片"生成模型" → 乐观更新 status="MODEL_PENDING"
+            //   → 轮询返回 status="MODEL_COMPLETED"（因为第一张图片的模型已完成！）
+            //   → ❌ 旧逻辑：检查 task.status === "MODEL_PENDING" → 失败！因为后端返回 "MODEL_COMPLETED"
+            //   → ✅ 新逻辑：检查当前图片是否有正在生成的模型 → 没有 → 保留 MODEL_PENDING
+            status: (() => {
+              // 如果当前是 MODEL_PENDING（乐观更新），且当前图片没有正在生成的模型
+              // 说明后端还没创建模型记录，保留 MODEL_PENDING
+              //
+              // 注意：不再检查 task.status === "MODEL_PENDING"，因为在多图片场景下可能是 "MODEL_COMPLETED"
+              if (
+                task.status === "MODEL_PENDING" &&
+                !currentImageHasGeneratingModel &&
+                currentSelectedImageIndex !== null
+              ) {
+                console.log("🔒 保留 MODEL_PENDING 状态（后端还没创建模型记录）", {
+                  当前选中图片: currentSelectedImageIndex,
+                  后端返回status: taskData.data.status,
+                  当前图片有生成中模型: currentImageHasGeneratingModel,
+                });
+                return "MODEL_PENDING";
+              }
 
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          images: prev.images?.map((img) =>
-            img.index === index
-              ? {
-                  ...img,
-                  imageStatus: "FAILED",
-                  errorMessage,
-                  failedAt: new Date(),
-                }
-              : img
-          ),
-        };
-      });
-    });
+              // 否则使用后端返回的状态
+              return taskData.data.status;
+            })(),
 
-    /**
-     * 处理 model:generating 事件
-     */
-    eventSource.addEventListener("model:generating", (event) => {
-      const { modelId, providerJobId } = JSON.parse(event.data);
-      console.log(`🎨 模型开始生成`, { modelId, providerJobId });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        // 查找或创建该模型的记录
-        const existingModel = prev.models?.find((m) => m.id === modelId);
-
-        if (existingModel) {
-          // 更新现有模型
-          return {
-            ...prev,
-            status: "MODEL_GENERATING",
-            models: prev.models?.map((m) =>
-              m.id === modelId
-                ? { ...m, generationStatus: "GENERATING", progress: 0 }
-                : m
-            ),
+            // ✅ 保留乐观更新时添加的 modelGenerationStartedAt
+            modelGenerationStartedAt: task.modelGenerationStartedAt ?? taskData.data.modelGenerationStartedAt,
           };
-        } else {
-          // 如果模型不存在（理论上不应该发生），保持状态不变
-          console.warn("⚠️ 收到 model:generating 事件，但模型不存在", { modelId });
-          return prev;
+
+          console.log("🔄 轮询更新 task 状态:", {
+            原始status: taskData.data.status,
+            保留后status: preservedTask.status,
+            原始selectedImageIndex: taskData.data.selectedImageIndex,
+            保留后selectedImageIndex: preservedTask.selectedImageIndex,
+            原始models数量: taskData.data.models?.length || 0,
+            保留后models数量: preservedTask.models?.length || 0,
+          });
+
+          setTask(preservedTask);
+
+          // ========================================
+          // 智能停止逻辑
+          // ========================================
+
+          // 特殊情况：MODEL_COMPLETED 状态
+          // 为什么特殊处理？
+          // - 任务状态可能比模型数据更新快
+          // - 需要确保前端拿到完整的模型数据后再停止轮询
+          if (taskData.data.status === "MODEL_COMPLETED") {
+            // 检查是否真的有完成的模型数据
+            const hasCompletedModel = taskData.data.models.some(
+              (m) => m.generationStatus === "COMPLETED",
+            );
+
+            if (hasCompletedModel) {
+              // 模型数据已完整，可以停止轮询
+              console.log("✅ 模型生成完成，已获取到最新模型数据，停止轮询");
+              return false; // 返回 false = 停止轮询
+            }
+
+            // 模型数据尚未返回，继续轮询
+            console.log(
+              "⏳ 任务状态为 MODEL_COMPLETED，但尚未获取到完成的模型，继续轮询",
+            );
+            return true; // 返回 true = 继续轮询
+          }
+
+          // 其他完成状态：直接停止轮询
+          if (
+            taskData.data.status === "IMAGE_COMPLETED" ||  // 图片生成完成（未选择图片）
+            taskData.data.status === "FAILED" ||           // 任务失败
+            taskData.data.status === "CANCELLED"           // 任务取消
+          ) {
+            console.log(`✅ 任务已完成：${taskData.data.status}，停止轮询`);
+            return false; // 返回 false = 停止轮询
+          }
         }
-      });
-    });
 
-    /**
-     * 处理 model:progress 事件
-     */
-    eventSource.addEventListener("model:progress", (event) => {
-      const { modelId, progress, status } = JSON.parse(event.data);
-      console.log(`⏳ 模型生成进度更新: ${progress}%`, { modelId, status });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: "MODEL_GENERATING",
-          models: prev.models?.map((m) =>
-            m.id === modelId
-              ? { ...m, generationStatus: "GENERATING", progress }
-              : m
-          ),
-        };
-      });
-    });
-
-    /**
-     * 处理 model:completed 事件
-     */
-    eventSource.addEventListener("model:completed", (event) => {
-      const { modelId, modelUrl, previewImageUrl, format } = JSON.parse(event.data);
-      console.log(`✅ 模型生成完成`, { modelId, modelUrl });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        const updatedModels = prev.models?.map((m) =>
-          m.id === modelId
-            ? {
-                ...m,
-                generationStatus: "COMPLETED",
-                progress: 100,
-                modelUrl,
-                previewImageUrl,
-                format,
-                completedAt: new Date(),
-              }
-            : m
-        );
-
-        // 更新对应图片的 generatedModel 关联
-        const updatedImages = prev.images?.map((img) => {
-          const imageModel = updatedModels?.find((m) => m.sourceImageId === img.id);
-          return imageModel ? { ...img, generatedModel: imageModel } : img;
-        });
-
-        return {
-          ...prev,
-          status: "MODEL_COMPLETED",
-          models: updatedModels,
-          images: updatedImages,
-        };
-      });
-    });
-
-    /**
-     * 处理 model:failed 事件
-     */
-    eventSource.addEventListener("model:failed", (event) => {
-      const { modelId, errorMessage } = JSON.parse(event.data);
-      console.error(`❌ 模型生成失败`, { modelId, errorMessage });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: "FAILED",
-          models: prev.models?.map((m) =>
-            m.id === modelId
-              ? {
-                  ...m,
-                  generationStatus: "FAILED",
-                  errorMessage,
-                  failedAt: new Date(),
-                }
-              : m
-          ),
-        };
-      });
-    });
-
-    /**
-     * 处理连接打开
-     */
-    eventSource.onopen = () => {
-      console.log("✅ SSE 连接已建立");
-    };
-
-    /**
-     * 处理连接错误
-     */
-    eventSource.onerror = (error) => {
-      console.error("❌ SSE 连接错误", error);
-      // EventSource 会自动重连，无需手动处理
+        // 默认：继续轮询
+        return true;
+      } catch (error) {
+        // 错误处理：请求失败时继续轮询
+        // 原因：避免网络抖动导致轮询中断
+        console.error("❌ 轮询请求失败:", error);
+        return true; // 返回 true = 继续轮询
+      }
     };
 
     // ========================================
-    // 清理函数：组件卸载时关闭连接
+    // 第 3 步：启动轮询
     // ========================================
-    return () => {
-      console.log("🔌 关闭 SSE 连接", { taskId });
-      eventSource.close();
-    };
-  }, [taskId]); // 依赖项：URL 中的 taskId 变化时重新建立连接
+
+    // 立即执行一次轮询（不等待首次 interval 触发）
+    // 好处：用户打开页面后立即看到最新状态
+    pollOnce();
+
+    // 设置定时器持续轮询
+    const interval = setInterval(async () => {
+      // 执行一次轮询，获取返回值
+      const shouldContinue = await pollOnce();
+
+      // 如果返回 false，清除定时器停止轮询
+      if (!shouldContinue) {
+        clearInterval(interval);
+      }
+    }, 1000); // 每 1 秒轮询一次
+
+    // 清理函数：组件卸载时清除定时器
+    return () => clearInterval(interval);
+  }, [task?.id, task?.status]); // 依赖项：任务 ID 或状态变化时重新启动轮询
 
   // ============================================
   // 事件处理函数
@@ -511,7 +484,7 @@ function WorkspaceContent() {
       // 第 1 步：乐观更新（立即反馈）
       // ========================================
       // 立即更新本地状态为"模型生成中"，让用户看到进度条
-      // 实际状态会通过 SSE 事件自动更新
+      // 实际状态会在轮询时自动更新
       console.log("🚀 乐观更新: 设置 MODEL_PENDING 状态", {
         imageIndex,
         previousStatus: task.status,
@@ -554,7 +527,7 @@ function WorkspaceContent() {
           // 成功：立即合并新模型到 task 状态
           // ========================================
           // 后台 Worker 会自动生成 3D 模型
-          // 前端通过 SSE 事件自动更新进度
+          // 前端通过轮询机制自动更新进度
           console.log("✅ 图片选择成功，3D 模型生成已加入队列");
 
           // 从响应中提取新创建的模型
@@ -589,7 +562,7 @@ function WorkspaceContent() {
               };
             });
 
-            console.log("✅ 新模型已合并，SSE 将继续推送进度更新");
+            console.log("✅ 新模型已合并，轮询将继续更新进度");
           } else {
             console.warn("⚠️ API 响应中没有 model 字段");
           }

@@ -28,6 +28,7 @@ import {
 } from "./worker-config-manager";
 import { createAssetFromModel } from "@/lib/repositories/user-asset.repository";
 import type { ModelGenerationJob } from "@prisma/client";
+import { sseConnectionManager } from "@/lib/sse/connection-manager";
 
 // 创建日志器
 const log = createLogger("Model3DWorker");
@@ -335,6 +336,16 @@ async function processJob(
       },
     });
 
+    // 4.1 推送 SSE 事件：模型开始生成
+    await sseConnectionManager.broadcast(
+      job.model.requestId,
+      "model:generating",
+      {
+        modelId: job.modelId,
+        providerJobId: tencentResponse.jobId,
+      },
+    );
+
     // 5. 轮询 3D 生成状态直到完成
     await pollModel3DStatus(job.id, job.modelId, tencentResponse.jobId);
 
@@ -420,6 +431,12 @@ async function processJob(
           errorMessage: errorMsg,
         },
       });
+
+      // 推送 SSE 事件：模型生成失败
+      await sseConnectionManager.broadcast(job.model.requestId, "model:failed", {
+        modelId: job.modelId,
+        errorMessage: errorMsg,
+      });
     }
   } finally {
     processingJobs.delete(job.id);
@@ -437,6 +454,18 @@ async function pollModel3DStatus(
   const startTime = Date.now();
   let pollCount = 0;
   const model3DProvider = createModel3DProvider();
+
+  // 查询 model 获取 requestId（用于 SSE 推送）
+  const model = await prisma.generatedModel.findUnique({
+    where: { id: modelId },
+    select: { requestId: true },
+  });
+
+  if (!model) {
+    throw new Error(`模型不存在: modelId=${modelId}`);
+  }
+
+  const { requestId } = model;
 
   log.info("pollModel3DStatus", "开始轮询 3D 生成状态", {
     jobId,
@@ -481,6 +510,13 @@ async function pollModel3DStatus(
       await prisma.modelGenerationJob.update({
         where: { id: jobId },
         data: { progress },
+      });
+
+      // 推送 SSE 事件：模型生成进度更新
+      await sseConnectionManager.broadcast(requestId, "model:progress", {
+        modelId,
+        progress,
+        status: status.status,
       });
     }
 
@@ -576,6 +612,14 @@ async function pollModel3DStatus(
           completedAt,
           errorMessage: null, // 清除之前的错误信息
         },
+      });
+
+      // 推送 SSE 事件：模型生成完成
+      await sseConnectionManager.broadcast(requestId, "model:completed", {
+        modelId,
+        modelUrl: storageUrl,
+        previewImageUrl: previewImageStorageUrl,
+        format: MODEL_FORMAT,
       });
 
       // 自动创建 UserAsset 并发布到模型画廊
