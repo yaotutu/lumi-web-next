@@ -1,0 +1,1357 @@
+openapi: 3.0.3
+info:
+  title: Lumi Web Next API
+  version: 0.1.0
+  description: |-
+    AI 3D 模型生成平台 API 文档
+
+    ## 功能概述
+    - 用户输入文本 → 生成 4 张图片
+    - 选择图片 → 生成 3D 模型
+    - 实时任务状态推送（SSE）
+    - 模型画廊管理
+
+    ## 认证方式
+    使用 JWT Token，存储在 HTTP-only Cookie 中（名称：`auth-token`）
+
+    ## 错误处理
+    所有错误响应遵循统一格式，详见 ErrorResponse Schema
+
+    **注意**：此文档由 `scripts/generate-openapi.ts` 自动生成，基于 Zod validators。
+    如需更新文档，请运行 `npm run generate:openapi`
+  contact:
+    name: Lumi Web Team
+servers:
+  - url: http://localhost:4000
+    description: 开发环境
+  - url: https://api.lumi-web.com
+    description: 生产环境（示例）
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: auth-token
+      description: JWT Token，通过 /api/auth/verify-code 登录后自动设置
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+      required:
+        - success
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - NOT_FOUND
+            - INVALID_STATE
+            - QUEUE_FULL
+            - DATABASE_ERROR
+            - EXTERNAL_API_ERROR
+            - UNKNOWN_ERROR
+        details:
+          nullable: true
+      required:
+        - success
+        - error
+        - code
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          nullable: true
+        lastLoginAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - name
+        - lastLoginAt
+        - createdAt
+        - updatedAt
+    ImageStatus:
+      type: string
+      enum:
+        - PENDING
+        - GENERATING
+        - COMPLETED
+        - FAILED
+    JobStatus:
+      type: string
+      enum:
+        - PENDING
+        - RUNNING
+        - RETRYING
+        - COMPLETED
+        - FAILED
+        - CANCELLED
+        - TIMEOUT
+    GeneratedImage:
+      type: object
+      properties:
+        id:
+          type: string
+        requestId:
+          type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 3
+        imageUrl:
+          type: string
+          nullable: true
+          format: uri
+        imagePrompt:
+          type: string
+          nullable: true
+        imageStatus:
+          $ref: '#/components/schemas/ImageStatus'
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+        failedAt:
+          type: string
+          nullable: true
+          format: date-time
+        errorMessage:
+          type: string
+          nullable: true
+      required:
+        - id
+        - requestId
+        - index
+        - imageUrl
+        - imagePrompt
+        - imageStatus
+        - createdAt
+        - completedAt
+        - failedAt
+        - errorMessage
+    GenerationRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        prompt:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneratedImage'
+      required:
+        - id
+        - userId
+        - prompt
+        - createdAt
+        - updatedAt
+        - completedAt
+        - images
+    QueueConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        queueName:
+          type: string
+          enum:
+            - image-generation
+            - model3d-generation
+        maxConcurrency:
+          type: integer
+          default: 1
+        jobTimeout:
+          type: integer
+          default: 300000
+        maxRetries:
+          type: integer
+          default: 3
+        retryDelayBase:
+          type: integer
+          default: 5000
+        retryDelayMax:
+          type: integer
+          default: 60000
+        enablePriority:
+          type: boolean
+          default: false
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          nullable: true
+      required:
+        - id
+        - queueName
+        - createdAt
+        - updatedAt
+        - updatedBy
+  parameters: {}
+paths:
+  /api/auth/send-code:
+    post:
+      tags:
+        - 认证
+      summary: 发送邮箱验证码
+      description: 发送验证码到指定邮箱。开发环境验证码固定为 0000
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  minLength: 5
+                  maxLength: 100
+                  format: email
+              required:
+                - email
+      responses:
+        '200':
+          description: 验证码已发送
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties: {}
+                    required:
+                      - message
+        '400':
+          description: 输入验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/verify-code:
+    post:
+      tags:
+        - 认证
+      summary: 验证码登录
+      description: 使用邮箱验证码登录，成功后返回用户信息并设置 Cookie（有效期7天）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  minLength: 5
+                  maxLength: 100
+                  format: email
+                code:
+                  type: string
+                  minLength: 4
+                  maxLength: 4
+                  pattern: ^\d{4}$
+              required:
+                - email
+                - code
+      responses:
+        '200':
+          description: 登录成功
+          headers:
+            Set-Cookie:
+              description: JWT Token（7天有效）
+              schema:
+                type: string
+                example: auth-token=eyJhbGc...; Path=/; HttpOnly; Max-Age=604800
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      message:
+                        type: string
+                    required:
+                      - user
+                      - message
+                required:
+                  - success
+                  - data
+        '400':
+          description: 输入验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 验证码错误或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/me:
+    get:
+      tags:
+        - 认证
+      summary: 获取当前用户信息
+      description: 需要登录
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取用户信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                    required:
+                      - user
+                required:
+                  - success
+                  - data
+        '401':
+          description: 未认证或认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/logout:
+    post:
+      tags:
+        - 认证
+      summary: 退出登录
+      description: 清除 Cookie
+      responses:
+        '200':
+          description: 已退出登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /api/tasks:
+    get:
+      tags:
+        - 任务管理
+      summary: 获取用户的生成请求列表
+      description: 需要登录，返回用户所有任务
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GenerationRequest'
+                  count:
+                    type: integer
+                required:
+                  - success
+                  - data
+                  - count
+        '401':
+          description: 未认证或认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - 任务管理
+      summary: 创建新的生成请求
+      description: 创建任务并启动图片生成，自动创建 4 个图片生成任务
+      security:
+        - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                  description: 用户输入的提示词
+              required:
+                - prompt
+      responses:
+        '201':
+          description: 任务已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/GenerationRequest'
+                  message:
+                    type: string
+                required:
+                  - success
+                  - data
+                  - message
+        '400':
+          description: 输入验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未认证或认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/tasks/{id}:
+    get:
+      tags:
+        - 任务管理
+      summary: 获取单个任务详情
+      description: 需要登录
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 任务 ID（GenerationRequest.id）
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 成功获取任务详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/GenerationRequest'
+                required:
+                  - success
+                  - data
+        '401':
+          description: 未认证或认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - 任务管理
+      summary: 选择图片并触发 3D 模型生成
+      description: 选择一张已完成的图片，创建 3D 模型生成任务。图片必须已完成（imageStatus=COMPLETED）
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                selectedImageIndex:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+                  description: 选择的图片索引（0-3）
+              required:
+                - selectedImageIndex
+      responses:
+        '200':
+          description: 3D 模型生成已启动
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  model:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      sourceImageId:
+                        type: string
+                    required:
+                      - id
+                      - name
+                      - sourceImageId
+                  selectedImageIndex:
+                    type: integer
+                  message:
+                    type: string
+                required:
+                  - success
+                  - model
+                  - selectedImageIndex
+                  - message
+        '400':
+          description: 输入验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 状态冲突（图片未完成）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/tasks/{id}/events:
+    get:
+      tags:
+        - 任务管理
+      summary: 实时任务状态推送（SSE）
+      description: |-
+        Server-Sent Events（服务器推送事件）
+
+        事件类型：
+        - task:init - 任务初始状态
+        - image:generating - 图片生成中
+        - image:completed - 图片完成
+        - image:failed - 图片失败
+        - model:generating - 模型生成中
+        - model:progress - 模型进度更新
+        - model:completed - 模型完成
+        - model:failed - 模型失败
+        - heartbeat - 心跳（30秒）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: SSE 连接已建立
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/gallery/models:
+    get:
+      tags:
+        - 画廊
+      summary: 获取公开模型列表
+      description: 无需登录，支持排序和分页
+      parameters:
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: default
+              innerType:
+                ~standard:
+                  vendor: zod
+                  version: 1
+                def:
+                  type: enum
+                  entries:
+                    latest: latest
+                    popular: popular
+                type: enum
+                enum:
+                  latest: latest
+                  popular: popular
+                options:
+                  - latest
+                  - popular
+              defaultValue: latest
+            type: default
+        - name: limit
+          in: query
+          required: false
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: default
+              innerType:
+                ~standard:
+                  vendor: zod
+                  version: 1
+                def:
+                  type: number
+                  checks:
+                    - ~standard:
+                        vendor: zod
+                        version: 1
+                      def:
+                        type: number
+                        check: number_format
+                        abort: false
+                        format: safeint
+                      type: number
+                      minValue: -9007199254740991
+                      maxValue: 9007199254740991
+                      isInt: true
+                      isFinite: true
+                      format: safeint
+                    - {}
+                    - {}
+                type: number
+                minValue: 1
+                maxValue: 100
+                isInt: true
+                isFinite: true
+                format: safeint
+              defaultValue: 20
+            type: default
+        - name: offset
+          in: query
+          required: false
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: default
+              innerType:
+                ~standard:
+                  vendor: zod
+                  version: 1
+                def:
+                  type: number
+                  checks:
+                    - ~standard:
+                        vendor: zod
+                        version: 1
+                      def:
+                        type: number
+                        check: number_format
+                        abort: false
+                        format: safeint
+                      type: number
+                      minValue: -9007199254740991
+                      maxValue: 9007199254740991
+                      isInt: true
+                      isFinite: true
+                      format: safeint
+                    - {}
+                type: number
+                minValue: 0
+                maxValue: 9007199254740991
+                isInt: true
+                isFinite: true
+                format: safeint
+              defaultValue: 0
+            type: default
+      responses:
+        '200':
+          description: 成功获取模型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: object
+                    properties:
+                      models:
+                        type: array
+                        items:
+                          nullable: true
+                      total:
+                        type: integer
+                      hasMore:
+                        type: boolean
+                    required:
+                      - models
+                      - total
+                      - hasMore
+                required:
+                  - success
+                  - data
+  /api/gallery/models/{id}:
+    get:
+      tags:
+        - 画廊
+      summary: 获取模型详情
+      description: 无需登录，自动增加浏览次数
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 模型 ID
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 成功获取模型详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    nullable: true
+                required:
+                  - success
+        '404':
+          description: 模型不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/gallery/models/{id}/download:
+    post:
+      tags:
+        - 画廊
+      summary: 增加模型下载计数
+      description: 无需登录，客户端在下载模型前调用
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 下载计数已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 模型不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/proxy/image:
+    get:
+      tags:
+        - 代理服务
+      summary: 图片代理（解决 CORS）
+      description: 代理腾讯云 COS、阿里云 OSS、SiliconFlow 的图片请求。支持域名：.myqcloud.com, .aliyuncs.com, .siliconflow.cn
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: 图片 URL
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+              checks:
+                - ~standard:
+                    vendor: zod
+                    version: 1
+                  def:
+                    type: string
+                    format: url
+                    check: string_format
+                    abort: false
+                  type: string
+                  format: url
+                  minLength: null
+                  maxLength: null
+            type: string
+            format: url
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 返回图片文件流
+          content:
+            image/*:
+              schema:
+                type: string
+                description: 图片二进制数据
+        '400':
+          description: URL 参数缺失或域名不受信任
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/proxy/model:
+    get:
+      tags:
+        - 代理服务
+      summary: 3D 模型代理（解决 CORS）
+      description: 代理腾讯云 COS 的模型文件请求。支持格式：GLB, GLTF, OBJ, MTL, FBX, PNG/JPG
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: 模型文件 URL
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+              checks:
+                - ~standard:
+                    vendor: zod
+                    version: 1
+                  def:
+                    type: string
+                    format: url
+                    check: string_format
+                    abort: false
+                  type: string
+                  format: url
+                  minLength: null
+                  maxLength: null
+            type: string
+            format: url
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 返回模型文件流
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+            application/octet-stream:
+              schema:
+                type: string
+        '400':
+          description: URL 参数缺失或域名不受信任
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/admin/queues/{name}:
+    get:
+      tags:
+        - 管理接口
+      summary: 获取队列配置
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: enum
+              entries:
+                image-generation: image-generation
+                model3d-generation: model3d-generation
+            type: enum
+            enum:
+              image-generation: image-generation
+              model3d-generation: model3d-generation
+            options:
+              - image-generation
+              - model3d-generation
+      responses:
+        '200':
+          description: 成功获取队列配置
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/QueueConfig'
+                required:
+                  - success
+                  - data
+        '404':
+          description: 队列不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - 管理接口
+      summary: 更新队列配置
+      description: 动态更新队列配置，Worker 下一轮轮询生效
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: enum
+              entries:
+                image-generation: image-generation
+                model3d-generation: model3d-generation
+            type: enum
+            enum:
+              image-generation: image-generation
+              model3d-generation: model3d-generation
+            options:
+              - image-generation
+              - model3d-generation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxConcurrency:
+                  type: integer
+                jobTimeout:
+                  type: integer
+                maxRetries:
+                  type: integer
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: 配置已更新
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/QueueConfig'
+                required:
+                  - success
+                  - data
+  /api/admin/queues/{name}/pause:
+    post:
+      tags:
+        - 管理接口
+      summary: 暂停队列
+      description: Worker 下一轮轮询时停止处理任务
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: enum
+              entries:
+                image-generation: image-generation
+                model3d-generation: model3d-generation
+            type: enum
+            enum:
+              image-generation: image-generation
+              model3d-generation: model3d-generation
+            options:
+              - image-generation
+              - model3d-generation
+      responses:
+        '200':
+          description: 队列已暂停
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/QueueConfig'
+                  message:
+                    type: string
+                required:
+                  - success
+                  - data
+                  - message
+    delete:
+      tags:
+        - 管理接口
+      summary: 恢复队列
+      description: Worker 下一轮轮询时开始处理任务
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: enum
+              entries:
+                image-generation: image-generation
+                model3d-generation: model3d-generation
+            type: enum
+            enum:
+              image-generation: image-generation
+              model3d-generation: model3d-generation
+            options:
+              - image-generation
+              - model3d-generation
+      responses:
+        '200':
+          description: 队列已恢复
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/QueueConfig'
+                  message:
+                    type: string
+                required:
+                  - success
+                  - data
+                  - message
+  /api/test/requests:
+    get:
+      tags:
+        - 测试接口
+      summary: 获取生成请求列表（测试用）
+      description: 无需认证，需要提供 userId
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 成功获取请求列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GenerationRequest'
+                required:
+                  - success
+                  - data
+    post:
+      tags:
+        - 测试接口
+      summary: 创建生成请求（测试用）
+      description: 无需认证，需要提供 userId
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                prompt:
+                  type: string
+              required:
+                - userId
+                - prompt
+      responses:
+        '201':
+          description: 请求已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/GenerationRequest'
+                required:
+                  - success
+                  - data
+  /api/test/requests/{id}:
+    get:
+      tags:
+        - 测试接口
+      summary: 获取生成请求详情（测试用）
+      description: 无需认证
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            ~standard:
+              vendor: zod
+              version: 1
+            def:
+              type: string
+            type: string
+            format: null
+            minLength: null
+            maxLength: null
+      responses:
+        '200':
+          description: 成功获取请求详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $ref: '#/components/schemas/GenerationRequest'
+                required:
+                  - success
+                  - data
+  /api/test/models/generate:
+    post:
+      tags:
+        - 测试接口
+      summary: 创建 3D 模型生成任务（测试用）
+      description: 无需认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestId:
+                  type: string
+                sourceImageId:
+                  type: string
+              required:
+                - requestId
+                - sourceImageId
+      responses:
+        '201':
+          description: 模型生成任务已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    nullable: true
+                required:
+                  - success
+  /api/workers/status:
+    get:
+      tags:
+        - Worker 状态
+      summary: 获取所有 Worker 运行状态
+      description: 无需认证，用于监控 Worker 健康状态
+      responses:
+        '200':
+          description: 成功获取 Worker 状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    type: object
+                    properties:
+                      image:
+                        type: object
+                        properties:
+                          isRunning:
+                            type: boolean
+                          config:
+                            $ref: '#/components/schemas/QueueConfig'
+                        required:
+                          - isRunning
+                      model3d:
+                        type: object
+                        properties:
+                          isRunning:
+                            type: boolean
+                          config:
+                            $ref: '#/components/schemas/QueueConfig'
+                        required:
+                          - isRunning
+                    required:
+                      - image
+                      - model3d
+                required:
+                  - success
+                  - data

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
+    "generate:openapi": "tsx scripts/generate-openapi.ts",
     "init:storage": "tsx scripts/init-storage.ts",
     "test:storage": "tsx scripts/test-storage.ts",
     "test:api": "tsx scripts/test-task-api.ts",
@@ -51,12 +52,15 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.1.0",
     "@biomejs/biome": "2.2.0",
     "@tailwindcss/postcss": "^4",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
+    "js-yaml": "^4.1.0",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"

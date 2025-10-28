@@ -33,6 +33,52 @@ npm run build
 npm start
 ```
 
+## 📚 相关文档
+
+详细的架构设计和工作流程说明，请参考以下文档：
+
+### 核心架构文档
+
+| 文档 | 说明 | 何时查看 |
+|------|------|---------|
+| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | 系统架构详解：四层架构、Status vs Phase、Worker 协作机制、完整数据流图 | 理解整体架构设计时 |
+| **[COMPLETE_WORKFLOW.md](docs/COMPLETE_WORKFLOW.md)** | 完整工作流：图片生成流程、3D 模型生成流程、状态机、API 接口、Worker 配置、错误处理 | 理解任务执行流程时 |
+
+### 功能文档
+
+| 文档 | 说明 |
+|------|------|
+| **[PROMPT_OPTIMIZATION.md](docs/PROMPT_OPTIMIZATION.md)** | Prompt 优化功能详解：工作流程、配置步骤、优化规则、技术架构、故障处理 |
+| **[快速开始.md](docs/快速开始.md)** | Prompt 优化快速入门：配置步骤、验证效果、故障排查 |
+| **[日志输出示例.md](docs/日志输出示例.md)** | 日志输出示例：优化成功、功能关闭、优化失败场景 |
+
+### 集成指南
+
+| 文档 | 说明 |
+|------|------|
+| **[OSS_INTEGRATION_GUIDE.md](docs/OSS_INTEGRATION_GUIDE.md)** | OSS 对接指南：本地文件系统、云 OSS（阿里云/腾讯云/AWS）、混合方案 |
+
+### API 文档
+
+| 文档 | 说明 | 查看方式 |
+|------|------|---------|
+| **[openapi.yaml](docs/openapi.yaml)** | OpenAPI 3.0 规范：完整的 REST API 文档，包含所有端点、请求/响应格式、认证方式<br>**⚠️ 自动生成，请勿手动编辑** | 在线查看：http://localhost:4000/api-docs（启动服务后访问）<br>或：https://editor.swagger.io 导入 openapi.yaml<br>更新文档：`npm run generate:openapi` |
+| **[API_USAGE.md](docs/API_USAGE.md)** | API 快速上手指南：常用接口示例、认证流程、错误处理 | 快速参考常用 API |
+| **[OPENAPI_GENERATION.md](docs/OPENAPI_GENERATION.md)** | OpenAPI 文档自动生成指南：如何添加新 API、如何维护文档、工作流程 | 需要添加或修改 API 文档时阅读 |
+
+### UI/UX 设计
+
+| 文档 | 说明 |
+|------|------|
+| **[design-tokens.md](docs/design-tokens.md)** | 设计令牌：颜色、圆角、阴影、排版等设计系统 |
+| **[ui-optimization-suggestions.md](docs/ui-optimization-suggestions.md)** | UI 优化建议：首页、Workspace、通用优化建议 |
+
+**💡 提示**：开发过程中遇到问题时，优先查阅 **ARCHITECTURE.md** 和 **COMPLETE_WORKFLOW.md**。
+
+**📦 归档文档**：已完成或过时的文档保存在 `docs/archive/` 目录中，仅供历史参考。
+
+---
+
 ## 核心架构
 
 ### 1. 数据库架构：五层设计

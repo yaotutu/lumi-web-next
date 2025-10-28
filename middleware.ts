@@ -82,14 +82,42 @@ function matchesRoute(path: string, routes: RegExp[]): boolean {
 }
 
 /**
+ * 为响应添加 CORS 头（支持 Swagger UI）
+ */
+function addCorsHeaders(response: NextResponse): NextResponse {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, DELETE, OPTIONS"
+  );
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, Cookie"
+  );
+  response.headers.set("Access-Control-Allow-Credentials", "true");
+  return response;
+}
+
+/**
  * Middleware 主函数
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. 公开路由：直接放行
+  // 0. 处理 API 路由的 OPTIONS 预检请求（CORS）
+  if (pathname.startsWith("/api/") && request.method === "OPTIONS") {
+    const response = new NextResponse(null, { status: 204 });
+    return addCorsHeaders(response);
+  }
+
+  // 1. 公开路由：直接放行（API 路由添加 CORS 头）
   if (matchesRoute(pathname, PUBLIC_ROUTES)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    // 为所有 API 请求添加 CORS 头
+    if (pathname.startsWith("/api/")) {
+      return addCorsHeaders(response);
+    }
+    return response;
   }
 
   // 2. 受保护路由：检查登录状态
@@ -107,8 +135,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. 其他路由：默认放行
-  return NextResponse.next();
+  // 3. 其他路由：默认放行（API 路由添加 CORS 头）
+  const response = NextResponse.next();
+  if (pathname.startsWith("/api/")) {
+    return addCorsHeaders(response);
+  }
+  return response;
 }
 
 /**
