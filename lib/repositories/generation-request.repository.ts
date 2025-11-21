@@ -7,7 +7,12 @@
  * - 不包含业务逻辑
  */
 
-import type { GenerationRequest, Prisma } from "@prisma/client";
+import type {
+  GenerationRequest,
+  Prisma,
+  RequestStatus,
+  RequestPhase,
+} from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 // ============================================
@@ -24,22 +29,7 @@ export async function findRequestById(requestId: string) {
       images: {
         orderBy: { index: "asc" },
         include: {
-          generatedModel: {
-            // 一对一关系：该图片生成的模型
-            select: {
-              id: true,
-              modelUrl: true,
-              previewImageUrl: true,
-              format: true,
-              createdAt: true,
-              completedAt: true,
-              failedAt: true,
-              errorMessage: true,
-              sliceTaskId: true, // 打印任务ID
-            },
-          },
           generationJob: {
-            // 图片的生成任务
             select: {
               id: true,
               status: true,
@@ -48,10 +38,22 @@ export async function findRequestById(requestId: string) {
           },
         },
       },
-      generatedModels: {
-        // 直接查询所有模型（用于打印等功能）
-        orderBy: { createdAt: "desc" },
-        include: {
+      // 1:1 关系：该请求生成的模型（新架构）
+      model: {
+        select: {
+          id: true,
+          name: true,
+          modelUrl: true,
+          previewImageUrl: true,
+          format: true,
+          source: true,
+          visibility: true,
+          sliceTaskId: true,
+          sourceImageId: true, // 新增：关联的图片ID
+          createdAt: true,
+          completedAt: true,
+          failedAt: true,
+          errorMessage: true,
           generationJob: {
             select: {
               id: true,
@@ -73,30 +75,40 @@ export async function findRequestsByUserId(
   options?: {
     limit?: number;
     offset?: number;
+    status?: RequestStatus;
+    phase?: RequestPhase;
   },
 ) {
-  const { limit = 20, offset = 0 } = options || {};
+  const { limit = 20, offset = 0, status, phase } = options || {};
 
   return prisma.generationRequest.findMany({
     where: {
       userId,
+      ...(status && { status }),
+      ...(phase && { phase }),
     },
     include: {
       images: {
         orderBy: { index: "asc" },
         include: {
-          generatedModel: {
-            select: {
-              id: true,
-              modelUrl: true,
-              previewImageUrl: true,
-              format: true,
-              completedAt: true,
-            },
-          },
           generationJob: {
             select: {
               status: true,
+            },
+          },
+        },
+      },
+      model: {
+        select: {
+          id: true,
+          modelUrl: true,
+          previewImageUrl: true,
+          format: true,
+          completedAt: true,
+          generationJob: {
+            select: {
+              status: true,
+              progress: true,
             },
           },
         },
@@ -128,11 +140,13 @@ export async function createRequestWithImagesAndJobs(data: {
   jobIds: string[];
 }> {
   const result = await prisma.$transaction(async (tx) => {
-    // 1. 创建 GenerationRequest（无状态）
+    // 1. 创建 GenerationRequest（带状态）
     const request = await tx.generationRequest.create({
       data: {
         userId: data.userId,
         prompt: data.prompt,
+        status: "IMAGE_PENDING",
+        phase: "IMAGE_GENERATION",
       },
     });
 
@@ -143,8 +157,8 @@ export async function createRequestWithImagesAndJobs(data: {
           data: {
             requestId: request.id,
             index,
-            imageStatus: "PENDING", // 初始状态
-            imageUrl: null, // 待生成
+            imageStatus: "PENDING",
+            imageUrl: null,
           },
         }),
       ),
@@ -155,7 +169,7 @@ export async function createRequestWithImagesAndJobs(data: {
       images.map((image) =>
         tx.imageGenerationJob.create({
           data: {
-            imageId: image.id, // 1:1 关系
+            imageId: image.id,
             status: "PENDING",
             priority: 0,
           },
@@ -187,6 +201,41 @@ export async function updateRequest(
   return prisma.generationRequest.update({
     where: { id: requestId },
     data,
+  });
+}
+
+/**
+ * 更新请求状态和阶段
+ */
+export async function updateRequestStatus(
+  requestId: string,
+  status: RequestStatus,
+  phase?: RequestPhase,
+): Promise<GenerationRequest> {
+  return prisma.generationRequest.update({
+    where: { id: requestId },
+    data: {
+      status,
+      ...(phase && { phase }),
+      ...(status === "COMPLETED" && { completedAt: new Date() }),
+    },
+  });
+}
+
+/**
+ * 设置选中的图片索引并更新状态
+ */
+export async function setSelectedImageIndex(
+  requestId: string,
+  imageIndex: number,
+): Promise<GenerationRequest> {
+  return prisma.generationRequest.update({
+    where: { id: requestId },
+    data: {
+      selectedImageIndex: imageIndex,
+      status: "MODEL_PENDING",
+      phase: "MODEL_GENERATION",
+    },
   });
 }
 

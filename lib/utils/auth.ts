@@ -114,13 +114,9 @@ export async function verifyJWT(token: string): Promise<JWTPayload> {
       algorithms: [JWT_ALGORITHM],
     });
 
-    return payload as JWTPayload;
+    return payload as unknown as JWTPayload;
   } catch (error) {
-    throw new AppError(
-      "UNAUTHORIZED",
-      "登录已过期或无效，请重新登录",
-      error,
-    );
+    throw new AppError("UNAUTHORIZED", "登录已过期或无效，请重新登录", error);
   }
 }
 

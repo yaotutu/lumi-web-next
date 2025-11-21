@@ -148,7 +148,7 @@ export default function HistoryPage() {
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">
                       <span>{task.images.length} 张图片</span>
-                      {task.models?.length > 0 && <span>• 已生成3D</span>}
+                      {task.model && <span>• 已生成3D</span>}
                     </div>
 
                     <div className="text-xs text-white/40">

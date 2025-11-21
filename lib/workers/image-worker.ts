@@ -116,7 +116,6 @@ async function detectTimeoutJobs(): Promise<void> {
               status: "RETRYING",
               retryCount: job.retryCount + 1,
               nextRetryAt,
-              timeoutedAt: now,
               errorMessage: "任务执行超时",
               errorCode: "TIMEOUT",
             },
@@ -136,7 +135,6 @@ async function detectTimeoutJobs(): Promise<void> {
             data: {
               status: "FAILED",
               failedAt: now,
-              timeoutedAt: now,
               errorMessage: "任务执行超时，已达最大重试次数",
               errorCode: "MAX_RETRIES_EXCEEDED",
             },
@@ -303,7 +301,6 @@ async function processJob(
         status: "RUNNING",
         startedAt: new Date(),
         timeoutAt,
-        workerNodeId: process.env.WORKER_NODE_ID || "default",
       },
     });
 
@@ -315,7 +312,18 @@ async function processJob(
       },
     });
 
-    // 2.1 推送 SSE 事件：图片开始生成
+    // 2.1 更新 Request 状态为 IMAGE_GENERATING（如果还是 IMAGE_PENDING）
+    await prisma.generationRequest.updateMany({
+      where: {
+        id: job.image.requestId,
+        status: "IMAGE_PENDING",
+      },
+      data: {
+        status: "IMAGE_GENERATING",
+      },
+    });
+
+    // 2.2 推送 SSE 事件：图片开始生成
     await sseConnectionManager.broadcast(
       job.image.requestId,
       "image:generating",
@@ -373,6 +381,44 @@ async function processJob(
       imageIndex: job.image.index,
       duration: t(),
     });
+
+    // 6. 检查该请求的所有图片是否都已完成
+    const allImages = await prisma.generatedImage.findMany({
+      where: { requestId: job.image.requestId },
+      select: { imageStatus: true },
+    });
+
+    const allImagesCompleted = allImages.every(
+      (img) => img.imageStatus === "COMPLETED",
+    );
+
+    if (allImagesCompleted) {
+      // 所有图片都完成了，更新 Request 状态
+      await prisma.generationRequest.update({
+        where: { id: job.image.requestId },
+        data: {
+          status: "IMAGE_COMPLETED",
+          phase: "AWAITING_SELECTION",
+        },
+      });
+
+      log.info("processJob", "所有图片生成完成，更新请求状态", {
+        requestId: job.image.requestId,
+        newStatus: "IMAGE_COMPLETED",
+        newPhase: "AWAITING_SELECTION",
+      });
+
+      // 推送 SSE 事件：所有图片已完成
+      await sseConnectionManager.broadcast(
+        job.image.requestId,
+        "task:updated",
+        {
+          requestId: job.image.requestId,
+          status: "IMAGE_COMPLETED",
+          phase: "AWAITING_SELECTION",
+        },
+      );
+    }
   } catch (error) {
     // 处理错误
     const errorMsg = error instanceof Error ? error.message : "未知错误";
@@ -412,7 +458,6 @@ async function processJob(
           failedAt: new Date(),
           errorMessage: errorMsg,
           errorCode,
-          errorStack: error instanceof Error ? error.stack : undefined,
         },
       });
 
@@ -432,7 +477,6 @@ async function processJob(
           failedAt: new Date(),
           errorMessage: errorMsg,
           errorCode,
-          errorStack: error instanceof Error ? error.stack : undefined,
         },
       });
 

@@ -28,6 +28,7 @@ const log = createLogger("ErrorHandler");
 export type ErrorCode =
   // 客户端错误（4xx）- 前端需要特殊处理的错误
   | "VALIDATION_ERROR" // 输入验证失败 -> 400
+  | "UNAUTHORIZED" // 未认证 -> 401
   | "FORBIDDEN" // 无权访问 -> 403
   | "NOT_FOUND" // 资源不存在 -> 404
   | "INVALID_STATE" // 状态不允许操作 -> 409
@@ -58,6 +59,7 @@ export class AppError extends Error {
  */
 const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
   VALIDATION_ERROR: 400,
+  UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   INVALID_STATE: 409,

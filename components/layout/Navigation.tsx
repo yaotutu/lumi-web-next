@@ -83,13 +83,13 @@ export default function Navigation() {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       // 检查点击是否在菜单外部
-      if (!target.closest('[data-user-menu]')) {
+      if (!target.closest("[data-user-menu]")) {
         setShowUserMenu(false);
       }
     };
 
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, [showUserMenu]);
 
   // 退出登录

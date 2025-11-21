@@ -31,73 +31,39 @@ export default function ModelPreview({
   taskId,
   onGenerate3D,
 }: ModelPreviewProps) {
-  // 根据选中的图片索引，获取对应图片的模型
-  // 策略：
-  // 1. 如果有 imageIndex，查找该图片对应的模型（从 images[imageIndex].generatedModel）
-  // 2. 如果没有 imageIndex，查找最新的模型
-  const selectedModel =
-    task?.images && imageIndex !== null && imageIndex !== undefined
-      ? (() => {
-          const selectedImage = task.images.find(
-            (img) => img.index === imageIndex,
-          );
-          if (selectedImage && (selectedImage as any).generatedModel) {
-            const model = (selectedImage as any).generatedModel;
-            // 从 task.models 中找到完整的模型数据（包含 generationStatus 和 progress）
-            const fullModel = task.models?.find((m) => m.id === model.id);
-            return fullModel || model;
-          }
-          return undefined;
-        })()
-      : task?.models?.length
-        ? (() => {
-            const completedModels = task.models.filter(
-              (m) => m.generationStatus === "COMPLETED",
-            );
-            if (completedModels.length > 0) {
-              return completedModels.sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime(),
-              )[0];
-            }
-            return task.models
-              .slice()
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime(),
-              )[0];
-          })()
-        : undefined;
+  // 新架构：1 Request : 1 Model
+  // 直接使用 task.model（1:1 关系），不再需要复杂的查找逻辑
+  const selectedModel = task?.model
+    ? {
+        ...task.model,
+        // 确保有 generationStatus 和 progress（从适配器或 Job）
+        generationStatus: (task.model as any).generationStatus || "PENDING",
+        progress: (task.model as any).progress || 0,
+      }
+    : undefined;
 
   // 为了向后兼容，保留 latestModel 别名
   const latestModel = selectedModel;
 
-  // 调试日志：查看选择的模型
-  console.log("=== ModelPreview latestModel 选择 ===", {
+  // 调试日志：查看选择的模型（新架构：1:1 关系）
+  console.log("=== ModelPreview 模型选择（新架构）===", {
     taskId: task?.id,
     taskStatus: task?.status,
-    imageIndex,
-    imageIndexType: typeof imageIndex,
-    imagesCount: task?.images?.length,
-    allImagesWithModels: task?.images?.map((img: any) => ({
-      index: img.index,
-      hasGeneratedModel: !!(img as any).generatedModel,
-      generatedModelId: (img as any).generatedModel?.id,
-    })),
-    allModelsCount: task?.models?.length,
-    allModels: task?.models?.map((m) => ({
-      id: m.id,
-      createdAt: m.createdAt,
-      generationStatus: m.generationStatus,
-      modelUrl: m.modelUrl,
-      progress: m.progress,
-    })),
-    selectedLatestModel: latestModel
+    selectedImageIndex: task?.selectedImageIndex,
+    hasModel: !!task?.model,
+    model: task?.model
+      ? {
+          id: task.model.id,
+          sourceImageId: task.model.sourceImageId,
+          modelUrl: task.model.modelUrl,
+          completedAt: task.model.completedAt,
+          generationStatus: (task.model as any).generationStatus,
+          progress: (task.model as any).progress,
+        }
+      : null,
+    selectedModel: latestModel
       ? {
           id: latestModel.id,
-          createdAt: latestModel.createdAt,
           generationStatus: latestModel.generationStatus,
           modelUrl: latestModel.modelUrl,
           progress: latestModel.progress,
@@ -265,7 +231,7 @@ export default function ModelPreview({
   useEffect(() => {
     console.log("🎨 ModelPreview useEffect 触发:", {
       taskStatus: task?.status,
-      taskModelsCount: task?.models?.length || 0,
+      hasModel: !!task?.model,
       imageIndex,
       latestModelId: latestModel?.id,
       latestModelStatus: latestModel?.generationStatus,
@@ -289,13 +255,24 @@ export default function ModelPreview({
 
       // 模型生成中
       if (
-        !latestModel.generationStatus ||
         latestModel.generationStatus === "PENDING" ||
         latestModel.generationStatus === "GENERATING"
       ) {
         setStatus("generating");
         setProgress(latestModel.progress || 0);
         console.log("⏳ 模型生成中，显示进度:", latestModel.progress);
+        return;
+      }
+
+      // 修复：如果 generationStatus 为空，但有 progress > 0，也认为是生成中
+      if (
+        !latestModel.generationStatus &&
+        latestModel.progress &&
+        latestModel.progress > 0
+      ) {
+        setStatus("generating");
+        setProgress(latestModel.progress);
+        console.log("⏳ 模型生成中（根据进度推断）:", latestModel.progress);
         return;
       }
 
@@ -396,7 +373,7 @@ export default function ModelPreview({
                 originalUrl,
                 proxiedUrl,
                 latestModelFullData: latestModel,
-                allModels: task?.models,
+                allModels: task?.model ? [task.model] : null,
               });
               return (
                 <Model3DViewer

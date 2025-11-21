@@ -23,7 +23,7 @@ import type {
  * - getName(): 返回存储类型名称
  * - saveTaskImageImpl(): 保存图片的具体实现
  * - saveTaskModelImpl(): 保存模型的具体实现
- * - deleteTaskResourcesImpl(): 删除资源的具体实现
+ * - deleteRequestResourcesImpl(): 删除资源的具体实现
  * - getFileInfoImpl(): 获取文件信息的具体实现
  * - fileExistsImpl(): 检查文件存在性的具体实现
  */
@@ -57,7 +57,9 @@ export abstract class BaseStorageProvider implements StorageProvider {
   /**
    * 删除资源的具体实现（子类实现）
    */
-  protected abstract deleteTaskResourcesImpl(taskId: string): Promise<void>;
+  protected abstract deleteRequestResourcesImpl(
+    requestId: string,
+  ): Promise<void>;
 
   /**
    * 获取文件信息的具体实现（子类实现）
@@ -74,7 +76,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
    */
   async saveTaskImage(params: SaveImageParams): Promise<string> {
     this.log.info("saveTaskImage", "开始保存图片", {
-      taskId: params.taskId,
+      requestId: params.requestId,
       index: params.index,
       dataType: typeof params.imageData === "string" ? "base64" : "buffer",
     });
@@ -83,7 +85,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
       const url = await this.saveTaskImageImpl(params);
 
       this.log.info("saveTaskImage", "图片保存成功", {
-        taskId: params.taskId,
+        requestId: params.requestId,
         index: params.index,
         url,
       });
@@ -91,7 +93,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
       return url;
     } catch (error) {
       this.log.error("saveTaskImage", "图片保存失败", error, {
-        taskId: params.taskId,
+        requestId: params.requestId,
         index: params.index,
       });
       throw error;
@@ -103,7 +105,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
    */
   async saveTaskModel(params: SaveModelParams): Promise<string> {
     this.log.info("saveTaskModel", "开始保存模型", {
-      taskId: params.taskId,
+      modelId: params.modelId,
       format: params.format || "glb",
       dataSize: params.modelData.length,
     });
@@ -112,14 +114,14 @@ export abstract class BaseStorageProvider implements StorageProvider {
       const url = await this.saveTaskModelImpl(params);
 
       this.log.info("saveTaskModel", "模型保存成功", {
-        taskId: params.taskId,
+        modelId: params.modelId,
         url,
       });
 
       return url;
     } catch (error) {
       this.log.error("saveTaskModel", "模型保存失败", error, {
-        taskId: params.taskId,
+        modelId: params.modelId,
       });
       throw error;
     }
@@ -130,7 +132,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
    */
   async saveFile(params: SaveFileParams): Promise<string> {
     this.log.info("saveFile", "开始保存文件", {
-      taskId: params.taskId,
+      modelId: params.modelId,
       fileName: params.fileName,
       dataSize: params.fileData.length,
     });
@@ -139,7 +141,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
       const url = await this.saveFileImpl(params);
 
       this.log.info("saveFile", "文件保存成功", {
-        taskId: params.taskId,
+        modelId: params.modelId,
         fileName: params.fileName,
         url,
       });
@@ -147,7 +149,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
       return url;
     } catch (error) {
       this.log.error("saveFile", "文件保存失败", error, {
-        taskId: params.taskId,
+        modelId: params.modelId,
         fileName: params.fileName,
       });
       throw error;
@@ -155,18 +157,20 @@ export abstract class BaseStorageProvider implements StorageProvider {
   }
 
   /**
-   * 删除任务的所有资源 - 公共实现
+   * 删除请求的所有资源 - 公共实现
    */
-  async deleteTaskResources(taskId: string): Promise<void> {
-    this.log.info("deleteTaskResources", "开始删除任务资源", { taskId });
+  async deleteRequestResources(requestId: string): Promise<void> {
+    this.log.info("deleteRequestResources", "开始删除请求资源", { requestId });
 
     try {
-      await this.deleteTaskResourcesImpl(taskId);
+      await this.deleteRequestResourcesImpl(requestId);
 
-      this.log.info("deleteTaskResources", "任务资源删除成功", { taskId });
+      this.log.info("deleteRequestResources", "请求资源删除成功", {
+        requestId,
+      });
     } catch (error) {
-      this.log.error("deleteTaskResources", "任务资源删除失败", error, {
-        taskId,
+      this.log.error("deleteRequestResources", "请求资源删除失败", error, {
+        requestId,
       });
       throw error;
     }
@@ -204,15 +208,15 @@ export abstract class BaseStorageProvider implements StorageProvider {
   /**
    * 生成 Mock 图片 - 默认实现
    */
-  async saveMockImage(taskId: string, index: number): Promise<string> {
-    this.log.info("saveMockImage", "生成 Mock 图片", { taskId, index });
+  async saveMockImage(requestId: string, index: number): Promise<string> {
+    this.log.info("saveMockImage", "生成 Mock 图片", { requestId, index });
 
     // 创建一个简单的 1x1 PNG (透明像素)
     const mockImageBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
     return this.saveTaskImage({
-      taskId,
+      requestId,
       index,
       imageData: mockImageBase64,
     });
@@ -221,8 +225,8 @@ export abstract class BaseStorageProvider implements StorageProvider {
   /**
    * 生成 Mock 3D 模型 - 默认实现
    */
-  async saveMockModel(taskId: string): Promise<string> {
-    this.log.info("saveMockModel", "生成 Mock 模型", { taskId });
+  async saveMockModel(modelId: string): Promise<string> {
+    this.log.info("saveMockModel", "生成 Mock 模型", { modelId });
 
     // 创建一个最小的 GLB 文件头
     const mockModelBuffer = Buffer.from([
@@ -241,7 +245,7 @@ export abstract class BaseStorageProvider implements StorageProvider {
     ]);
 
     return this.saveTaskModel({
-      modelId: `mock-${taskId}`, // Mock 模型使用 taskId 作为标识
+      modelId,
       modelData: mockModelBuffer,
       format: "glb",
     });

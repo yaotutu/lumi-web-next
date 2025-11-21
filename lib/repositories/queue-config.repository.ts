@@ -69,15 +69,11 @@ export async function updateConfig(
 /**
  * 暂停队列
  */
-export async function pauseQueue(
-  queueName: string,
-  updatedBy?: string,
-): Promise<QueueConfig> {
+export async function pauseQueue(queueName: string): Promise<QueueConfig> {
   return prisma.queueConfig.update({
     where: { queueName },
     data: {
       isActive: false,
-      updatedBy,
     },
   });
 }
@@ -85,15 +81,11 @@ export async function pauseQueue(
 /**
  * 恢复队列
  */
-export async function resumeQueue(
-  queueName: string,
-  updatedBy?: string,
-): Promise<QueueConfig> {
+export async function resumeQueue(queueName: string): Promise<QueueConfig> {
   return prisma.queueConfig.update({
     where: { queueName },
     data: {
       isActive: true,
-      updatedBy,
     },
   });
 }

@@ -43,7 +43,7 @@ const SuccessResponseSchema = registry.register(
   z.object({
     success: z.literal(true),
     message: z.string().optional(),
-  })
+  }),
 );
 
 // 错误响应
@@ -64,7 +64,7 @@ const ErrorResponseSchema = registry.register(
       "UNKNOWN_ERROR",
     ]),
     details: z.any().optional(),
-  })
+  }),
 );
 
 // 用户 Schema
@@ -77,13 +77,13 @@ const UserSchema = registry.register(
     lastLoginAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
-  })
+  }),
 );
 
 // 图片状态枚举
 const ImageStatusSchema = registry.register(
   "ImageStatus",
-  z.enum(["PENDING", "GENERATING", "COMPLETED", "FAILED"])
+  z.enum(["PENDING", "GENERATING", "COMPLETED", "FAILED"]),
 );
 
 // Job 状态枚举
@@ -97,7 +97,7 @@ const JobStatusSchema = registry.register(
     "FAILED",
     "CANCELLED",
     "TIMEOUT",
-  ])
+  ]),
 );
 
 // GeneratedImage Schema
@@ -114,7 +114,7 @@ const GeneratedImageSchema = registry.register(
     completedAt: z.string().datetime().nullable(),
     failedAt: z.string().datetime().nullable(),
     errorMessage: z.string().nullable(),
-  })
+  }),
 );
 
 // GenerationRequest Schema
@@ -128,7 +128,7 @@ const GenerationRequestSchema = registry.register(
     updatedAt: z.string().datetime(),
     completedAt: z.string().datetime().nullable(),
     images: z.array(GeneratedImageSchema),
-  })
+  }),
 );
 
 // ============================================
@@ -190,7 +190,8 @@ registry.registerPath({
   path: "/api/auth/verify-code",
   tags: ["认证"],
   summary: "验证码登录",
-  description: "使用邮箱验证码登录，成功后返回用户信息并设置 Cookie（有效期7天）",
+  description:
+    "使用邮箱验证码登录，成功后返回用户信息并设置 Cookie（有效期7天）",
   request: {
     body: {
       content: {
@@ -432,7 +433,8 @@ registry.registerPath({
   path: "/api/tasks/{id}",
   tags: ["任务管理"],
   summary: "选择图片并触发 3D 模型生成",
-  description: "选择一张已完成的图片，创建 3D 模型生成任务。图片必须已完成（imageStatus=COMPLETED）",
+  description:
+    "选择一张已完成的图片，创建 3D 模型生成任务。图片必须已完成（imageStatus=COMPLETED）",
   security: [{ cookieAuth: [] }],
   parameters: [
     {
@@ -757,7 +759,7 @@ const QueueConfigSchema = registry.register(
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     updatedBy: z.string().nullable(),
-  })
+  }),
 );
 
 // GET /api/admin/queues/{name}

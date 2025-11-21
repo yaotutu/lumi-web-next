@@ -224,11 +224,11 @@ function WorkspaceContent() {
           // 如果是新任务，完全替换
           return initialTask;
         }
-        // 如果是同一个任务，只更新需要同步的字段（如图片状态）
+        // 如果是同一个任务，只更新需要同步的字段（如图片状态和模型状态）
         return {
           ...prev,
           images: initialTask.images || prev.images,
-          models: initialTask.models || prev.models,
+          model: initialTask.model || prev.model, // 同步模型状态
           status: initialTask.status || prev.status,
         };
       });
@@ -246,9 +246,7 @@ function WorkspaceContent() {
         return {
           ...prev,
           images: prev.images?.map((img) =>
-            img.index === index
-              ? { ...img, imageStatus: "GENERATING" }
-              : img
+            img.index === index ? { ...img, imageStatus: "GENERATING" } : img,
           ),
         };
       });
@@ -268,23 +266,23 @@ function WorkspaceContent() {
           img.index === index
             ? {
                 ...img,
-                imageStatus: "COMPLETED",
+                imageStatus: "COMPLETED" as const,
                 imageUrl,
                 completedAt: new Date(),
               }
-            : img
+            : img,
         );
 
         // 检查是否所有图片都已完成
         const allImagesCompleted = updatedImages?.every(
-          (img) => img.imageStatus === "COMPLETED"
+          (img) => img.imageStatus === "COMPLETED",
         );
 
         return {
           ...prev,
           images: updatedImages,
           status: allImagesCompleted ? "IMAGE_COMPLETED" : prev.status,
-        };
+        } as any;
       });
     });
 
@@ -307,7 +305,7 @@ function WorkspaceContent() {
                   errorMessage,
                   failedAt: new Date(),
                 }
-              : img
+              : img,
           ),
         };
       });
@@ -323,25 +321,28 @@ function WorkspaceContent() {
       setTask((prev) => {
         if (!prev) return prev;
 
-        // 查找或创建该模型的记录
-        const existingModel = prev.models?.find((m) => m.id === modelId);
-
-        if (existingModel) {
-          // 更新现有模型
-          return {
-            ...prev,
-            status: "MODEL_GENERATING",
-            models: prev.models?.map((m) =>
-              m.id === modelId
-                ? { ...m, generationStatus: "GENERATING", progress: 0 }
-                : m
-            ),
-          };
-        } else {
-          // 如果模型不存在（理论上不应该发生），保持状态不变
-          console.warn("⚠️ 收到 model:generating 事件，但模型不存在", { modelId });
+        // 新架构：检查 task.model（1:1 关系）
+        if (!prev.model || prev.model.id !== modelId) {
+          console.warn("⚠️ 收到 model:generating 事件，但模型不匹配", {
+            modelId,
+            currentModelId: prev.model?.id,
+          });
           return prev;
         }
+
+        // 新架构：更新 task.model（1:1 关系）
+        const updatedModel = {
+          ...prev.model,
+          generationStatus: "GENERATING",
+          progress: 0,
+        };
+
+        return {
+          ...prev,
+          status: "MODEL_GENERATING",
+          phase: "MODEL_GENERATION",
+          model: updatedModel as any,
+        } as any;
       });
     });
 
@@ -354,15 +355,34 @@ function WorkspaceContent() {
 
       setTask((prev) => {
         if (!prev) return prev;
+
+        // 新架构：优先检查 task.model（1:1 关系）
+        if (!prev.model || prev.model.id !== modelId) {
+          console.warn("⚠️ 收到 model:progress 事件，但模型不匹配", {
+            modelId,
+            currentModelId: prev.model?.id,
+          });
+          return prev;
+        }
+
+        // 修复：正确设置状态，优先使用服务器返回的 status
+        const generationStatus = status || (progress >= 100 ? "COMPLETED" : "GENERATING");
+
+        const updatedModel = {
+          ...prev.model,
+          generationStatus,
+          progress,
+          // 如果进度达到100%，标记为完成
+          ...(progress >= 100 && { completedAt: new Date() }),
+        };
+
         return {
           ...prev,
-          status: "MODEL_GENERATING",
-          models: prev.models?.map((m) =>
-            m.id === modelId
-              ? { ...m, generationStatus: "GENERATING", progress }
-              : m
-          ),
-        };
+          status: progress >= 100 ? "COMPLETED" : "MODEL_GENERATING",
+          phase: progress >= 100 ? "COMPLETED" : "MODEL_GENERATION",
+          model: updatedModel as any,
+          ...(progress >= 100 && { completedAt: new Date() }),
+        } as any;
       });
     });
 
@@ -370,16 +390,19 @@ function WorkspaceContent() {
      * 处理 model:completed 事件
      */
     eventSource.addEventListener("model:completed", (event) => {
-      const { modelId, modelUrl, previewImageUrl, format } = JSON.parse(event.data);
+      const { modelId, modelUrl, previewImageUrl, format } = JSON.parse(
+        event.data,
+      );
       console.log(`✅ 模型生成完成`, { modelId, modelUrl });
 
       setTask((prev) => {
         if (!prev) return prev;
 
-        const updatedModels = prev.models?.map((m) =>
-          m.id === modelId
+        // 新架构：直接更新 task.model（1:1 关系）
+        const updatedModel =
+          prev.model?.id === modelId
             ? {
-                ...m,
+                ...prev.model,
                 generationStatus: "COMPLETED",
                 progress: 100,
                 modelUrl,
@@ -387,21 +410,15 @@ function WorkspaceContent() {
                 format,
                 completedAt: new Date(),
               }
-            : m
-        );
-
-        // 更新对应图片的 generatedModel 关联
-        const updatedImages = prev.images?.map((img) => {
-          const imageModel = updatedModels?.find((m) => m.sourceImageId === img.id);
-          return imageModel ? { ...img, generatedModel: imageModel } : img;
-        });
+            : prev.model;
 
         return {
           ...prev,
-          status: "MODEL_COMPLETED",
-          models: updatedModels,
-          images: updatedImages,
-        };
+          status: "COMPLETED", // 新架构：COMPLETED（不是 MODEL_COMPLETED）
+          phase: "COMPLETED",
+          model: updatedModel as any,
+          completedAt: new Date(),
+        } as any;
       });
     });
 
@@ -414,19 +431,20 @@ function WorkspaceContent() {
 
       setTask((prev) => {
         if (!prev) return prev;
+
+        const updatedModel = prev.model?.id === modelId
+          ? {
+              ...prev.model,
+              generationStatus: "FAILED",
+              errorMessage,
+              failedAt: new Date(),
+            }
+          : prev.model;
+
         return {
           ...prev,
           status: "FAILED",
-          models: prev.models?.map((m) =>
-            m.id === modelId
-              ? {
-                  ...m,
-                  generationStatus: "FAILED",
-                  errorMessage,
-                  failedAt: new Date(),
-                }
-              : m
-          ),
+          model: updatedModel as any,
         };
       });
     });
@@ -519,10 +537,10 @@ function WorkspaceContent() {
       });
 
       setTask({
-        ...task,                                 // 保留其他字段
-        selectedImageIndex: imageIndex,          // 更新选中的图片
-        status: "MODEL_PENDING",                 // 设置为"等待生成"
-        modelGenerationStartedAt: new Date(),    // 记录开始时间
+        ...task, // 保留其他字段
+        selectedImageIndex: imageIndex, // 更新选中的图片
+        status: "MODEL_PENDING", // 设置为"等待生成"
+        modelGenerationStartedAt: new Date(), // 记录开始时间
       });
 
       try {
@@ -564,11 +582,11 @@ function WorkspaceContent() {
             console.log("🔥 立即合并新模型到 task 状态", {
               modelId: newModel.id,
               sourceImageId: newModel.sourceImageId,
-              imageIndex
+              imageIndex,
             });
 
             // 更新 task 状态，添加新模型
-            setTask(prev => {
+            setTask((prev) => {
               // 安全检查：确保 prev 和 prev.images 存在
               if (!prev || !prev.images) {
                 console.error("❌ task 状态异常，无法合并新模型");
@@ -579,11 +597,16 @@ function WorkspaceContent() {
                 ...prev,
                 selectedImageIndex: imageIndex,
                 status: "MODEL_GENERATING", // 明确设置为生成中
-                models: [...(prev.models || []), newModel], // 添加新模型到数组
-                images: prev.images.map(img =>
+                phase: "MODEL_GENERATION",
+                model: {
+                  ...newModel,
+                  generationStatus: "PENDING", // 新创建的模型初始状态为 PENDING
+                  progress: 0,
+                },
+                images: prev.images.map((img) =>
                   img.index === imageIndex
                     ? { ...img, generatedModel: newModel } // 关联到对应图片
-                    : img
+                    : img,
                 ),
                 modelGenerationStartedAt: new Date(),
               };
@@ -612,8 +635,9 @@ function WorkspaceContent() {
           setTask({
             ...task,
             status: previousTaskState.status,
-            selectedImageIndex: imageIndex,  // 保留用户选择
-            modelGenerationStartedAt: previousTaskState.modelGenerationStartedAt,
+            selectedImageIndex: imageIndex, // 保留用户选择
+            modelGenerationStartedAt:
+              previousTaskState.modelGenerationStartedAt,
           });
         }
       } catch (error) {
@@ -632,7 +656,7 @@ function WorkspaceContent() {
         setTask({
           ...task,
           status: previousTaskState.status,
-          selectedImageIndex: imageIndex,  // 保留用户选择
+          selectedImageIndex: imageIndex, // 保留用户选择
           modelGenerationStartedAt: previousTaskState.modelGenerationStartedAt,
         });
       }
@@ -703,11 +727,11 @@ function WorkspaceContent() {
       */}
       <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
-          initialPrompt={task.prompt}                  // 传入任务的提示词（用于显示）
-          onImageSelect={handleImageSelect}            // 图片选择回调（预览用）
-          onGenerate3D={handleGenerate3D}              // 3D 生成回调（确认生成）
-          task={task}                                  // 完整的任务数据
-          taskId={task.id}                             // 任务 ID
+          initialPrompt={task.prompt} // 传入任务的提示词（用于显示）
+          onImageSelect={handleImageSelect} // 图片选择回调（预览用）
+          onGenerate3D={handleGenerate3D} // 3D 生成回调（确认生成）
+          task={task} // 完整的任务数据
+          taskId={task.id} // 任务 ID
         />
       </div>
 
@@ -719,11 +743,11 @@ function WorkspaceContent() {
       */}
       <div className="flex w-full flex-1 flex-col overflow-hidden">
         <ModelPreview
-          imageIndex={selectedImageIndex}              // 当前选中的图片索引
-          prompt={task.prompt}                          // 任务提示词
-          task={task}                                   // 完整的任务数据
-          taskId={task.id}                              // 任务 ID
-          onGenerate3D={handleGenerate3D}               // 3D 生成回调
+          imageIndex={selectedImageIndex} // 当前选中的图片索引
+          prompt={task.prompt} // 任务提示词
+          task={task} // 完整的任务数据
+          taskId={task.id} // 任务 ID
+          onGenerate3D={handleGenerate3D} // 3D 生成回调
         />
       </div>
     </>

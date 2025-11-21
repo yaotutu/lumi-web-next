@@ -72,7 +72,7 @@ export class TencentCOSAdapter extends BaseStorageProvider {
    * 保存任务的图片到 COS
    */
   protected async saveTaskImageImpl(params: SaveImageParams): Promise<string> {
-    const key = `images/${params.taskId}/${params.index}.png`;
+    const key = `images/${params.requestId}/${params.index}.png`;
 
     // 处理不同格式的图片数据
     let buffer: Buffer;
@@ -137,40 +137,30 @@ export class TencentCOSAdapter extends BaseStorageProvider {
   }
 
   /**
-   * 删除任务的所有资源
+   * 删除请求的所有资源（图片目录）
    */
-  protected async deleteTaskResourcesImpl(taskId: string): Promise<void> {
-    // 列出任务的所有图片
-    const imagePrefix = `images/${taskId}/`;
+  protected async deleteRequestResourcesImpl(requestId: string): Promise<void> {
+    // 列出请求的所有图片
+    const imagePrefix = `images/${requestId}/`;
     const imageObjects = await this.listObjects(imagePrefix);
 
-    // 列出任务的所有模型（尝试常见格式）
-    const modelKeys: string[] = [];
-    for (const format of ["obj", "glb", "gltf", "fbx"]) {
-      const modelKey = `models/${taskId}.${format}`;
-      const exists = await this.objectExists(modelKey);
-      if (exists) {
-        modelKeys.push(modelKey);
-      }
-    }
-
-    // 批量删除所有对象
-    const allKeys = [...imageObjects, ...modelKeys];
-    if (allKeys.length > 0) {
-      await this.deleteObjects(allKeys);
+    // 批量删除图片
+    if (imageObjects.length > 0) {
+      await this.deleteObjects(imageObjects);
       this.log.info(
-        "deleteTaskResourcesImpl",
-        `删除了 ${allKeys.length} 个文件`,
+        "deleteRequestResourcesImpl",
+        `删除了 ${imageObjects.length} 个文件`,
         {
-          taskId,
-          keys: allKeys,
+          requestId,
+          keys: imageObjects,
         },
       );
     } else {
-      this.log.info("deleteTaskResourcesImpl", "没有找到需要删除的文件", {
-        taskId,
+      this.log.info("deleteRequestResourcesImpl", "没有找到需要删除的文件", {
+        requestId,
       });
     }
+    // 注意：模型文件现在使用 modelId 存储，需要单独处理
   }
 
   /**

@@ -38,7 +38,9 @@ export async function GET(
 
   // 存储心跳定时器（需要在外部作用域，以便 cancel 时清理）
   let heartbeatInterval: NodeJS.Timeout | undefined;
-  let connection: ReturnType<typeof sseConnectionManager.addConnection> | undefined;
+  let connection:
+    | ReturnType<typeof sseConnectionManager.addConnection>
+    | undefined;
 
   // 创建 SSE 流
   const stream = new ReadableStream({

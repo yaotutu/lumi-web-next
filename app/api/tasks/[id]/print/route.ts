@@ -1,11 +1,13 @@
 /**
  * 打印接口 - 一键打印功能
+ *
+ * 新架构：1 Request : 1 Model
  */
 
 import { type NextRequest, NextResponse } from "next/server";
 import { withErrorHandler, AppError } from "@/lib/utils/errors";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
-import * as GeneratedModelService from "@/lib/services/generated-model-service";
+import * as ModelService from "@/lib/services/model-service";
 
 /**
  * POST /api/tasks/:id/print
@@ -14,29 +16,32 @@ import * as GeneratedModelService from "@/lib/services/generated-model-service";
 export const POST = withErrorHandler(
   async (
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;
 
     // 1. 获取请求详情
     const request = await GenerationRequestService.getRequestById(id);
 
-    // 2. 找到已完成的模型
-    const completedModel = request.generatedModels?.find(
-      (model) => model.generationJob?.status === "COMPLETED" && model.modelUrl
-    );
+    // 2. 新架构：1 Request : 1 Model（通过 request.model 访问）
+    const model = request.model;
 
-    if (!completedModel || !completedModel.modelUrl) {
-      throw new AppError("NOT_FOUND", "未找到已完成的3D模型");
+    if (!model) {
+      throw new AppError("NOT_FOUND", "未找到关联的3D模型");
+    }
+
+    // 检查模型是否已完成
+    if (model.generationJob?.status !== "COMPLETED" || !model.modelUrl) {
+      throw new AppError("INVALID_STATE", "3D模型尚未生成完成");
     }
 
     // 3. 提取对象存储路径
-    const objectPath = extractObjectPath(completedModel.modelUrl);
+    const objectPath = extractObjectPath(model.modelUrl);
 
     // 4. 准备文件名
-    let fileName = completedModel.name;
+    let fileName = model.name;
     if (!fileName.includes(".")) {
-      fileName = `${fileName}.${completedModel.format.toLowerCase()}`;
+      fileName = `${fileName}.${model.format.toLowerCase()}`;
     }
 
     // 5. 调用打印服务
@@ -65,7 +70,7 @@ export const POST = withErrorHandler(
     if (!response.ok) {
       throw new AppError(
         "EXTERNAL_API_ERROR",
-        `打印服务错误: ${response.status}`
+        `打印服务错误: ${response.status}`,
       );
     }
 
@@ -73,14 +78,11 @@ export const POST = withErrorHandler(
 
     // 6. 保存 sliceTaskId 到数据库
     const sliceTaskId = printResult.slice_task_id;
-    if (sliceTaskId && completedModel.id) {
+    if (sliceTaskId && model.id) {
       try {
-        await GeneratedModelService.updateSliceTaskId(
-          completedModel.id,
-          sliceTaskId
-        );
+        await ModelService.updateSliceTaskId(model.id, sliceTaskId);
         console.log(
-          `✅ [打印接口] 已保存切片任务ID: modelId=${completedModel.id}, sliceTaskId=${sliceTaskId}`
+          `✅ [打印接口] 已保存切片任务ID: modelId=${model.id}, sliceTaskId=${sliceTaskId}`,
         );
       } catch (saveError) {
         // 保存失败只记录日志，不影响返回
@@ -92,13 +94,13 @@ export const POST = withErrorHandler(
       success: true,
       data: {
         requestId: id,
-        modelId: completedModel.id,
+        modelId: model.id,
         sliceTaskId,
         printResult,
       },
       message: "打印任务已提交",
     });
-  }
+  },
 );
 
 /**

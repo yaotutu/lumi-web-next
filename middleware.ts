@@ -88,11 +88,11 @@ function addCorsHeaders(response: NextResponse): NextResponse {
   response.headers.set("Access-Control-Allow-Origin", "*");
   response.headers.set(
     "Access-Control-Allow-Methods",
-    "GET, POST, PATCH, DELETE, OPTIONS"
+    "GET, POST, PATCH, DELETE, OPTIONS",
   );
   response.headers.set(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, Cookie"
+    "Content-Type, Authorization, Cookie",
   );
   response.headers.set("Access-Control-Allow-Credentials", "true");
   return response;

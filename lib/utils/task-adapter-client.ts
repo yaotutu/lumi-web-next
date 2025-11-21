@@ -2,164 +2,196 @@
  * 客户端任务适配器
  *
  * 职责：将后端的 GenerationRequest 数据转换为前端期望的 TaskWithDetails 格式
- * 主要功能：从 images 的 imageStatus 推导整体的 status 字段
+ *
+ * 新架构核心变更：
+ * - 1 Request : 1 Model（通过 request.model 访问，不再通过 images）
+ * - 使用 request.status 和 request.phase 字段（不再推导）
  */
 
 import type {
   GenerationRequest,
   GeneratedImage,
-  GeneratedModel,
+  Model,
   ImageGenerationJob,
+  ModelGenerationJob,
+  RequestStatus,
+  RequestPhase,
 } from "@prisma/client";
 import type { TaskWithDetails } from "@/types";
 
 /**
  * 后端返回的完整 GenerationRequest 数据结构
+ *
+ * 新架构：
+ * - request.model: Model | null（1:1 关系）
+ * - request.status/phase: 直接存储状态
  */
 export type GenerationRequestResponse = GenerationRequest & {
   images: (GeneratedImage & {
     generationJob?: ImageGenerationJob | null;
-    generatedModel?: GeneratedModel | null;
   })[];
+  model?:
+    | (Model & {
+        generationJob?: ModelGenerationJob | null;
+      })
+    | null;
 };
 
 /**
- * 从 images 的状态推导整体任务 status
- */
-function deriveTaskStatus(
-  images: (GeneratedImage & { generatedModel?: GeneratedModel | null })[],
-): string {
-  // 1. 检查图片生成状态
-  if (images.length === 0) {
-    return "IMAGE_PENDING";
-  }
-
-  const allCompleted = images.every((img) => img.imageStatus === "COMPLETED");
-  const anyFailed = images.some((img) => img.imageStatus === "FAILED");
-  const anyGenerating = images.some((img) => img.imageStatus === "GENERATING");
-  const allPending = images.every((img) => img.imageStatus === "PENDING");
-
-  // 任何图片失败 → FAILED
-  if (anyFailed) {
-    return "FAILED";
-  }
-
-  // 2. 从 images 中收集所有模型，检查模型状态
-  const models = images
-    .map((img) => img.generatedModel)
-    .filter((model): model is GeneratedModel => model !== null);
-
-  if (models.length > 0) {
-    const hasCompleted = models.some((m) => !!m.completedAt);
-    const hasFailed = models.some((m) => !!m.failedAt);
-
-    // 有完成的模型 → MODEL_COMPLETED
-    if (hasCompleted) {
-      return "MODEL_COMPLETED";
-    }
-
-    // 有失败的模型（且无完成的）→ 检查是否还在重试
-    if (hasFailed && !hasCompleted) {
-      // 如果都失败了，返回 FAILED
-      if (models.every((m) => !!m.failedAt)) {
-        return "FAILED";
-      }
-      // 还有未失败的，说明在重试中
-      return "MODEL_GENERATING";
-    }
-
-    // 模型生成中
-    return "MODEL_GENERATING";
-  }
-
-  // 3. 只有图片状态，无模型
-  if (allCompleted) {
-    return "IMAGE_COMPLETED";
-  }
-
-  if (anyGenerating) {
-    return "IMAGE_GENERATING";
-  }
-
-  if (allPending) {
-    return "IMAGE_PENDING";
-  }
-
-  // 默认状态
-  return "IMAGE_GENERATING";
-}
-
-/**
  * 将 GenerationRequest 适配为 TaskWithDetails
+ *
+ * 新架构：直接使用 request.status，不再推导
  */
 export function adaptGenerationRequest(
-  request: GenerationRequestResponse,
+  request: GenerationRequestResponse | any,
 ): TaskWithDetails {
-  // 推导整体 status
-  const status = deriveTaskStatus(request.images);
-
-  // 从 images 中收集所有模型
-  const models = request.images
-    .map((img) => img.generatedModel)
-    .filter((model): model is GeneratedModel => model !== null);
-
-  // selectedImageIndex 不由后端推导，保持为 undefined
-  // 这是前端 UI 状态，由用户点击图片来设置，不应该被后端数据覆盖
-  const selectedImageIndex = undefined;
-
-  // 推导 modelGenerationStartedAt：所有模型中最早创建的时间
-  let modelGenerationStartedAt: Date | null = null;
-  if (models.length > 0) {
-    const firstModel = models[0];
-    modelGenerationStartedAt =
-      firstModel.createdAt instanceof Date
-        ? firstModel.createdAt
-        : new Date(firstModel.createdAt);
-  }
+  // 直接使用后端的 status 和 phase
+  const status =
+    request.status ||
+    deriveStatusFromPhase(request.phase, request.images, request.model);
 
   // 适配 images 字段：将 imageUrl 映射为 url（向后兼容）
-  const adaptedImages = request.images.map((img) => ({
+  const adaptedImages = request.images.map((img: any) => ({
     ...img,
     url: img.imageUrl, // 添加兼容字段
   }));
 
-  // 适配 models 字段：从 images[].generatedModel 收集，并添加 generationStatus 和 progress
-  // ✅ 根据模型的实际状态推导 generationStatus
-  const adaptedModels = models.map((model) => {
+  // 适配 model 字段（1:1 关系）
+  let adaptedModels: any[] = [];
+  let modelGenerationStartedAt: Date | null = null;
+
+  if (request.model) {
+    const model = request.model;
+
+    // 调试日志：查看原始模型数据
+    console.log("=== 适配器：推导模型状态 ===", {
+      modelId: model.id,
+      completedAt: model.completedAt,
+      completedAtType: typeof model.completedAt,
+      failedAt: model.failedAt,
+      hasJob: !!model.generationJob,
+      jobStatus: model.generationJob?.status,
+      jobProgress: model.generationJob?.progress,
+    });
+
     // 根据 completedAt 和 failedAt 推导状态
     let generationStatus: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED";
     let progress: number;
 
     if (model.completedAt) {
-      // 模型已完成
       generationStatus = "COMPLETED";
       progress = 100;
+      console.log("✅ 推导为 COMPLETED（根据 completedAt）");
     } else if (model.failedAt) {
-      // 模型生成失败
       generationStatus = "FAILED";
       progress = 0;
+      console.log("❌ 推导为 FAILED（根据 failedAt）");
+    } else if (model.generationJob) {
+      // 使用 Job 的状态和进度
+      const jobStatus = model.generationJob.status;
+      progress = model.generationJob.progress || 0;
+
+      if (jobStatus === "COMPLETED") {
+        generationStatus = "COMPLETED";
+        progress = 100;
+      } else if (jobStatus === "FAILED" || jobStatus === "TIMEOUT") {
+        generationStatus = "FAILED";
+      } else if (jobStatus === "RUNNING" || jobStatus === "RETRYING") {
+        generationStatus = "GENERATING";
+      } else {
+        generationStatus = "PENDING";
+      }
     } else {
-      // 模型正在生成中（completedAt 和 failedAt 都是 null）
-      // Worker 监听到模型后会立即开始生成，所以这里统一认为是 GENERATING
-      generationStatus = "GENERATING";
-      progress = 50; // 默认进度 50%（实际进度由 Worker 更新）
+      generationStatus = "PENDING";
+      progress = 0;
     }
 
-    return {
+    // 适配后的模型数据（包含状态字段）
+    const adaptedModel = {
       ...model,
       generationStatus,
       progress,
     };
-  });
+
+    adaptedModels = [adaptedModel];
+
+    modelGenerationStartedAt =
+      model.createdAt instanceof Date
+        ? model.createdAt
+        : new Date(model.createdAt);
+  }
 
   return {
     ...request,
     images: adaptedImages as any,
-    status: status as any, // 添加推导的 status
-    selectedImageIndex,
-    models: adaptedModels,
+    status: status as any,
+    selectedImageIndex: request.selectedImageIndex ?? null,
     modelGenerationStartedAt,
+    // 新架构：只保留 model 字段（1:1 关系）
+    model: adaptedModels.length > 0 ? adaptedModels[0] : null,
   };
+}
+
+/**
+ * 备用：从 phase 和数据推导 status（当后端 status 字段为空时）
+ */
+function deriveStatusFromPhase(
+  phase: RequestPhase | null | undefined,
+  images: GeneratedImage[],
+  model:
+    | (Model & { generationJob?: ModelGenerationJob | null })
+    | null
+    | undefined,
+): RequestStatus {
+  // 如果有明确的 phase，基于 phase 推导
+  if (phase) {
+    switch (phase) {
+      case "IMAGE_GENERATION":
+        // 检查图片状态
+        if (images.length === 0) return "IMAGE_PENDING";
+        const anyImageGenerating = images.some(
+          (img) => img.imageStatus === "GENERATING",
+        );
+        const anyImageFailed = images.some(
+          (img) => img.imageStatus === "FAILED",
+        );
+        if (anyImageFailed) return "IMAGE_FAILED";
+        if (anyImageGenerating) return "IMAGE_GENERATING";
+        return "IMAGE_PENDING";
+
+      case "AWAITING_SELECTION":
+        return "IMAGE_COMPLETED";
+
+      case "MODEL_GENERATION":
+        if (!model) return "MODEL_PENDING";
+        if (model.completedAt) return "MODEL_COMPLETED";
+        if (model.failedAt) return "MODEL_FAILED";
+        return "MODEL_GENERATING";
+
+      case "COMPLETED":
+        return "COMPLETED";
+    }
+  }
+
+  // 默认：基于数据推导
+  if (images.length === 0) return "IMAGE_PENDING";
+
+  const allImagesCompleted = images.every(
+    (img) => img.imageStatus === "COMPLETED",
+  );
+  const anyImageFailed = images.some((img) => img.imageStatus === "FAILED");
+
+  if (anyImageFailed) return "IMAGE_FAILED";
+
+  if (model) {
+    if (model.completedAt) return "COMPLETED";
+    if (model.failedAt) return "MODEL_FAILED";
+    return "MODEL_GENERATING";
+  }
+
+  if (allImagesCompleted) return "IMAGE_COMPLETED";
+
+  return "IMAGE_GENERATING";
 }
 
 /**

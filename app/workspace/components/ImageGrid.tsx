@@ -43,6 +43,9 @@ export default function ImageGrid({
   const isModelGenerating =
     task?.status === "MODEL_PENDING" || task?.status === "MODEL_GENERATING";
 
+  // 判断模型是否已完成（锁定所有编辑操作）
+  const isModelCompleted = task?.status === "COMPLETED";
+
   // 如果任务已有图片数据，初始化图片槽位
   useEffect(() => {
     if (task?.images && task.images.length > 0) {
@@ -243,70 +246,88 @@ export default function ImageGrid({
 
   return (
     <div className="flex h-full w-full flex-col gap-4 overflow-hidden lg:w-[600px]">
-      {/* 输入与生成区域 */}
-      <div className="glass-panel flex shrink-0 flex-col gap-2.5 p-4">
-        <div className="relative">
-          <textarea
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              if (error) setError("");
-            }}
-            onKeyDown={handleKeyPress}
-            placeholder="描述你想要的物体..."
-            maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            readOnly={isImageGenerating}
-            className={`h-20 w-full resize-none rounded-lg border bg-[#242424] p-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none transition-opacity ${
-              error
-                ? "border-red-1 focus:border-red-1"
-                : "border-white/10 focus:border-yellow-1 focus:ring-1 focus:ring-yellow-1/20"
-            } ${isImageGenerating ? "opacity-60 cursor-not-allowed" : ""}`}
-            aria-label="描述你想要的物体"
-            aria-invalid={!!error}
-          />
-          <div className="mt-1 flex items-center justify-between text-xs">
-            <span className={error ? "text-red-1" : "text-transparent"}>
-              {error || "placeholder"}
-            </span>
-            <span className="text-white/50">
-              {inputText.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            </span>
+      {/* 输入与生成区域 - 模型完成后折叠为只读卡片 */}
+      {isModelCompleted ? (
+        // 只读卡片：显示原始 prompt
+        <div className="glass-panel shrink-0 p-4 border border-white/5">
+          <div className="flex items-start gap-3">
+            <div className="text-text-subtle text-sm font-medium shrink-0">
+              原始描述
+            </div>
+            <div className="flex-1 text-text-muted text-sm leading-relaxed">
+              {task?.prompt || inputText}
+            </div>
           </div>
         </div>
+      ) : (
+        // 完整编辑区：输入框 + 重新生成按钮
+        <div className="glass-panel flex shrink-0 flex-col gap-2.5 p-4">
+          <div className="relative">
+            <textarea
+              value={inputText}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                if (error) setError("");
+              }}
+              onKeyDown={handleKeyPress}
+              placeholder="描述你想要的物体..."
+              maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+              readOnly={isImageGenerating}
+              className={`h-20 w-full resize-none rounded-lg border bg-[#242424] p-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none transition-opacity ${
+                error
+                  ? "border-red-1 focus:border-red-1"
+                  : "border-white/10 focus:border-yellow-1 focus:ring-1 focus:ring-yellow-1/20"
+              } ${isImageGenerating ? "opacity-60 cursor-not-allowed" : ""}`}
+              aria-label="描述你想要的物体"
+              aria-invalid={!!error}
+            />
+            <div className="mt-1 flex items-center justify-between text-xs">
+              <span className={error ? "text-red-1" : "text-transparent"}>
+                {error || "placeholder"}
+              </span>
+              <span className="text-white/50">
+                {inputText.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+              </span>
+            </div>
+          </div>
 
-        <Tooltip content="图片生成中，请稍候..." disabled={!isImageGenerating}>
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isImageGenerating}
-            className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
+          <Tooltip
+            content="图片生成中，请稍候..."
+            disabled={!isImageGenerating}
           >
-            {isImageGenerating ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
-                生成中...
-              </>
-            ) : (
-              <>
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                重新生成
-              </>
-            )}
-          </button>
-        </Tooltip>
-      </div>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isImageGenerating}
+              className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
+            >
+              {isImageGenerating ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  重新生成
+                </>
+              )}
+            </button>
+          </Tooltip>
+        </div>
+      )}
 
       {/* 生成结果区域 - flex布局容器 */}
       <div className="glass-panel flex flex-1 flex-col overflow-hidden p-4">
@@ -413,16 +434,28 @@ export default function ImageGrid({
                   <button
                     type="button"
                     onClick={() => {
-                      if (slot.status === "completed") {
+                      if (slot.status === "completed" && !isModelCompleted) {
                         handleImageSelect(idx);
                       }
                     }}
-                    disabled={slot.status !== "completed" || isModelGenerating}
+                    disabled={
+                      slot.status !== "completed" ||
+                      isModelGenerating ||
+                      isModelCompleted
+                    }
                     className={`group relative h-full w-full overflow-hidden rounded-xl transition-all duration-300 ${
                       selectedImage === idx && slot.status === "completed"
                         ? "border-[3px] border-yellow-1 shadow-[0_8px_24px_rgba(249,207,0,0.4)] -translate-y-1 scale-[1.02]"
                         : "border-2 border-white/10 hover:border-white/20 hover:scale-[1.02]"
-                    } ${slot.status !== "completed" || isModelGenerating ? "cursor-not-allowed" : ""} ${selectedImage !== null && selectedImage !== idx && slot.status === "completed" ? "opacity-60" : "opacity-100"}`}
+                    } ${slot.status !== "completed" || isModelGenerating || isModelCompleted ? "cursor-not-allowed" : ""} ${selectedImage !== null && selectedImage !== idx && slot.status === "completed" ? "opacity-60" : "opacity-100"} ${
+                      isModelCompleted && selectedImage !== idx
+                        ? "opacity-50"
+                        : ""
+                    } ${
+                      isModelCompleted
+                        ? "cursor-default hover:border-white/10 hover:scale-100"
+                        : ""
+                    }`}
                   >
                     {/* 加载中状态 */}
                     {slot.status === "pending" || slot.status === "loading" ? (
@@ -443,20 +476,22 @@ export default function ImageGrid({
                           className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
                         />
 
-                        {/* Hover 提示遮罩 - 仅在未选中且未在模型生成中时显示 */}
-                        {selectedImage !== idx && !isModelGenerating && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-sm">
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="text-3xl">🎯</div>
-                              <p className="text-xs font-medium text-white">
-                                选择此图片
-                              </p>
+                        {/* Hover 提示遮罩 - 仅在未选中且未在模型生成中且模型未完成时显示 */}
+                        {selectedImage !== idx &&
+                          !isModelGenerating &&
+                          !isModelCompleted && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-sm">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="text-3xl">🎯</div>
+                                <p className="text-xs font-medium text-white">
+                                  选择此图片
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* 选中标记 */}
-                        {selectedImage === idx && (
+                        {/* 选中标记 - 模型完成后隐藏 */}
+                        {selectedImage === idx && !isModelCompleted && (
                           <>
                             <div className="absolute right-2 top-2 z-10 flex h-6 w-6 animate-[scale-in_0.2s_cubic-bezier(0.4,0,0.2,1)] items-center justify-center rounded-full bg-gradient-to-br from-yellow-1 to-accent-yellow-dim shadow-lg">
                               <svg
@@ -520,45 +555,47 @@ export default function ImageGrid({
               )}
             </div>
 
-            {/* 底部按钮 - 固定高度,不参与flex */}
-            <div className="mt-3 shrink-0 hidden">
-              <Tooltip content={getGenerate3DTooltip()}>
-                <button
-                  type="button"
-                  onClick={handleGenerate3D}
-                  disabled={
-                    selectedImage === null ||
-                    isImageGenerating ||
-                    isModelGenerating
-                  }
-                  className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
-                >
-                  {isModelGenerating ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
-                      {getGenerate3DButtonText()}
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"
-                        />
-                      </svg>
-                      {getGenerate3DButtonText()}
-                    </>
-                  )}
-                </button>
-              </Tooltip>
-            </div>
+            {/* 底部按钮 - 模型完成后完全隐藏 */}
+            {!isModelCompleted && (
+              <div className="mt-3 shrink-0 hidden">
+                <Tooltip content={getGenerate3DTooltip()}>
+                  <button
+                    type="button"
+                    onClick={handleGenerate3D}
+                    disabled={
+                      selectedImage === null ||
+                      isImageGenerating ||
+                      isModelGenerating
+                    }
+                    className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-semibold"
+                  >
+                    {isModelGenerating ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                        {getGenerate3DButtonText()}
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"
+                          />
+                        </svg>
+                        {getGenerate3DButtonText()}
+                      </>
+                    )}
+                  </button>
+                </Tooltip>
+              </div>
+            )}
           </>
         )}
       </div>

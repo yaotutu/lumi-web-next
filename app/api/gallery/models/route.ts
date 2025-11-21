@@ -11,9 +11,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/utils/errors";
 import {
-  findPublicAssets,
-  countPublicAssets,
-} from "@/lib/repositories/user-asset.repository";
+  findPublicModels,
+  countPublicModels,
+} from "@/lib/repositories/model.repository";
 
 // GET /api/gallery/models - 获取公开模型列表
 export const GET = withErrorHandler(async (request: NextRequest) => {
@@ -27,14 +27,14 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
   const offset = Number(searchParams.get("offset")) || 0;
 
   // 调用 repository 查询公开模型
-  const models = await findPublicAssets({
-    sortBy,
+  const models = await findPublicModels({
+    orderBy: sortBy,
     limit,
     offset,
   });
 
   // 统计总数（用于判断是否还有更多）
-  const total = await countPublicAssets();
+  const total = await countPublicModels();
 
   // 判断是否还有更多
   const hasMore = offset + models.length < total;

@@ -81,8 +81,8 @@ class SSEConnectionManager {
 
     log.info("addConnection", "SSE 连接已建立", {
       taskId,
-      processId: process.pid,  // 记录进程 ID
-      instanceId: this.instanceId,  // 记录实例 ID
+      processId: process.pid, // 记录进程 ID
+      instanceId: this.instanceId, // 记录实例 ID
       totalConnections: this.connections.get(taskId)!.size,
     });
 
@@ -110,7 +110,7 @@ class SSEConnectionManager {
         log.info("removeConnection", "任务的所有 SSE 连接已关闭", {
           taskId,
           processId: process.pid,
-          callStack: stack?.split('\n').slice(0, 5).join('\n')  // 只记录前5行调用栈
+          callStack: stack?.split("\n").slice(0, 5).join("\n"), // 只记录前5行调用栈
         });
       } else {
         log.info("removeConnection", "SSE 连接已移除", {
@@ -145,8 +145,8 @@ class SSEConnectionManager {
       log.warn("broadcast", "没有找到任务的 SSE 连接，跳过推送", {
         taskId,
         eventType,
-        processId: process.pid,  // 记录进程 ID
-        instanceId: this.instanceId,  // 记录实例 ID
+        processId: process.pid, // 记录进程 ID
+        instanceId: this.instanceId, // 记录实例 ID
         当前所有连接: Array.from(this.connections.keys()),
       });
       return;
@@ -155,8 +155,8 @@ class SSEConnectionManager {
     log.info("broadcast", "推送 SSE 事件", {
       taskId,
       eventType,
-      processId: process.pid,  // 记录进程 ID
-      instanceId: this.instanceId,  // 记录实例 ID
+      processId: process.pid, // 记录进程 ID
+      instanceId: this.instanceId, // 记录实例 ID
       connectionCount: taskConnections.size,
       data,
     });
@@ -220,13 +220,17 @@ class SSEConnectionManager {
 
 // 导出单例实例（使用 globalThis 确保热重载时保持同一实例）
 // 这样即使模块被重新加载，也能访问到同一个连接管理器
-const GLOBAL_KEY = Symbol.for("__sseConnectionManager__");
+const GLOBAL_KEY = "__sseConnectionManager__";
+const globalStore = globalThis as unknown as Record<
+  string,
+  SSEConnectionManager
+>;
 
-if (!globalThis[GLOBAL_KEY]) {
-  globalThis[GLOBAL_KEY] = new SSEConnectionManager();
+if (!globalStore[GLOBAL_KEY]) {
+  globalStore[GLOBAL_KEY] = new SSEConnectionManager();
   log.info("init", "创建新的 SSE 连接管理器实例");
 } else {
   log.info("init", "复用已有的 SSE 连接管理器实例");
 }
 
-export const sseConnectionManager = globalThis[GLOBAL_KEY] as SSEConnectionManager;
+export const sseConnectionManager = globalStore[GLOBAL_KEY];

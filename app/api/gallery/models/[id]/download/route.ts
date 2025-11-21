@@ -7,9 +7,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandler, AppError } from "@/lib/utils/errors";
 import {
-  findAssetById,
-  incrementDownloadCount,
-} from "@/lib/repositories/user-asset.repository";
+  findModelById,
+  incrementModelCount,
+} from "@/lib/repositories/model.repository";
 
 // POST /api/gallery/models/[id]/download - 增加下载计数
 export const POST = withErrorHandler(
@@ -22,13 +22,13 @@ export const POST = withErrorHandler(
     const { id } = params;
 
     // 检查模型是否存在
-    const model = await findAssetById(id);
+    const model = await findModelById(id);
     if (!model) {
       throw new AppError("NOT_FOUND", `模型不存在: ${id}`);
     }
 
     // 增加下载计数
-    await incrementDownloadCount(id);
+    await incrementModelCount(id, "downloadCount");
 
     // 返回成功响应
     return NextResponse.json({

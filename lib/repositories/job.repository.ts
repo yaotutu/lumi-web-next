@@ -155,11 +155,19 @@ export async function findModelJobById(jobId: string) {
     include: {
       model: {
         include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
           request: {
             select: {
               id: true,
               userId: true,
               prompt: true,
+              status: true,
+              phase: true,
             },
           },
           sourceImage: {
@@ -184,7 +192,21 @@ export async function findModelJobByModelId(modelId: string) {
     include: {
       model: {
         include: {
-          request: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+          request: {
+            select: {
+              id: true,
+              userId: true,
+              prompt: true,
+              status: true,
+              phase: true,
+            },
+          },
           sourceImage: true,
         },
       },
@@ -214,7 +236,21 @@ export async function findModelJobsByStatus(
     include: {
       model: {
         include: {
-          request: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+          request: {
+            select: {
+              id: true,
+              userId: true,
+              prompt: true,
+              status: true,
+              phase: true,
+            },
+          },
           sourceImage: true,
         },
       },

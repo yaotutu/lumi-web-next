@@ -7,24 +7,28 @@
  * - 不包含业务逻辑
  *
  * 使用示例：
- * import { GenerationRequestRepository, GeneratedModelRepository } from '@/lib/repositories';
+ * import { GenerationRequestRepository, ModelRepository } from '@/lib/repositories';
  *
  * const request = await GenerationRequestRepository.findRequestById(id);
- * const model = await GeneratedModelRepository.createModelWithJob({ ... });
+ * const model = await ModelRepository.createModelWithJob({ ... });
  */
 
 import * as GenerationRequestRepository from "./generation-request.repository";
 import * as GeneratedImageRepository from "./generated-image.repository";
-import * as GeneratedModelRepository from "./generated-model.repository";
+import * as ModelRepository from "./model.repository";
+import * as ModelInteractionRepository from "./model-interaction.repository";
 import * as JobRepository from "./job.repository";
-import * as UserAssetRepository from "./user-asset.repository";
 import * as QueueConfigRepository from "./queue-config.repository";
+import * as UserRepository from "./user.repository";
+import * as EmailVerificationRepository from "./email-verification.repository";
 
 export {
   GenerationRequestRepository,
   GeneratedImageRepository,
-  GeneratedModelRepository,
+  ModelRepository,
+  ModelInteractionRepository,
   JobRepository,
-  UserAssetRepository,
   QueueConfigRepository,
+  UserRepository,
+  EmailVerificationRepository,
 };

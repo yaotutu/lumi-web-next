@@ -26,9 +26,11 @@ export async function findImageById(imageId: string) {
           id: true,
           userId: true,
           prompt: true,
+          status: true,
+          phase: true,
         },
       },
-      generatedModel: {
+      model: {
         select: {
           id: true,
           modelUrl: true,
@@ -49,7 +51,7 @@ export async function findImagesByRequestId(requestId: string) {
     where: { requestId },
     orderBy: { index: "asc" },
     include: {
-      generatedModel: {
+      model: {
         select: {
           id: true,
           modelUrl: true,
@@ -95,6 +97,8 @@ export async function findImagesByStatus(
           id: true,
           userId: true,
           prompt: true,
+          status: true,
+          phase: true,
         },
       },
       ...(includeJob && {
@@ -142,11 +146,9 @@ export async function findPendingImagesByRequestId(requestId: string) {
 export async function createImage(data: {
   requestId: string;
   index: number;
-  imageUrl?: string | null; // 可选，生成后才有
+  imageUrl?: string | null;
   imagePrompt?: string;
-  imageStatus?: ImageStatus; // 默认 PENDING
-  providerTaskId?: string;
-  providerRequestId?: string;
+  imageStatus?: ImageStatus;
 }): Promise<GeneratedImage> {
   return prisma.generatedImage.create({
     data: {
@@ -155,8 +157,6 @@ export async function createImage(data: {
       imageUrl: data.imageUrl ?? null,
       imagePrompt: data.imagePrompt,
       imageStatus: data.imageStatus ?? "PENDING",
-      providerTaskId: data.providerTaskId,
-      providerRequestId: data.providerRequestId,
     },
   });
 }
@@ -171,8 +171,6 @@ export async function createImages(
     imageUrl?: string | null;
     imagePrompt?: string;
     imageStatus?: ImageStatus;
-    providerTaskId?: string;
-    providerRequestId?: string;
   }>,
 ): Promise<void> {
   await prisma.generatedImage.createMany({
@@ -182,8 +180,6 @@ export async function createImages(
       imageUrl: img.imageUrl ?? null,
       imagePrompt: img.imagePrompt,
       imageStatus: img.imageStatus ?? "PENDING",
-      providerTaskId: img.providerTaskId,
-      providerRequestId: img.providerRequestId,
     })),
   });
 }

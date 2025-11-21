@@ -36,7 +36,7 @@ export class LocalStorageAdapter extends BaseStorageProvider {
    * 保存图片到本地文件系统
    */
   protected async saveTaskImageImpl(params: SaveImageParams): Promise<string> {
-    const dir = path.join(STORAGE_ROOT, "images", params.taskId);
+    const dir = path.join(STORAGE_ROOT, "images", params.requestId);
 
     // 确保目录存在
     if (!fs.existsSync(dir)) {
@@ -63,7 +63,7 @@ export class LocalStorageAdapter extends BaseStorageProvider {
     fs.writeFileSync(filepath, buffer);
 
     // 返回可访问的 URL (相对于 public 目录)
-    return `/generated/images/${params.taskId}/${filename}`;
+    return `/generated/images/${params.requestId}/${filename}`;
   }
 
   /**
@@ -77,7 +77,7 @@ export class LocalStorageAdapter extends BaseStorageProvider {
     }
 
     const format = params.format || "glb";
-    const filename = `${params.taskId}.${format}`;
+    const filename = `${params.modelId}.${format}`;
     const filepath = path.join(dir, filename);
 
     fs.writeFileSync(filepath, params.modelData);
@@ -89,7 +89,7 @@ export class LocalStorageAdapter extends BaseStorageProvider {
    * 保存通用文件到本地文件系统
    */
   protected async saveFileImpl(params: SaveFileParams): Promise<string> {
-    const dir = path.join(STORAGE_ROOT, "models", params.taskId);
+    const dir = path.join(STORAGE_ROOT, "models", params.modelId);
 
     // 确保目录存在
     if (!fs.existsSync(dir)) {
@@ -99,31 +99,21 @@ export class LocalStorageAdapter extends BaseStorageProvider {
     const filepath = path.join(dir, params.fileName);
     fs.writeFileSync(filepath, params.fileData);
 
-    return `/generated/models/${params.taskId}/${params.fileName}`;
+    return `/generated/models/${params.modelId}/${params.fileName}`;
   }
 
   /**
-   * 删除任务的所有资源
+   * 删除请求的所有资源
    */
-  protected async deleteTaskResourcesImpl(taskId: string): Promise<void> {
+  protected async deleteRequestResourcesImpl(requestId: string): Promise<void> {
     // 删除图片目录
-    const imageDir = path.join(STORAGE_ROOT, "images", taskId);
+    const imageDir = path.join(STORAGE_ROOT, "images", requestId);
     if (fs.existsSync(imageDir)) {
       fs.rmSync(imageDir, { recursive: true, force: true });
     }
 
-    // 删除模型文件（尝试常见格式）
-    const formats = ["glb", "gltf", "fbx"];
-    for (const format of formats) {
-      const modelPath = path.join(
-        STORAGE_ROOT,
-        "models",
-        `${taskId}.${format}`,
-      );
-      if (fs.existsSync(modelPath)) {
-        fs.unlinkSync(modelPath);
-      }
-    }
+    // 注意：模型文件现在使用 modelId 而非 requestId，需要分开处理
+    // 模型文件的删除应该在 Model 删除时处理
   }
 
   /**

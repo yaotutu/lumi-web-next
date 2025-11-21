@@ -16,7 +16,7 @@ const log = createLogger("ImageStorageUtil");
  * 从远程 URL 下载图片并上传到存储服务
  *
  * @param remoteUrl 远程图片 URL（如：阿里云/SiliconFlow 返回的临时 URL）
- * @param taskId 任务 ID
+ * @param requestId 生成请求 ID
  * @param index 图片索引 (0-3)
  * @returns 存储后的 URL（本地路径或 COS URL）
  *
@@ -24,18 +24,18 @@ const log = createLogger("ImageStorageUtil");
  */
 export async function downloadAndUploadImage(
   remoteUrl: string,
-  taskId: string,
+  requestId: string,
   index: number,
 ): Promise<string> {
   log.info("downloadAndUploadImage", "开始下载并上传图片", {
-    taskId,
+    requestId,
     index,
     remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
   });
 
   try {
     // 1. 下载图片到 Buffer
-    log.info("downloadAndUploadImage", "正在下载图片", { taskId, index });
+    log.info("downloadAndUploadImage", "正在下载图片", { requestId, index });
 
     const response = await fetch(remoteUrl);
 
@@ -49,7 +49,7 @@ export async function downloadAndUploadImage(
     const contentType = response.headers.get("content-type");
     if (contentType && !contentType.startsWith("image/")) {
       log.warn("downloadAndUploadImage", "响应的 Content-Type 不是图片类型", {
-        taskId,
+        requestId,
         index,
         contentType,
       });
@@ -60,7 +60,7 @@ export async function downloadAndUploadImage(
     const imageBuffer = Buffer.from(arrayBuffer);
 
     log.info("downloadAndUploadImage", "图片下载成功", {
-      taskId,
+      requestId,
       index,
       size: imageBuffer.length,
       sizeKB: (imageBuffer.length / 1024).toFixed(2),
@@ -70,19 +70,19 @@ export async function downloadAndUploadImage(
     const storageProvider = createStorageProvider();
 
     log.info("downloadAndUploadImage", "正在上传到存储服务", {
-      taskId,
+      requestId,
       index,
       provider: storageProvider.getName(),
     });
 
     const storageUrl = await storageProvider.saveTaskImage({
-      taskId,
+      requestId,
       index,
       imageData: imageBuffer,
     });
 
     log.info("downloadAndUploadImage", "图片上传成功", {
-      taskId,
+      requestId,
       index,
       storageUrl,
       provider: storageProvider.getName(),
@@ -91,7 +91,7 @@ export async function downloadAndUploadImage(
     return storageUrl;
   } catch (error) {
     log.error("downloadAndUploadImage", "下载或上传图片失败", error, {
-      taskId,
+      requestId,
       index,
       remoteUrl,
     });
@@ -103,29 +103,33 @@ export async function downloadAndUploadImage(
  * 批量下载并上传图片
  *
  * @param remoteUrls 远程图片 URL 列表
- * @param taskId 任务 ID
+ * @param requestId 生成请求 ID
  * @returns 存储后的 URL 列表
  *
  * @throws 如果任何一张图片下载或上传失败
  */
 export async function downloadAndUploadImages(
   remoteUrls: string[],
-  taskId: string,
+  requestId: string,
 ): Promise<string[]> {
   log.info("downloadAndUploadImages", "开始批量下载并上传图片", {
-    taskId,
+    requestId,
     count: remoteUrls.length,
   });
 
   const storageUrls: string[] = [];
 
   for (let i = 0; i < remoteUrls.length; i++) {
-    const storageUrl = await downloadAndUploadImage(remoteUrls[i], taskId, i);
+    const storageUrl = await downloadAndUploadImage(
+      remoteUrls[i],
+      requestId,
+      i,
+    );
     storageUrls.push(storageUrl);
   }
 
   log.info("downloadAndUploadImages", "批量上传完成", {
-    taskId,
+    requestId,
     count: storageUrls.length,
   });
 
@@ -380,17 +384,41 @@ async function handleObjZipArchive(
         // 替换 MTL 文件中的贴图路径
         for (const [originalName, newName] of fileNameMap) {
           // 转义特殊字符用于正则表达式
-          const escapedOriginalName = originalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const escapedOriginalName = originalName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&",
+          );
 
           // 替换各种可能的贴图声明格式
           const replacements = [
-            { pattern: new RegExp(`map_Kd\\s+${escapedOriginalName}`, 'g'), replacement: `map_Kd ${newName}` },     // 漫反射贴图
-            { pattern: new RegExp(`map_Ka\\s+${escapedOriginalName}`, 'g'), replacement: `map_Ka ${newName}` },     // 环境光贴图
-            { pattern: new RegExp(`map_Ks\\s+${escapedOriginalName}`, 'g'), replacement: `map_Ks ${newName}` },     // 高光贴图
-            { pattern: new RegExp(`map_Bump\\s+${escapedOriginalName}`, 'g'), replacement: `map_Bump ${newName}` }, // 法线贴图
-            { pattern: new RegExp(`map_d\\s+${escapedOriginalName}`, 'g'), replacement: `map_d ${newName}` },       // 透明度贴图
-            { pattern: new RegExp(`bump\\s+${escapedOriginalName}`, 'g'), replacement: `bump ${newName}` },         // 简化法线贴图
-            { pattern: new RegExp(escapedOriginalName, 'g'), replacement: newName }                                  // 直接文件名引用
+            {
+              pattern: new RegExp(`map_Kd\\s+${escapedOriginalName}`, "g"),
+              replacement: `map_Kd ${newName}`,
+            }, // 漫反射贴图
+            {
+              pattern: new RegExp(`map_Ka\\s+${escapedOriginalName}`, "g"),
+              replacement: `map_Ka ${newName}`,
+            }, // 环境光贴图
+            {
+              pattern: new RegExp(`map_Ks\\s+${escapedOriginalName}`, "g"),
+              replacement: `map_Ks ${newName}`,
+            }, // 高光贴图
+            {
+              pattern: new RegExp(`map_Bump\\s+${escapedOriginalName}`, "g"),
+              replacement: `map_Bump ${newName}`,
+            }, // 法线贴图
+            {
+              pattern: new RegExp(`map_d\\s+${escapedOriginalName}`, "g"),
+              replacement: `map_d ${newName}`,
+            }, // 透明度贴图
+            {
+              pattern: new RegExp(`bump\\s+${escapedOriginalName}`, "g"),
+              replacement: `bump ${newName}`,
+            }, // 简化法线贴图
+            {
+              pattern: new RegExp(escapedOriginalName, "g"),
+              replacement: newName,
+            }, // 直接文件名引用
           ];
 
           replacements.forEach(({ pattern, replacement }) => {
@@ -407,7 +435,7 @@ async function handleObjZipArchive(
             modelId,
             originalFile: fileName,
             updatedPaths: updatedCount,
-            textureFiles: Array.from(fileNameMap.keys())
+            textureFiles: Array.from(fileNameMap.keys()),
           });
           // 使用更新后的内容
           fileBuffer = Buffer.from(mtlContent, "utf8");

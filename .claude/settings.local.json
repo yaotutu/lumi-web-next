@@ -10,7 +10,11 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Bash(node:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

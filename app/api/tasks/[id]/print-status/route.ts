@@ -1,5 +1,7 @@
 /**
  * 打印状态查询接口
+ *
+ * 新架构：1 Request : 1 Model
  */
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -20,22 +22,25 @@ export const GET = withErrorHandler(
     // 1. 获取请求详情
     const request = await GenerationRequestService.getRequestById(id);
 
-    // 2. 找到已完成的模型
-    const completedModel = request.generatedModels?.find(
-      (model) => model.generationJob?.status === "COMPLETED" && model.modelUrl,
-    );
+    // 2. 新架构：1 Request : 1 Model
+    const model = request.model;
 
-    if (!completedModel) {
-      throw new AppError("NOT_FOUND", "未找到已完成的3D模型");
+    if (!model) {
+      throw new AppError("NOT_FOUND", "未找到关联的3D模型");
+    }
+
+    // 检查模型是否已完成
+    if (model.generationJob?.status !== "COMPLETED" || !model.modelUrl) {
+      throw new AppError("INVALID_STATE", "3D模型尚未生成完成");
     }
 
     // 3. 检查是否有 sliceTaskId
-    if (!completedModel.sliceTaskId) {
+    if (!model.sliceTaskId) {
       return NextResponse.json({
         success: true,
         data: {
           requestId: id,
-          modelId: completedModel.id,
+          modelId: model.id,
           hasPrintTask: false,
           message: "尚未提交打印任务",
         },
@@ -43,10 +48,10 @@ export const GET = withErrorHandler(
     }
 
     // 4. 调用外部打印服务查询状态
-    const printServiceUrl = `http://192.168.110.214:80/api/v1/tasks/${completedModel.sliceTaskId}`;
+    const printServiceUrl = `http://192.168.110.214:80/api/v1/tasks/${model.sliceTaskId}`;
 
     console.log(
-      `🔍 [打印状态] 查询打印任务状态: sliceTaskId=${completedModel.sliceTaskId}`,
+      `🔍 [打印状态] 查询打印任务状态: sliceTaskId=${model.sliceTaskId}`,
     );
 
     try {
@@ -59,7 +64,7 @@ export const GET = withErrorHandler(
 
       if (!response.ok) {
         console.error(`❌ [打印状态] 查询失败:`, {
-          sliceTaskId: completedModel.sliceTaskId,
+          sliceTaskId: model.sliceTaskId,
           statusCode: response.status,
           responseBody: responseText,
         });
@@ -78,8 +83,8 @@ export const GET = withErrorHandler(
         success: true,
         data: {
           requestId: id,
-          modelId: completedModel.id,
-          sliceTaskId: completedModel.sliceTaskId,
+          modelId: model.id,
+          sliceTaskId: model.sliceTaskId,
           hasPrintTask: true,
           printStatus,
         },

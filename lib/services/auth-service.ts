@@ -130,10 +130,7 @@ export async function verifyCodeAndLogin(
   const codeRecord = await findLatestValidCode(email);
 
   if (!codeRecord) {
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "验证码不存在或已过期，请重新获取",
-    );
+    throw new AppError("VALIDATION_ERROR", "验证码不存在或已过期，请重新获取");
   }
 
   // 2. 验证验证码是否匹配

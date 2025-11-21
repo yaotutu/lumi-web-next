@@ -7,9 +7,10 @@
  * - 使用 WorkerConfigManager 获取动态配置
  *
  * 架构原则：
- * - API 层创建 GeneratedModel 和 ModelGenerationJob
+ * - API 层创建 Model 和 ModelGenerationJob
  * - Worker 层监听 Job 状态并执行 3D 生成
- * - Job 状态独立于 GeneratedModel 状态
+ * - Job 状态独立于 Model 状态
+ * - 完成后更新 GenerationRequest 状态
  */
 
 import { prisma } from "@/lib/db/prisma";
@@ -26,7 +27,6 @@ import {
   QUEUE_NAMES,
   type WorkerConfig,
 } from "./worker-config-manager";
-import { createAssetFromModel } from "@/lib/repositories/user-asset.repository";
 import type { ModelGenerationJob } from "@prisma/client";
 import { sseConnectionManager } from "@/lib/sse/connection-manager";
 
@@ -124,14 +124,13 @@ async function detectTimeoutJobs(): Promise<void> {
               status: "RETRYING",
               retryCount: job.retryCount + 1,
               nextRetryAt,
-              timeoutedAt: now,
               errorMessage: "任务执行超时",
               errorCode: "TIMEOUT",
             },
           });
 
-          // 更新 GeneratedModel 状态
-          await prisma.generatedModel.update({
+          // 更新 Model 状态
+          await prisma.model.update({
             where: { id: job.modelId },
             data: {
               errorMessage: "任务执行超时，正在重试",
@@ -150,20 +149,29 @@ async function detectTimeoutJobs(): Promise<void> {
             data: {
               status: "FAILED",
               failedAt: now,
-              timeoutedAt: now,
               errorMessage: "任务执行超时，已达最大重试次数",
               errorCode: "MAX_RETRIES_EXCEEDED",
             },
           });
 
-          // 更新 GeneratedModel 状态
-          await prisma.generatedModel.update({
+          // 更新 Model 状态
+          await prisma.model.update({
             where: { id: job.modelId },
             data: {
               failedAt: now,
               errorMessage: "3D 模型生成超时失败",
             },
           });
+
+          // 更新 Request 状态
+          if (job.model.requestId) {
+            await prisma.generationRequest.update({
+              where: { id: job.model.requestId },
+              data: {
+                status: "MODEL_FAILED",
+              },
+            });
+          }
         }
       }
     }
@@ -270,8 +278,8 @@ async function processJob(
     model: {
       id: string;
       name: string;
-      requestId: string;
-      sourceImage: { id: string; imageUrl: string | null };
+      requestId: string | null;
+      sourceImage: { id: string; imageUrl: string | null } | null;
     };
   },
 ): Promise<void> {
@@ -302,15 +310,24 @@ async function processJob(
         status: "RUNNING",
         startedAt: new Date(),
         timeoutAt,
-        workerNodeId: process.env.WORKER_NODE_ID || "default",
       },
     });
 
+    // 更新 Request 状态为 MODEL_GENERATING
+    if (job.model.requestId) {
+      await prisma.generationRequest.update({
+        where: { id: job.model.requestId },
+        data: {
+          status: "MODEL_GENERATING",
+        },
+      });
+    }
+
     // 2. 验证源图片 URL 是否存在
-    const sourceImageUrl = job.model.sourceImage.imageUrl;
+    const sourceImageUrl = job.model.sourceImage?.imageUrl;
     if (!sourceImageUrl) {
       throw new Error(
-        `源图片 URL 缺失: sourceImageId=${job.model.sourceImage.id}`,
+        `源图片 URL 缺失: sourceImageId=${job.model.sourceImage?.id}`,
       );
     }
 
@@ -331,23 +348,29 @@ async function processJob(
       where: { id: job.id },
       data: {
         providerJobId: tencentResponse.jobId,
-        providerRequestId: tencentResponse.requestId,
         providerName: "tencent",
       },
     });
 
     // 4.1 推送 SSE 事件：模型开始生成
-    await sseConnectionManager.broadcast(
-      job.model.requestId,
-      "model:generating",
-      {
-        modelId: job.modelId,
-        providerJobId: tencentResponse.jobId,
-      },
-    );
+    if (job.model.requestId) {
+      await sseConnectionManager.broadcast(
+        job.model.requestId,
+        "model:generating",
+        {
+          modelId: job.modelId,
+          providerJobId: tencentResponse.jobId,
+        },
+      );
+    }
 
     // 5. 轮询 3D 生成状态直到完成
-    await pollModel3DStatus(job.id, job.modelId, tencentResponse.jobId);
+    await pollModel3DStatus(
+      job.id,
+      job.modelId,
+      tencentResponse.jobId,
+      job.model.requestId,
+    );
 
     log.info("processJob", "3D 模型生成完成", {
       jobId: job.id,
@@ -393,12 +416,11 @@ async function processJob(
           failedAt: new Date(),
           errorMessage: errorMsg,
           errorCode,
-          errorStack: error instanceof Error ? error.stack : undefined,
         },
       });
 
-      // 更新 GeneratedModel 状态
-      await prisma.generatedModel.update({
+      // 更新 Model 状态
+      await prisma.model.update({
         where: { id: job.modelId },
         data: {
           errorMessage: `${errorMsg}（正在重试）`,
@@ -419,12 +441,11 @@ async function processJob(
           failedAt: new Date(),
           errorMessage: errorMsg,
           errorCode,
-          errorStack: error instanceof Error ? error.stack : undefined,
         },
       });
 
-      // 更新 GeneratedModel 状态
-      await prisma.generatedModel.update({
+      // 更新 Model 状态
+      await prisma.model.update({
         where: { id: job.modelId },
         data: {
           failedAt: new Date(),
@@ -432,11 +453,25 @@ async function processJob(
         },
       });
 
-      // 推送 SSE 事件：模型生成失败
-      await sseConnectionManager.broadcast(job.model.requestId, "model:failed", {
-        modelId: job.modelId,
-        errorMessage: errorMsg,
-      });
+      // 更新 Request 状态
+      if (job.model.requestId) {
+        await prisma.generationRequest.update({
+          where: { id: job.model.requestId },
+          data: {
+            status: "MODEL_FAILED",
+          },
+        });
+
+        // 推送 SSE 事件：模型生成失败
+        await sseConnectionManager.broadcast(
+          job.model.requestId,
+          "model:failed",
+          {
+            modelId: job.modelId,
+            errorMessage: errorMsg,
+          },
+        );
+      }
     }
   } finally {
     processingJobs.delete(job.id);
@@ -450,22 +485,11 @@ async function pollModel3DStatus(
   jobId: string,
   modelId: string,
   providerJobId: string,
+  requestId: string | null,
 ): Promise<void> {
   const startTime = Date.now();
   let pollCount = 0;
   const model3DProvider = createModel3DProvider();
-
-  // 查询 model 获取 requestId（用于 SSE 推送）
-  const model = await prisma.generatedModel.findUnique({
-    where: { id: modelId },
-    select: { requestId: true },
-  });
-
-  if (!model) {
-    throw new Error(`模型不存在: modelId=${modelId}`);
-  }
-
-  const { requestId } = model;
 
   log.info("pollModel3DStatus", "开始轮询 3D 生成状态", {
     jobId,
@@ -513,11 +537,13 @@ async function pollModel3DStatus(
       });
 
       // 推送 SSE 事件：模型生成进度更新
-      await sseConnectionManager.broadcast(requestId, "model:progress", {
-        modelId,
-        progress,
-        status: status.status,
-      });
+      if (requestId) {
+        await sseConnectionManager.broadcast(requestId, "model:progress", {
+          modelId,
+          progress,
+          status: status.status,
+        });
+      }
     }
 
     // 处理完成状态
@@ -602,8 +628,8 @@ async function pollModel3DStatus(
         },
       });
 
-      // 更新 GeneratedModel 状态
-      await prisma.generatedModel.update({
+      // 更新 Model 状态
+      await prisma.model.update({
         where: { id: modelId },
         data: {
           modelUrl: storageUrl,
@@ -614,43 +640,23 @@ async function pollModel3DStatus(
         },
       });
 
-      // 推送 SSE 事件：模型生成完成
-      await sseConnectionManager.broadcast(requestId, "model:completed", {
-        modelId,
-        modelUrl: storageUrl,
-        previewImageUrl: previewImageStorageUrl,
-        format: MODEL_FORMAT,
-      });
-
-      // 自动创建 UserAsset 并发布到模型画廊
-      try {
-        const generatedModel = await prisma.generatedModel.findUnique({
-          where: { id: modelId },
-          include: { request: true },
+      // 更新 Request 状态为 COMPLETED
+      if (requestId) {
+        await prisma.generationRequest.update({
+          where: { id: requestId },
+          data: {
+            status: "COMPLETED",
+            phase: "COMPLETED",
+            completedAt,
+          },
         });
 
-        if (generatedModel) {
-          await createAssetFromModel({
-            userId: generatedModel.request.userId,
-            generatedModelId: modelId,
-            name: generatedModel.name,
-            modelUrl: storageUrl,
-            previewImageUrl: previewImageStorageUrl,
-            format: MODEL_FORMAT,
-          });
-
-          log.info("pollModel3DStatus", "UserAsset 已创建并发布到模型画廊", {
-            jobId,
-            modelId,
-            userId: generatedModel.request.userId,
-          });
-        }
-      } catch (error) {
-        // UserAsset 创建失败不影响主流程
-        log.warn("pollModel3DStatus", "UserAsset 创建失败", {
-          jobId,
+        // 推送 SSE 事件：模型生成完成
+        await sseConnectionManager.broadcast(requestId, "model:completed", {
           modelId,
-          error: error instanceof Error ? error.message : String(error),
+          modelUrl: storageUrl,
+          previewImageUrl: previewImageStorageUrl,
+          format: MODEL_FORMAT,
         });
       }
 

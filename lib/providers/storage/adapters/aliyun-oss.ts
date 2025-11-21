@@ -55,7 +55,9 @@ export class AliyunOSSAdapter extends BaseStorageProvider {
     );
   }
 
-  protected async deleteTaskResourcesImpl(_taskId: string): Promise<void> {
+  protected async deleteRequestResourcesImpl(
+    _requestId: string,
+  ): Promise<void> {
     throw new Error(
       "阿里云 OSS 适配器尚未实现，请先安装 ali-oss SDK 或使用本地存储",
     );

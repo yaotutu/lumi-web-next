@@ -2,11 +2,13 @@
  * 测试 API：创建 3D 模型生成任务
  *
  * POST /api/test/models/generate - 为图片创建 3D 模型生成任务
+ *
+ * 新架构：1 Request : 1 Model，接受 requestId 和 imageIndex
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/utils/errors";
-import * as GeneratedModelService from "@/lib/services/generated-model-service";
+import * as ModelService from "@/lib/services/model-service";
 
 /**
  * POST /api/test/models/generate
@@ -15,26 +17,23 @@ import * as GeneratedModelService from "@/lib/services/generated-model-service";
  * Body:
  * {
  *   "requestId": "clxxx",
- *   "sourceImageId": "clxxx"
+ *   "imageIndex": 0  // 图片索引 (0-3)
  * }
  */
 export const POST = withErrorHandler(async (request: NextRequest) => {
   const body = await request.json();
-  const { requestId, sourceImageId } = body;
+  const { requestId, imageIndex } = body;
 
   // 简单验证
-  if (!requestId || !sourceImageId) {
+  if (!requestId || typeof imageIndex !== "number") {
     return NextResponse.json(
-      { success: false, error: "缺少必需参数" },
+      { success: false, error: "缺少必需参数 requestId 或 imageIndex" },
       { status: 400 },
     );
   }
 
-  // 创建模型和 Job（同时创建 ModelGenerationJob）
-  const model = await GeneratedModelService.createModelForImage(
-    requestId,
-    sourceImageId,
-  );
+  // 新架构：使用 createModelForRequest，接受 requestId 和 imageIndex
+  const model = await ModelService.createModelForRequest(requestId, imageIndex);
 
   return NextResponse.json({
     success: true,

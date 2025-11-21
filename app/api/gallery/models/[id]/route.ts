@@ -7,9 +7,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandler, AppError } from "@/lib/utils/errors";
 import {
-  findAssetById,
-  incrementViewCount,
-} from "@/lib/repositories/user-asset.repository";
+  findModelById,
+  incrementModelCount,
+} from "@/lib/repositories/model.repository";
 
 // GET /api/gallery/models/[id] - 获取模型详情
 export const GET = withErrorHandler(
@@ -22,7 +22,7 @@ export const GET = withErrorHandler(
     const { id } = params;
 
     // 查询模型详情
-    const model = await findAssetById(id);
+    const model = await findModelById(id);
 
     // 如果模型不存在，抛出 404 错误
     if (!model) {
@@ -30,7 +30,7 @@ export const GET = withErrorHandler(
     }
 
     // 增加浏览计数（异步执行，不阻塞响应）
-    incrementViewCount(id).catch((error) => {
+    incrementModelCount(id, "viewCount").catch((error: Error) => {
       console.error("增加浏览计数失败:", error);
     });
 
