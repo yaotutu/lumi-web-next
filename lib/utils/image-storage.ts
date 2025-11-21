@@ -338,7 +338,18 @@ async function handleObjZipArchive(
       files,
     });
 
-    // 3. 遍历所有文件，统一命名并上传到存储服务
+    // 3. 建立文件名映射表，用于更新 MTL 文件中的贴图路径
+    const fileNameMap = new Map<string, string>();
+    for (const fileName of files) {
+      if (zip.files[fileName].dir) continue;
+      const extension = fileName.split(".").pop()?.toLowerCase() || "";
+      if (["png", "jpg", "jpeg"].includes(extension)) {
+        // 原始图片文件名 → 重命名后的文件名
+        fileNameMap.set(fileName, `material.${extension}`);
+      }
+    }
+
+    // 4. 遍历所有文件，统一命名并上传到存储服务
     for (const fileName of files) {
       const file = zip.files[fileName];
 
@@ -346,7 +357,7 @@ async function handleObjZipArchive(
       if (file.dir) continue;
 
       // 获取文件内容
-      const fileBuffer = await file.async("nodebuffer");
+      let fileBuffer = await file.async("nodebuffer");
       const extension = fileName.split(".").pop()?.toLowerCase() || "";
 
       log.info("handleObjZipArchive", `处理文件: ${fileName}`, {
@@ -361,6 +372,46 @@ async function handleObjZipArchive(
         normalizedFileName = "model.obj"; // 统一命名为 model.obj
       } else if (extension === "mtl") {
         normalizedFileName = "material.mtl"; // 统一命名为 material.mtl
+
+        // 处理 MTL 文件内容：更新贴图路径
+        let mtlContent = fileBuffer.toString("utf8");
+        let updatedCount = 0;
+
+        // 替换 MTL 文件中的贴图路径
+        for (const [originalName, newName] of fileNameMap) {
+          // 转义特殊字符用于正则表达式
+          const escapedOriginalName = originalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+          // 替换各种可能的贴图声明格式
+          const replacements = [
+            { pattern: new RegExp(`map_Kd\\s+${escapedOriginalName}`, 'g'), replacement: `map_Kd ${newName}` },     // 漫反射贴图
+            { pattern: new RegExp(`map_Ka\\s+${escapedOriginalName}`, 'g'), replacement: `map_Ka ${newName}` },     // 环境光贴图
+            { pattern: new RegExp(`map_Ks\\s+${escapedOriginalName}`, 'g'), replacement: `map_Ks ${newName}` },     // 高光贴图
+            { pattern: new RegExp(`map_Bump\\s+${escapedOriginalName}`, 'g'), replacement: `map_Bump ${newName}` }, // 法线贴图
+            { pattern: new RegExp(`map_d\\s+${escapedOriginalName}`, 'g'), replacement: `map_d ${newName}` },       // 透明度贴图
+            { pattern: new RegExp(`bump\\s+${escapedOriginalName}`, 'g'), replacement: `bump ${newName}` },         // 简化法线贴图
+            { pattern: new RegExp(escapedOriginalName, 'g'), replacement: newName }                                  // 直接文件名引用
+          ];
+
+          replacements.forEach(({ pattern, replacement }) => {
+            const matches = mtlContent.match(pattern);
+            if (matches) {
+              updatedCount += matches.length;
+              mtlContent = mtlContent.replace(pattern, replacement);
+            }
+          });
+        }
+
+        if (updatedCount > 0) {
+          log.info("handleObjZipArchive", "MTL 文件内容已更新贴图路径", {
+            modelId,
+            originalFile: fileName,
+            updatedPaths: updatedCount,
+            textureFiles: Array.from(fileNameMap.keys())
+          });
+          // 使用更新后的内容
+          fileBuffer = Buffer.from(mtlContent, "utf8");
+        }
       } else if (
         extension === "png" ||
         extension === "jpg" ||
