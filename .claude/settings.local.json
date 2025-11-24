@@ -14,7 +14,15 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(npx tsx:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__wait_for",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__navigate_page",
+      "Bash(npx prisma db execute:*)",
+      "mcp__chrome-devtools__fill",
+      "mcp__chrome-devtools__take_snapshot",
+      "Bash(echo \"# 认证方案对比\n\n## 1. 简单 Cookie + Session\n**优点**:\n- 服务器可主动撤销登录\n- 实现简单\n\n**缺点**:\n- 需要服务器存储状态\n- 扩展性差\n- 不适合微服务架构\n\n## 2. JWT + localStorage\n**优点**:\n- 无状态\n- 支持多端\n\n**缺点**:\n- 容易被 XSS 窃取\n- 需要手动管理 Token\n\n## 3. JWT + HTTP-only Cookie (项目选择)\n**优点**:\n- 无状态 + 安全存储\n- 自动携带，无需手动处理\n- 防止 XSS 攻击\n- 支持分布式部署\n\n**缺点**:\n- Token 无法主动撤销（只能等过期）\n- Cookie 大小限制\")"
     ]
   },
   "enableAllProjectMcpServers": true,

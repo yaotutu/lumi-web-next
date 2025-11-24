@@ -7,6 +7,7 @@ import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
+import { getCurrentUser } from "@/lib/auth-client";
 
 // 材质颜色选项（从 ModelPreview 复制）
 const MATERIAL_COLORS = [
@@ -31,6 +32,7 @@ type UserAsset = {
   quality: string | null;
   viewCount: number;
   likeCount: number;
+  favoriteCount: number;
   downloadCount: number;
   createdAt: string;
   user: {
@@ -57,20 +59,33 @@ export default function GalleryDetailPage({ params }: PageProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [interactionStatus, setInteractionStatus] = useState({
+    isLiked: false,
+    isFavorited: false,
+  });
+  const [currentLikes, setCurrentLikes] = useState(0);
+  const [currentFavorites, setCurrentFavorites] = useState(0);
+  const [interactionLoading, setInteractionLoading] = useState(false);
 
   // 引用
   const model3DViewerRef = useRef<Model3DViewerRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 加载模型详情
+   * 加载模型详情和用户交互状态
    */
   useEffect(() => {
-    const loadModel = async () => {
+    const loadModelAndInteractions = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // 获取用户信息
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+
+        // 加载模型详情
         const response = await fetch(`/api/gallery/models/${id}`);
 
         if (!response.ok) {
@@ -80,7 +95,28 @@ export default function GalleryDetailPage({ params }: PageProps) {
         const data = await response.json();
 
         if (data.success) {
-          setModel(data.data);
+          const modelData = data.data;
+          setModel(modelData);
+          setCurrentLikes(modelData.likeCount);
+          setCurrentFavorites(modelData.favoriteCount || 0);
+
+          // 如果用户已登录，获取交互状态
+          if (currentUser) {
+            try {
+              const interactionResponse = await fetch(`/api/gallery/models/${id}/interactions`);
+              if (interactionResponse.ok) {
+                const interactionData = await interactionResponse.json();
+                if (interactionData.success && interactionData.data.isAuthenticated) {
+                  setInteractionStatus({
+                    isLiked: interactionData.data.isLiked || false,
+                    isFavorited: interactionData.data.isFavorited || false,
+                  });
+                }
+              }
+            } catch (error) {
+              console.error("加载交互状态失败:", error);
+            }
+          }
         } else {
           throw new Error(data.error?.message || "加载失败");
         }
@@ -92,7 +128,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
       }
     };
 
-    loadModel();
+    loadModelAndInteractions();
   }, [id]);
 
   /**
@@ -190,6 +226,71 @@ export default function GalleryDetailPage({ params }: PageProps) {
       setDownloading(false);
     }
   }, [model, id]);
+
+  /**
+   * 处理交互操作（点赞/收藏）
+   */
+  const handleInteraction = useCallback(async (type: "LIKE" | "FAVORITE") => {
+    if (!user) {
+      // 未登录用户，显示提示
+      alert("请先登录后再进行操作");
+      return;
+    }
+
+    if (interactionLoading) return;
+
+    setInteractionLoading(true);
+    const originalStatus = { ...interactionStatus };
+
+    // 乐观更新 UI
+    if (type === "LIKE") {
+      const newIsLiked = !interactionStatus.isLiked;
+      setInteractionStatus(prev => ({ ...prev, isLiked: newIsLiked }));
+      setCurrentLikes(prev => newIsLiked ? prev + 1 : prev - 1);
+    } else {
+      const newIsFavorited = !interactionStatus.isFavorited;
+      setInteractionStatus(prev => ({ ...prev, isFavorited: newIsFavorited }));
+      setCurrentFavorites(prev => newIsFavorited ? prev + 1 : prev - 1);
+    }
+
+    try {
+      const response = await fetch(`/api/gallery/models/${id}/interactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type }),
+      });
+
+      if (!response.ok) {
+        // 回滚乐观更新
+        setInteractionStatus(originalStatus);
+        setCurrentLikes(model.likeCount);
+        setCurrentFavorites(model.favoriteCount || 0);
+        throw new Error("操作失败");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        // 使用服务器返回的最新数据
+        setCurrentLikes(data.data.likeCount);
+        setCurrentFavorites(data.data.favoriteCount);
+        setInteractionStatus(prev => ({
+          ...prev,
+          isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
+          isFavorited: type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+        }));
+      }
+    } catch (error) {
+      console.error("Interaction failed:", error);
+      // 回滚到初始状态
+      setInteractionStatus(originalStatus);
+      setCurrentLikes(model.likeCount);
+      setCurrentFavorites(model.favoriteCount || 0);
+    } finally {
+      setInteractionLoading(false);
+    }
+  }, [user, interactionLoading, interactionStatus, model, id]);
 
   /**
    * 格式化文件大小
@@ -386,18 +487,38 @@ export default function GalleryDetailPage({ params }: PageProps) {
                 </div>
                 <div className="text-xs text-white/50">浏览</div>
               </div>
-              <div className="text-center p-3 rounded-lg bg-white/5">
-                <div className="text-2xl font-bold text-yellow-1">
-                  {model.likeCount}
+
+              {/* 点赞按钮 */}
+              <button
+                type="button"
+                onClick={() => handleInteraction("LIKE")}
+                disabled={interactionLoading}
+                className={`text-center p-3 rounded-lg bg-white/5 transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  interactionStatus.isLiked ? 'bg-red-500/10 border border-red-500/30' : ''
+                }`}
+                title={user ? "点赞" : "请先登录"}
+              >
+                <div className={`text-2xl font-bold ${interactionStatus.isLiked ? 'text-red-500' : 'text-yellow-1'}`}>
+                  {currentLikes}
                 </div>
                 <div className="text-xs text-white/50">点赞</div>
-              </div>
-              <div className="text-center p-3 rounded-lg bg-white/5">
-                <div className="text-2xl font-bold text-yellow-1">
-                  {model.downloadCount}
+              </button>
+
+              {/* 收藏按钮 */}
+              <button
+                type="button"
+                onClick={() => handleInteraction("FAVORITE")}
+                disabled={interactionLoading}
+                className={`text-center p-3 rounded-lg bg-white/5 transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  interactionStatus.isFavorited ? 'bg-yellow-500/10 border border-yellow-500/30' : ''
+                }`}
+                title={user ? "收藏" : "请先登录"}
+              >
+                <div className={`text-2xl font-bold ${interactionStatus.isFavorited ? 'text-yellow-500' : 'text-yellow-1'}`}>
+                  {currentFavorites}
                 </div>
-                <div className="text-xs text-white/50">下载</div>
-              </div>
+                <div className="text-xs text-white/50">收藏</div>
+              </button>
             </div>
 
             {/* 下载按钮 */}

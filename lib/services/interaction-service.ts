@@ -227,3 +227,113 @@ export async function getUserFavoritedModels(
 
   return interactions.map((i) => i.model);
 }
+
+// ============================================
+// 通用交互操作
+// ============================================
+
+/**
+ * 通用交互切换方法（点赞/收藏）
+ * @param params 交互参数
+ * @returns 操作结果
+ */
+export async function toggleInteraction(params: {
+  userId: string;
+  modelId: string;
+  type: InteractionType;
+}): Promise<{ isInteracted: boolean; model: any }> {
+  const { userId, modelId, type } = params;
+
+  // 验证模型存在
+  const model = await ModelRepository.findModelById(modelId);
+  if (!model) {
+    throw new AppError("NOT_FOUND", `模型不存在: ${modelId}`);
+  }
+
+  // 检查是否已有交互记录
+  const hasInteraction = await ModelInteractionRepository.hasInteraction(
+    userId,
+    modelId,
+    type,
+  );
+
+  if (hasInteraction) {
+    // 取消交互
+    await ModelInteractionRepository.deleteInteraction(userId, modelId, type);
+    await ModelRepository.decrementInteractionCount(modelId, type);
+    console.log(`👎 用户 ${userId} 取消了对模型 ${modelId} 的 ${type} 交互`);
+
+    const updatedModel = await ModelRepository.findModelById(modelId);
+    return {
+      isInteracted: false,
+      model: updatedModel!,
+    };
+  } else {
+    // 添加交互
+    await ModelInteractionRepository.createInteraction({
+      userId,
+      modelId,
+      type,
+    });
+    await ModelRepository.incrementInteractionCount(modelId, type);
+    console.log(`👍 用户 ${userId} 对模型 ${modelId} 执行了 ${type} 交互`);
+
+    const updatedModel = await ModelRepository.findModelById(modelId);
+    return {
+      isInteracted: true,
+      model: updatedModel!,
+    };
+  }
+}
+
+/**
+ * 获取用户对单个模型的所有交互
+ * @param userId 用户ID
+ * @param modelId 模型ID
+ * @returns 交互类型数组
+ */
+export async function getUserModelInteractions(
+  userId: string,
+  modelId: string,
+): Promise<InteractionType[]> {
+  const interactions =
+    await ModelInteractionRepository.findUserInteractionsForModel(
+      userId,
+      modelId,
+    );
+
+  return interactions.map((interaction) => interaction.type);
+}
+
+/**
+ * 批量获取用户对多个模型的交互状态
+ * @param userId 用户ID
+ * @param modelIds 模型ID数组
+ * @returns 交互状态映射 { modelId: InteractionType[] }
+ */
+export async function getBatchUserModelInteractions(
+  userId: string,
+  modelIds: string[],
+): Promise<Record<string, InteractionType[]>> {
+  const interactions =
+    await ModelInteractionRepository.findUserInteractionsForModels(
+      userId,
+      modelIds,
+    );
+
+  // 初始化结果对象
+  const result: Record<string, InteractionType[]> = {};
+  for (const modelId of modelIds) {
+    result[modelId] = [];
+  }
+
+  // 填充交互状态
+  for (const interaction of interactions) {
+    if (!result[interaction.modelId]) {
+      result[interaction.modelId] = [];
+    }
+    result[interaction.modelId].push(interaction.type);
+  }
+
+  return result;
+}

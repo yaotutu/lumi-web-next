@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
+import { getCurrentUser } from "@/lib/auth-client";
 
 // UserAsset 类型（从 API 返回）
 type UserAsset = {
@@ -10,6 +11,7 @@ type UserAsset = {
   name: string;
   previewImageUrl: string | null;
   likeCount: number;
+  favoriteCount: number;
   user: {
     id: string;
     name: string | null;
@@ -39,13 +41,24 @@ const collections: Collection[] = [
 /**
  * 将 UserAsset 映射为 GalleryCardProps
  */
-function mapUserAssetToGalleryCard(asset: UserAsset): GalleryCardProps {
+function mapUserAssetToGalleryCard(
+  asset: UserAsset,
+  interactionStatuses?: Record<string, { isLiked: boolean; isFavorited: boolean }>
+): GalleryCardProps {
+  const status = interactionStatuses?.[asset.id];
+
   return {
+    modelId: asset.id,
     image: asset.previewImageUrl || "/placeholder.png",
     title: asset.name,
     author: asset.user?.name || "匿名用户",
     likes: asset.likeCount,
+    favorites: asset.favoriteCount,
     href: `/gallery/${asset.id}`, // 跳转到详情页
+    initialInteractionStatus: status ? {
+      isLiked: status.isLiked,
+      isFavorited: status.isFavorited,
+    } : undefined,
   };
 }
 
@@ -57,9 +70,38 @@ export default function ModelGallery() {
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [interactionStatuses, setInteractionStatuses] = useState<Record<string, { isLiked: boolean; isFavorited: boolean }>>({});
 
   // 每次加载的数量
   const LIMIT = 20;
+
+  /**
+   * 批量加载用户的交互状态
+   * @param modelIds 模型ID数组
+   */
+  const loadInteractionStatuses = useCallback(async (modelIds: string[]) => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      const response = await fetch("/api/gallery/models/batch-interactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ modelIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.isAuthenticated) {
+          setInteractionStatuses(data.data.interactions);
+        }
+      }
+    } catch (error) {
+      console.error("批量加载交互状态失败:", error);
+    }
+  }, []);
 
   /**
    * 加载模型数据
@@ -83,12 +125,20 @@ export default function ModelGallery() {
         const data = await response.json();
 
         if (data.success) {
+          const newModels = data.data.models;
+
           // 更新模型列表
           setModels((prev) =>
-            reset ? data.data.models : [...prev, ...data.data.models],
+            reset ? newModels : [...prev, ...newModels],
           );
           setHasMore(data.data.hasMore);
           setOffset(reset ? LIMIT : currentOffset + LIMIT);
+
+          // 批量加载交互状态
+          if (newModels.length > 0) {
+            const modelIds = newModels.map((model: UserAsset) => model.id);
+            await loadInteractionStatuses(modelIds);
+          }
         } else {
           throw new Error(data.error?.message || "加载失败");
         }
@@ -99,7 +149,7 @@ export default function ModelGallery() {
         setLoading(false);
       }
     },
-    [sortBy, offset],
+    [sortBy, offset, loadInteractionStatuses],
   );
 
   /**
@@ -135,7 +185,7 @@ export default function ModelGallery() {
   // 将模型数据映射为卡片数据
   const galleryItems = models.map((model) => ({
     id: model.id,
-    ...mapUserAssetToGalleryCard(model),
+    ...mapUserAssetToGalleryCard(model, interactionStatuses),
   }));
 
   return (

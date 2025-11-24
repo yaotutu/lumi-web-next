@@ -209,6 +209,8 @@ export async function createModelWithJob(data: {
         previewImageUrl: data.previewImageUrl,
         source: "AI_GENERATED",
         format: "OBJ",
+        visibility: "PUBLIC", // 修改：AI生成的模型默认公开
+        publishedAt: new Date(), // 设置发布时间
       },
     });
 
@@ -333,6 +335,50 @@ export async function unpublishModel(modelId: string): Promise<Model> {
       visibility: "PRIVATE",
       publishedAt: null,
     },
+  });
+}
+
+// ============================================
+// 交互计数管理
+// ============================================
+
+/**
+ * 增加模型的交互计数
+ * @param modelId 模型ID
+ * @param type 交互类型（LIKE 或 FAVORITE）
+ */
+export async function incrementInteractionCount(
+  modelId: string,
+  type: "LIKE" | "FAVORITE",
+): Promise<Model> {
+  const updateData =
+    type === "LIKE"
+      ? { likeCount: { increment: 1 } }
+      : { favoriteCount: { increment: 1 } };
+
+  return prisma.model.update({
+    where: { id: modelId },
+    data: updateData,
+  });
+}
+
+/**
+ * 减少模型的交互计数
+ * @param modelId 模型ID
+ * @param type 交互类型（LIKE 或 FAVORITE）
+ */
+export async function decrementInteractionCount(
+  modelId: string,
+  type: "LIKE" | "FAVORITE",
+): Promise<Model> {
+  const updateData =
+    type === "LIKE"
+      ? { likeCount: { decrement: 1 } }
+      : { favoriteCount: { decrement: 1 } };
+
+  return prisma.model.update({
+    where: { id: modelId },
+    data: updateData,
   });
 }
 
