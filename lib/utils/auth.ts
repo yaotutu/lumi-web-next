@@ -59,7 +59,7 @@ export async function setUserCookie(user: UserSession): Promise<void> {
 
   cookieStore.set(AUTH_COOKIE_NAME, userData, {
     httpOnly: true, // 防止 JavaScript 访问（防 XSS）
-    secure: process.env.NODE_ENV === "production", // 生产环境使用 HTTPS
+    secure: false, // 允许HTTP传输，方便开发和测试
     sameSite: "lax", // 防止 CSRF 攻击
     maxAge: COOKIE_MAX_AGE, // 7 天过期
     path: "/", // 全站可用
@@ -135,7 +135,7 @@ export async function clearUserCookie(): Promise<void> {
   // 保障1: 设置空字符串 + maxAge: 0
   cookieStore.set(AUTH_COOKIE_NAME, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: false, // 允许HTTP传输，方便开发和测试
     sameSite: "lax",
     maxAge: 0, // 立即过期
     path: "/",

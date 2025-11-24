@@ -2,6 +2,10 @@
 
 Lumi Web Next - AI 3D 模型生成平台的 Claude Code 开发指南
 
+> **🚨 重要技术决策记录**
+>
+> 本项目**永久选择纯Cookie认证方案**，严禁后续引入JWT。这是基于项目规模、维护成本、性能优化等多方面考虑的最终决策。所有维护工作必须保持当前的Cookie实现，不得随意更改认证方案。
+
 ## 项目概述
 
 AI 3D 模型生成平台：用户输入文本 → 生成 4 张图片 → 选择图片 → 生成 3D 模型
@@ -10,7 +14,7 @@ AI 3D 模型生成平台：用户输入文本 → 生成 4 张图片 → 选择�
 - Next.js 15.5.4 (App Router + Turbopack) + React 19 + TypeScript 5
 - Prisma 6.16.3 + SQLite (开发) / PostgreSQL (生产)
 - Three.js 0.180.0 + @react-three/fiber + @react-three/drei
-- Zod 4.1.11 + Jose 6.1.0 (JWT) + Pino 10.0.0 (日志)
+- Zod 4.1.11 + Pino 10.0.0 (日志)
 - 外部服务：OpenAI SDK (LLM)、腾讯云 SDK (3D 生成 + COS 存储)
 
 ## 快速开始
@@ -276,6 +280,9 @@ Model3DWorker 监听 → 提交腾讯云任务
 # .env.local
 DATABASE_URL="file:./dev.db"
 NEXT_PUBLIC_MOCK_MODE=true  # 启用 Mock 模式，无需真实 API Key
+
+# 认证（无需JWT配置）
+EMAIL_CODE_EXPIRES_IN=300   # 验证码有效期 5 分钟
 ```
 
 ### 生产环境（完整配置）
@@ -283,9 +290,6 @@ NEXT_PUBLIC_MOCK_MODE=true  # 启用 Mock 模式，无需真实 API Key
 ```bash
 # 数据库
 DATABASE_URL="postgresql://user:pass@host:5432/db"
-
-# 认证
-JWT_SECRET=your-random-secret-key-here
 
 # 图片生成（选择一个）
 SILICONFLOW_API_KEY=sk-xxx                    # 推荐：SiliconFlow
@@ -309,20 +313,31 @@ TENCENT_COS_SECRET_ID=xxx
 TENCENT_COS_SECRET_KEY=xxx
 TENCENT_COS_BUCKET=your-bucket-1234567890
 TENCENT_COS_REGION=ap-beijing
+
+# 认证（无需JWT配置）
+EMAIL_CODE_EXPIRES_IN=300   # 验证码有效期 5 分钟
 ```
 
 ## 认证系统
 
-**邮箱验证码登录**（无密码）：
+**⚠️ 重要决策：纯Cookie认证方案**
+
+本项目经过技术选型，**明确选择纯Cookie认证而非JWT**，原因如下：
+- **项目规模**：小规模团队，用户量有限，无需JWT的分布式优势
+- **维护成本**：Cookie方案简单可靠，减少加密/解密开销
+- **性能优化**：直接JSON解析，比JWT验证更快
+- **调试友好**：Cookie内容可读，便于问题排查
+
+**邮箱验证码登录**（无密码 + 纯Cookie）：
 
 ```typescript
-// 流程：用户输入邮箱 → 发送验证码 → 验证验证码 → 返回 JWT Token
+// 流程：用户输入邮箱 → 发送验证码 → 验证验证码 → 设置Cookie会话
 
 // API 接口
 POST /api/auth/send-code      // 发送验证码
 POST /api/auth/verify-code    // 验证验证码（登录/注册）
 GET  /api/auth/me             // 获取当前用户
-POST /api/auth/logout         // 登出
+POST /api/auth/logout         // 登出（三重Cookie清除）
 
 // 客户端使用
 import { getCurrentUser, logout } from '@/lib/auth-client';
@@ -330,10 +345,23 @@ const user = await getCurrentUser();
 await logout();
 ```
 
+**技术实现**：
+- ✅ **存储格式**：HTTP-only Cookie 存储 JSON 字符串 `{userId, email}`
+- ✅ **Cookie名称**：`auth-session`（非`auth-token`）
+- ✅ **有效期**：7天
+- ✅ **安全设置**：HttpOnly + SameSite=lax + 生产环境Secure
+- ✅ **退出机制**：三重保障确保Cookie完全清除
+
 **特性**：
 - ✅ 开发环境验证码固定为 `0000`
-- ✅ JWT Token 存储在 Cookie，有效期 7 天
+- ✅ 无JWT依赖，性能更优
+- ✅ 简单JSON会话，易于维护
 - ✅ 验证码有效期 5 分钟
+
+**🚫 注意事项**：
+- **不要引入JWT**：严禁重新引入jose或其他JWT库
+- **保持Cookie方案**：后续维护必须保持当前的纯Cookie实现
+- **性能优先**：选择简单直接的方案，避免过度工程化
 
 ## 日志系统
 
