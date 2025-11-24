@@ -9,6 +9,7 @@
 
 import { cookies } from "next/headers";
 import { AppError } from "./errors";
+import { AuthStatus, type AuthCheckResult } from "@/types/auth";
 
 // ============================================
 // 配置常量
@@ -83,8 +84,11 @@ export async function setUserCookie(user: UserSession): Promise<void> {
  * ```
  */
 export async function getCurrentUserId(): Promise<string> {
-  const user = await getCurrentUser();
-  return user.userId;
+  const userSession = await getCurrentUserSilent();
+  if (!userSession) {
+    throw new AppError("UNAUTHORIZED", "用户未登录，请先登录");
+  }
+  return userSession.userId;
 }
 
 /**
@@ -204,4 +208,111 @@ export function requireResourceAccess(resourceUserId: string): void {
   // }
   // 当前实现：始终通过验证
   // 未来实现时需要取消上面的注释
+}
+
+// ============================================
+// 新的认证状态检查函数
+// ============================================
+
+/**
+ * 静默认证检查函数
+ *
+ * **特点**：
+ * - 不抛出异常，将"未登录"视为正常状态
+ * - 返回详细的认证检查结果
+ * - 用于 API 接口和状态管理
+ *
+ * @returns 认证检查结果，包含状态和用户信息
+ *
+ * @example
+ * ```typescript
+ * // 在 API 路由中使用
+ * export const GET = async () => {
+ *   const authResult = await checkAuthStatus();
+ *
+ *   if (authResult.isAuthenticated) {
+ *     // 用户已登录，继续处理
+ *     return NextResponse.json({ user: authResult.user });
+ *   } else {
+ *     // 用户未登录，返回未认证状态
+ *     return NextResponse.json({
+ *       status: authResult.status,
+ *       user: null
+ *     });
+ *   }
+ * };
+ * ```
+ */
+export async function checkAuthStatus(): Promise<AuthCheckResult> {
+  const cookieStore = await cookies();
+  const userData = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+
+  if (!userData) {
+    // 没有 Cookie，用户未登录 - 正常状态
+    return {
+      isAuthenticated: false,
+      status: AuthStatus.UNAUTHENTICATED,
+    };
+  }
+
+  try {
+    const userSession = JSON.parse(userData);
+
+    // 验证数据格式
+    if (!userSession?.userId || !userSession?.email) {
+      // Cookie 数据无效，视为未认证
+      return {
+        isAuthenticated: false,
+        status: AuthStatus.UNAUTHENTICATED,
+      };
+    }
+
+    // 数据格式有效，用户已认证
+    return {
+      isAuthenticated: true,
+      status: AuthStatus.AUTHENTICATED,
+      userSession: {
+        userId: userSession.userId,
+        email: userSession.email,
+      },
+    };
+  } catch (error) {
+    // JSON 解析失败，视为认证错误
+    return {
+      isAuthenticated: false,
+      status: AuthStatus.ERROR,
+    };
+  }
+}
+
+/**
+ * 获取认证状态（简化版本）
+ *
+ * @returns 认证状态枚举值
+ *
+ * @example
+ * ```typescript
+ * const status = await getAuthStatus();
+ * if (status === AuthStatus.AUTHENTICATED) {
+ *   console.log("用户已登录");
+ * }
+ * ```
+ */
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const result = await checkAuthStatus();
+  return result.status;
+}
+
+/**
+ * 获取用户信息（静默版本）
+ *
+ * 与 getCurrentUser() 的区别：
+ * - getCurrentUser(): 未登录时抛出异常
+ * - getCurrentUserSilent(): 未登录时返回 null
+ *
+ * @returns 用户会话信息，未登录时返回 null
+ */
+export async function getCurrentUserSilent(): Promise<UserSession | null> {
+  const result = await checkAuthStatus();
+  return result.userSession || null;
 }

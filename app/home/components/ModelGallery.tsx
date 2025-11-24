@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
-import { getCurrentUser } from "@/lib/auth-client";
+import { useUser } from "@/stores/auth-store";
+import { useModal } from "../hooks/useModal";
+import ModelDetailModal from "./ModelDetailModal";
 
 // UserAsset 类型（从 API 返回）
 type UserAsset = {
@@ -43,6 +45,7 @@ const collections: Collection[] = [
  */
 function mapUserAssetToGalleryCard(
   asset: UserAsset,
+  onCardClick: (modelId: string) => void,
   interactionStatuses?: Record<string, { isLiked: boolean; isFavorited: boolean }>
 ): GalleryCardProps {
   const status = interactionStatuses?.[asset.id];
@@ -54,7 +57,7 @@ function mapUserAssetToGalleryCard(
     author: asset.user?.name || "匿名用户",
     likes: asset.likeCount,
     favorites: asset.favoriteCount,
-    href: `/gallery/${asset.id}`, // 跳转到详情页
+    onClick: onCardClick, // 使用点击回调而不是 href
     initialInteractionStatus: status ? {
       isLiked: status.isLiked,
       isFavorited: status.isFavorited,
@@ -63,6 +66,12 @@ function mapUserAssetToGalleryCard(
 }
 
 export default function ModelGallery() {
+  // 弹窗状态管理
+  const { isOpen, currentModelId, openModal, closeModal } = useModal();
+
+  // 认证状态
+  const user = useUser();
+
   // 状态管理
   const [models, setModels] = useState<UserAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,12 +85,22 @@ export default function ModelGallery() {
   const LIMIT = 20;
 
   /**
+   * 处理模型卡片点击事件
+   * @param modelId 模型ID
+   */
+  const handleCardClick = useCallback(
+    (modelId: string) => {
+      openModal(modelId);
+    },
+    [openModal],
+  );
+
+  /**
    * 批量加载用户的交互状态
    * @param modelIds 模型ID数组
    */
   const loadInteractionStatuses = useCallback(async (modelIds: string[]) => {
     try {
-      const user = await getCurrentUser();
       if (!user) return;
 
       const response = await fetch("/api/gallery/models/batch-interactions", {
@@ -101,7 +120,7 @@ export default function ModelGallery() {
     } catch (error) {
       console.error("批量加载交互状态失败:", error);
     }
-  }, []);
+  }, [user]);
 
   /**
    * 加载模型数据
@@ -185,7 +204,7 @@ export default function ModelGallery() {
   // 将模型数据映射为卡片数据
   const galleryItems = models.map((model) => ({
     id: model.id,
-    ...mapUserAssetToGalleryCard(model, interactionStatuses),
+    ...mapUserAssetToGalleryCard(model, handleCardClick, interactionStatuses),
   }));
 
   return (
@@ -315,6 +334,13 @@ export default function ModelGallery() {
             )}
           </>
         )}
+
+        {/* 模型详情弹窗 */}
+        <ModelDetailModal
+          isOpen={isOpen}
+          modelId={currentModelId}
+          onClose={closeModal}
+        />
       </div>
     </section>
   );

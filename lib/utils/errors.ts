@@ -97,11 +97,19 @@ export function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof AppError) {
     const status = ERROR_STATUS_MAP[error.code];
 
-    log.error("toErrorResponse", "业务错误", error, {
-      errorCode: error.code,
-      statusCode: status,
-      details: error.details,
-    });
+    // 优化：UNAUTHORIZED 降级为 WARN 级别，因为这是正常业务状态
+    if (error.code === "UNAUTHORIZED") {
+      log.warn("toErrorResponse", "用户未认证", {
+        errorCode: error.code,
+        statusCode: status,
+      });
+    } else {
+      log.error("toErrorResponse", "业务错误", error, {
+        errorCode: error.code,
+        statusCode: status,
+        details: error.details,
+      });
+    }
 
     // 构建响应体，条件性添加details字段
     const responseBody: {

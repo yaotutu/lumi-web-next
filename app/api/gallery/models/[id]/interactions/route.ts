@@ -9,7 +9,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { InteractionType } from "@prisma/client";
 import * as InteractionService from "@/lib/services/interaction-service";
-import { getCurrentUser } from "@/lib/utils/auth";
+import { checkAuthStatus } from "@/lib/utils/auth";
 import { z } from "zod";
 
 // 请求体验证 schema
@@ -28,20 +28,27 @@ export const POST = withErrorHandler(
   ) => {
     const { id: modelId } = await params;
 
-    // 获取当前用户会话信息
-    const userSession = await getCurrentUser();
+    // 检查认证状态
+    const authResult = await checkAuthStatus();
+    if (!authResult.isAuthenticated || !authResult.userSession) {
+      return NextResponse.json({
+        success: false,
+        error: "请先登录后再进行操作",
+        code: "UNAUTHORIZED",
+      }, { status: 401 });
+    }
 
     const body = await request.json();
     const { type } = interactionSchema.parse(body);
 
     // 执行交互操作（点赞/收藏切换）
     const result = await InteractionService.toggleInteraction({
-      userId: userSession.userId,
+      userId: authResult.userSession.userId,
       modelId,
       type,
     });
 
-    console.log(`👍 用户 ${userSession.userId} 对模型 ${modelId} 执行 ${type} 操作`, {
+    console.log(`👍 用户 ${authResult.userSession.userId} 对模型 ${modelId} 执行 ${type} 操作`, {
       isInteracted: result.isInteracted,
       newLikeCount: result.model.likeCount,
       newFavoriteCount: result.model.favoriteCount,
@@ -70,26 +77,9 @@ export const GET = withErrorHandler(
   ) => {
     const { id: modelId } = await params;
 
-    try {
-      // 尝试获取当前用户会话信息
-      const userSession = await getCurrentUser();
-
-      // 获取用户对该模型的交互状态
-      const interactions = await InteractionService.getUserModelInteractions(
-        userSession.userId,
-        modelId,
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          isAuthenticated: true,
-          interactions,
-          isLiked: interactions.includes(InteractionType.LIKE),
-          isFavorited: interactions.includes(InteractionType.FAVORITE),
-        },
-      });
-    } catch (error) {
+    // 检查认证状态
+    const authResult = await checkAuthStatus();
+    if (!authResult.isAuthenticated || !authResult.userSession) {
       // 用户未登录
       return NextResponse.json({
         success: true,
@@ -99,5 +89,21 @@ export const GET = withErrorHandler(
         },
       });
     }
+
+    // 获取用户对该模型的交互状态
+    const interactions = await InteractionService.getUserModelInteractions(
+      authResult.userSession.userId,
+      modelId,
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        isAuthenticated: true,
+        interactions,
+        isLiked: interactions.includes(InteractionType.LIKE),
+        isFavorited: interactions.includes(InteractionType.FAVORITE),
+      },
+    });
   },
 );

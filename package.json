@@ -48,7 +48,8 @@
     "react-dom": "19.1.0",
     "tencentcloud-sdk-nodejs-ai3d": "^4.1.127",
     "three": "^0.180.0",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@asteasolutions/zod-to-openapi": "^8.1.0",

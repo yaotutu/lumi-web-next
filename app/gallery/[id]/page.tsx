@@ -7,7 +7,7 @@ import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
-import { getCurrentUser } from "@/lib/auth-client";
+import { useUser } from "@/stores/auth-store";
 
 // 材质颜色选项（从 ModelPreview 复制）
 const MATERIAL_COLORS = [
@@ -59,7 +59,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const user = useUser();
   const [interactionStatus, setInteractionStatus] = useState({
     isLiked: false,
     isFavorited: false,
@@ -81,10 +81,6 @@ export default function GalleryDetailPage({ params }: PageProps) {
       setError(null);
 
       try {
-        // 获取用户信息
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-
         // 加载模型详情
         const response = await fetch(`/api/gallery/models/${id}`);
 
@@ -101,7 +97,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
           setCurrentFavorites(modelData.favoriteCount || 0);
 
           // 如果用户已登录，获取交互状态
-          if (currentUser) {
+          if (user) {
             try {
               const interactionResponse = await fetch(`/api/gallery/models/${id}/interactions`);
               if (interactionResponse.ok) {
@@ -129,7 +125,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
     };
 
     loadModelAndInteractions();
-  }, [id]);
+  }, [id, user]);
 
   /**
    * 重置相机视角

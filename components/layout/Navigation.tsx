@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { getCurrentUser, logout, type User } from "@/lib/auth-client";
+import { useUser, useIsLoaded, type User, authActions } from "@/stores/auth-store";
+import { logout } from "@/lib/auth-client";
 
 type NavLink = {
   label: string;
@@ -61,20 +62,18 @@ function IconBell() {
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const user = useUser();
+  const isLoaded = useIsLoaded();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // 获取当前用户信息
+  // 组件挂载时刷新认证状态
   useEffect(() => {
-    const fetchUser = async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      setLoading(false);
-    };
-    fetchUser();
-  }, []);
+    // 确保认证状态已加载
+    if (!isLoaded) {
+      authActions.refreshAuth();
+    }
+  }, [isLoaded]);
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -98,7 +97,6 @@ export default function Navigation() {
       setIsLoggingOut(true);
       const success = await logout();
       if (success) {
-        setUser(null);
         setShowUserMenu(false);
         // 先跳转，再刷新
         router.push("/");
@@ -160,7 +158,7 @@ export default function Navigation() {
             </button>
 
             {/* 用户菜单 */}
-            {loading ? (
+            {!isLoaded ? (
               // 加载中
               <div className="h-9 w-24 animate-pulse rounded-full bg-surface-3" />
             ) : user ? (

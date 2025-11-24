@@ -7,7 +7,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/utils/errors";
 import * as InteractionService from "@/lib/services/interaction-service";
-import { getCurrentUser } from "@/lib/utils/auth";
+import { checkAuthStatus } from "@/lib/utils/auth";
 import { z } from "zod";
 
 // 请求体验证 schema
@@ -20,31 +20,9 @@ const batchInteractionsSchema = z.object({
  * 批量获取用户对多个模型的交互状态
  */
 export const POST = withErrorHandler(async (request: NextRequest) => {
-  try {
-    // 尝试获取当前用户会话信息
-    const userSession = await getCurrentUser();
-
-    const body = await request.json();
-    const { modelIds } = batchInteractionsSchema.parse(body);
-
-    // 批量获取用户对多个模型的交互状态
-    const interactionsMap = await InteractionService.getBatchUserModelInteractions(
-      userSession.userId,
-      modelIds
-    );
-
-    console.log(`📊 用户 ${userSession.userId} 批量查询 ${modelIds.length} 个模型的交互状态`, {
-      interactionCount: Object.keys(interactionsMap).length,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        isAuthenticated: true,
-        interactions: interactionsMap,
-      },
-    });
-  } catch (error) {
+  // 检查认证状态
+  const authResult = await checkAuthStatus();
+  if (!authResult.isAuthenticated || !authResult.userSession) {
     // 用户未登录
     return NextResponse.json({
       success: true,
@@ -54,4 +32,25 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
       },
     });
   }
+
+  const body = await request.json();
+  const { modelIds } = batchInteractionsSchema.parse(body);
+
+  // 批量获取用户对多个模型的交互状态
+  const interactionsMap = await InteractionService.getBatchUserModelInteractions(
+    authResult.userSession.userId,
+    modelIds
+  );
+
+  console.log(`📊 用户 ${authResult.userSession.userId} 批量查询 ${modelIds.length} 个模型的交互状态`, {
+    interactionCount: Object.keys(interactionsMap).length,
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      isAuthenticated: true,
+      interactions: interactionsMap,
+    },
+  });
 });
