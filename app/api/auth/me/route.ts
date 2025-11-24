@@ -15,17 +15,17 @@
  */
 
 import { getUserById } from "@/lib/services/auth-service";
-import { getCurrentUserId } from "@/lib/utils/auth";
+import { getCurrentUser } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export const GET = withErrorHandler(async (request: NextRequest) => {
-  // 1. 从 Cookie 中获取当前用户 ID
-  const userId = await getCurrentUserId();
+  // 1. 从 Cookie 中获取当前用户会话信息
+  const userSession = await getCurrentUser();
 
-  // 2. 查询用户信息
-  const user = await getUserById(userId);
+  // 2. 查询用户详细信息
+  const user = await getUserById(userSession.userId);
 
   // 3. 返回用户信息
   return NextResponse.json({

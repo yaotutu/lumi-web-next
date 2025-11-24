@@ -1,13 +1,12 @@
 /**
- * 认证工具函数
- * 职责：JWT 生成/验证、用户身份认证
+ * 认证工具函数（纯Cookie版本）
+ * 职责：Cookie 会话管理、用户身份认证
  *
  * 技术栈：
- * - jose: Next.js 官方推荐的 JWT 库（支持 Edge Runtime）
- * - HTTP-only Cookie: 存储 JWT token
+ * - HTTP-only Cookie: 存储用户信息的 JSON
+ * - 简单 JSON 解析，无需 JWT 复杂度
  */
 
-import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { AppError } from "./errors";
 
@@ -16,139 +15,25 @@ import { AppError } from "./errors";
 // ============================================
 
 /**
- * JWT 密钥（从环境变量读取）
- * 必须是 32 字节以上的随机字符串
- */
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("环境变量 JWT_SECRET 未设置");
-}
-
-/**
- * JWT 过期时间（默认 7 天）
- */
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
-
-/**
  * Cookie 名称
  */
-const AUTH_COOKIE_NAME = "auth-token";
+const AUTH_COOKIE_NAME = "auth-session";
 
 /**
- * JWT 算法
+ * Cookie 有效期（7 天）
  */
-const JWT_ALGORITHM = "HS256";
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 秒
 
 // ============================================
-// JWT Payload 类型定义
+// 用户信息类型定义
 // ============================================
 
 /**
- * JWT Payload 结构
+ * 用户会话信息结构（存储在 Cookie 中）
  */
-export interface JWTPayload {
+export interface UserSession {
   userId: string;
   email: string;
-  iat?: number; // issued at（签发时间）
-  exp?: number; // expiration time（过期时间）
-}
-
-// ============================================
-// JWT 工具函数
-// ============================================
-
-/**
- * 生成 JWT token
- *
- * @param payload - JWT 载荷数据
- * @returns JWT 字符串
- *
- * @example
- * ```typescript
- * const jwt = await generateJWT({
- *   userId: "user-123",
- *   email: "user@example.com"
- * });
- * ```
- */
-export async function generateJWT(payload: {
-  userId: string;
-  email: string;
-}): Promise<string> {
-  // 将密钥字符串转换为 Uint8Array
-  const secret = new TextEncoder().encode(JWT_SECRET);
-
-  // 解析过期时间（支持 "7d", "24h" 等格式）
-  const expiresIn = parseExpireTime(JWT_EXPIRES_IN);
-
-  // 生成 JWT
-  const jwt = await new SignJWT(payload as Record<string, unknown>)
-    .setProtectedHeader({ alg: JWT_ALGORITHM }) // 设置算法
-    .setIssuedAt() // 设置签发时间
-    .setExpirationTime(Math.floor(Date.now() / 1000) + expiresIn) // 设置过期时间
-    .sign(secret); // 签名
-
-  return jwt;
-}
-
-/**
- * 验证并解析 JWT token
- *
- * @param token - JWT 字符串
- * @returns 解析后的 JWT Payload
- * @throws AppError UNAUTHORIZED - Token 无效或已过期
- *
- * @example
- * ```typescript
- * const payload = await verifyJWT(token);
- * console.log(payload.userId); // "user-123"
- * ```
- */
-export async function verifyJWT(token: string): Promise<JWTPayload> {
-  try {
-    // 将密钥字符串转换为 Uint8Array
-    const secret = new TextEncoder().encode(JWT_SECRET);
-
-    // 验证并解析 JWT
-    const { payload } = await jwtVerify(token, secret, {
-      algorithms: [JWT_ALGORITHM],
-    });
-
-    return payload as unknown as JWTPayload;
-  } catch (error) {
-    throw new AppError("UNAUTHORIZED", "登录已过期或无效，请重新登录", error);
-  }
-}
-
-/**
- * 解析过期时间字符串（支持 "7d", "24h", "60m" 等格式）
- *
- * @param timeString - 时间字符串（如 "7d", "24h"）
- * @returns 秒数
- */
-function parseExpireTime(timeString: string): number {
-  const regex = /^(\d+)([dhms])$/;
-  const match = timeString.match(regex);
-
-  if (!match) {
-    throw new Error(`无效的过期时间格式: ${timeString}`);
-  }
-
-  const value = Number.parseInt(match[1], 10);
-  const unit = match[2];
-
-  switch (unit) {
-    case "d":
-      return value * 24 * 60 * 60; // 天 → 秒
-    case "h":
-      return value * 60 * 60; // 小时 → 秒
-    case "m":
-      return value * 60; // 分钟 → 秒
-    case "s":
-      return value; // 秒
-    default:
-      throw new Error(`不支持的时间单位: ${unit}`);
-  }
 }
 
 // ============================================
@@ -156,10 +41,36 @@ function parseExpireTime(timeString: string): number {
 // ============================================
 
 /**
+ * 设置用户会话 Cookie
+ *
+ * @param user - 用户信息对象
+ *
+ * @example
+ * ```typescript
+ * await setUserCookie({
+ *   userId: "user-123",
+ *   email: "user@example.com"
+ * });
+ * ```
+ */
+export async function setUserCookie(user: UserSession): Promise<void> {
+  const cookieStore = await cookies();
+  const userData = JSON.stringify(user);
+
+  cookieStore.set(AUTH_COOKIE_NAME, userData, {
+    httpOnly: true, // 防止 JavaScript 访问（防 XSS）
+    secure: process.env.NODE_ENV === "production", // 生产环境使用 HTTPS
+    sameSite: "lax", // 防止 CSRF 攻击
+    maxAge: COOKIE_MAX_AGE, // 7 天过期
+    path: "/", // 全站可用
+  });
+}
+
+/**
  * 从请求的 Cookie 中获取当前用户 ID
  *
  * @returns 当前用户 ID
- * @throws AppError UNAUTHORIZED - 用户未登录或 Token 无效
+ * @throws AppError UNAUTHORIZED - 用户未登录或会话无效
  *
  * @example
  * ```typescript
@@ -172,22 +83,15 @@ function parseExpireTime(timeString: string): number {
  * ```
  */
 export async function getCurrentUserId(): Promise<string> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-
-  if (!token) {
-    throw new AppError("UNAUTHORIZED", "用户未登录，请先登录");
-  }
-
-  const payload = await verifyJWT(token);
-  return payload.userId;
+  const user = await getCurrentUser();
+  return user.userId;
 }
 
 /**
  * 从请求的 Cookie 中获取当前用户完整信息
  *
- * @returns JWT Payload（包含 userId 和 email）
- * @throws AppError UNAUTHORIZED - 用户未登录或 Token 无效
+ * @returns 用户会话信息（包含 userId 和 email）
+ * @throws AppError UNAUTHORIZED - 用户未登录或会话无效
  *
  * @example
  * ```typescript
@@ -195,15 +99,55 @@ export async function getCurrentUserId(): Promise<string> {
  * console.log(user.email); // "user@example.com"
  * ```
  */
-export async function getCurrentUser(): Promise<JWTPayload> {
+export async function getCurrentUser(): Promise<UserSession> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  const userData = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  if (!token) {
+  if (!userData) {
     throw new AppError("UNAUTHORIZED", "用户未登录，请先登录");
   }
 
-  return await verifyJWT(token);
+  try {
+    const user = JSON.parse(userData) as UserSession;
+
+    // 验证数据格式
+    if (!user.userId || !user.email) {
+      throw new Error("会话数据格式无效");
+    }
+
+    return user;
+  } catch (error) {
+    throw new AppError("UNAUTHORIZED", "登录信息无效，请重新登录");
+  }
+}
+
+/**
+ * 清除用户会话 Cookie（三重保障）
+ *
+ * 使用三种方式确保 Cookie 完全清除：
+ * 1. 设置空字符串 + maxAge: 0
+ * 2. 设置过去的时间 expires
+ * 3. 再次尝试 delete 方法
+ */
+export async function clearUserCookie(): Promise<void> {
+  const cookieStore = await cookies();
+
+  // 保障1: 设置空字符串 + maxAge: 0
+  cookieStore.set(AUTH_COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0, // 立即过期
+    path: "/",
+    expires: new Date(0), // 保障2: 显式设置过去的时间
+  });
+
+  // 保障3: 再次尝试删除（兜底）
+  try {
+    cookieStore.delete(AUTH_COOKIE_NAME);
+  } catch {
+    // 忽略删除失败，因为上面已经设置了过期
+  }
 }
 
 /**

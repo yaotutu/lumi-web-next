@@ -4,12 +4,12 @@
  *
  * 功能：
  * - 发送验证码（创建验证码记录）
- * - 验证验证码并登录（创建/更新用户、生成 JWT）
+ * - 验证验证码并登录（创建/更新用户）
  * - 获取用户信息
  *
  * 依赖：
  * - Repository 层：用户和验证码 CRUD
- * - Utils 层：JWT 生成
+ * - Utils 层：Cookie 会话管理
  */
 
 import {
@@ -23,7 +23,6 @@ import {
   updateLastLoginAt,
 } from "@/lib/repositories/user.repository";
 import { AppError } from "@/lib/utils/errors";
-import { generateJWT } from "@/lib/utils/auth";
 import type { User } from "@prisma/client";
 
 /**
@@ -103,29 +102,25 @@ export async function sendVerificationCode(email: string): Promise<string> {
  * 3. 查询或创建用户
  * 4. 标记验证码为已使用
  * 5. 更新用户最后登录时间
- * 6. 生成 JWT token
  *
  * @param email - 用户邮箱
  * @param code - 验证码（4位数字）
- * @returns 用户对象 + JWT token
+ * @returns 用户对象
  * @throws AppError VALIDATION_ERROR - 验证码错误或已过期
  *
  * @example
  * ```typescript
- * const { user, token } = await verifyCodeAndLogin(
+ * const user = await verifyCodeAndLogin(
  *   "user@example.com",
  *   "0000"
  * );
- * // 将 token 设置到 Cookie 中
+ * // API 路由会调用 setUserCookie 设置会话
  * ```
  */
 export async function verifyCodeAndLogin(
   email: string,
   code: string,
-): Promise<{
-  user: User;
-  token: string;
-}> {
+): Promise<User> {
   // 1. 查询最新的有效验证码
   const codeRecord = await findLatestValidCode(email);
 
@@ -151,13 +146,7 @@ export async function verifyCodeAndLogin(
   // 4. 标记验证码为已使用
   await markCodeAsVerified(codeRecord.id);
 
-  // 5. 生成 JWT token
-  const token = await generateJWT({
-    userId: user.id,
-    email: user.email,
-  });
-
-  return { user, token };
+  return user;
 }
 
 /**

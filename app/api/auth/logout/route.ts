@@ -9,27 +9,21 @@
  * }
  *
  * 副作用：
- * - 清除 HTTP-only Cookie（auth-token）
+ * - 清除 HTTP-only Cookie（auth-session）
  */
 
+import { clearUserCookie } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-/**
- * Cookie 名称
- */
-const AUTH_COOKIE_NAME = "auth-token";
-
 export const POST = withErrorHandler(async (request: NextRequest) => {
-  // 1. 创建响应
-  const response = NextResponse.json({
+  // 1. 清除用户会话 Cookie（三重保障）
+  await clearUserCookie();
+
+  // 2. 返回响应
+  return NextResponse.json({
     success: true,
     message: "已退出登录",
   });
-
-  // 2. 清除 Cookie（设置过期时间为过去）
-  response.cookies.delete(AUTH_COOKIE_NAME);
-
-  return response;
 });

@@ -9,7 +9,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { InteractionType } from "@prisma/client";
 import * as InteractionService from "@/lib/services/interaction-service";
-import { getCurrentUser } from "@/lib/auth-client";
+import { getCurrentUser } from "@/lib/utils/auth";
 import { z } from "zod";
 
 // 请求体验证 schema
@@ -27,26 +27,21 @@ export const POST = withErrorHandler(
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id: modelId } = await params;
-    const user = await getCurrentUser();
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "请先登录" },
-        { status: 401 },
-      );
-    }
+    // 获取当前用户会话信息
+    const userSession = await getCurrentUser();
 
     const body = await request.json();
     const { type } = interactionSchema.parse(body);
 
     // 执行交互操作（点赞/收藏切换）
     const result = await InteractionService.toggleInteraction({
-      userId: user.id,
+      userId: userSession.userId,
       modelId,
       type,
     });
 
-    console.log(`👍 用户 ${user.id} 对模型 ${modelId} 执行 ${type} 操作`, {
+    console.log(`👍 用户 ${userSession.userId} 对模型 ${modelId} 执行 ${type} 操作`, {
       isInteracted: result.isInteracted,
       newLikeCount: result.model.likeCount,
       newFavoriteCount: result.model.favoriteCount,
@@ -74,9 +69,28 @@ export const GET = withErrorHandler(
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id: modelId } = await params;
-    const user = await getCurrentUser();
 
-    if (!user) {
+    try {
+      // 尝试获取当前用户会话信息
+      const userSession = await getCurrentUser();
+
+      // 获取用户对该模型的交互状态
+      const interactions = await InteractionService.getUserModelInteractions(
+        userSession.userId,
+        modelId,
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          isAuthenticated: true,
+          interactions,
+          isLiked: interactions.includes(InteractionType.LIKE),
+          isFavorited: interactions.includes(InteractionType.FAVORITE),
+        },
+      });
+    } catch (error) {
+      // 用户未登录
       return NextResponse.json({
         success: true,
         data: {
@@ -85,21 +99,5 @@ export const GET = withErrorHandler(
         },
       });
     }
-
-    // 获取用户对该模型的交互状态
-    const interactions = await InteractionService.getUserModelInteractions(
-      user.id,
-      modelId,
-    );
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        isAuthenticated: true,
-        interactions,
-        isLiked: interactions.includes(InteractionType.LIKE),
-        isFavorited: interactions.includes(InteractionType.FAVORITE),
-      },
-    });
   },
 );
