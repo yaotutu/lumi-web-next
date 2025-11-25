@@ -347,6 +347,30 @@ a:hover {
     }
   }
 
+  /* Apple 风格弹窗进入动画 */
+  @keyframes modal-entrance {
+    from {
+      opacity: 0;
+      transform: scale(0.94) translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* 内容区域淡入动画 */
+  @keyframes content-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @keyframes pulse-glow {
     0%,
     100% {
@@ -934,8 +958,9 @@ a:hover {
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
     animation: fadeIn 0.2s ease-out;
   }
 
@@ -948,16 +973,20 @@ a:hover {
   .model-detail-modal__content {
     position: relative;
     width: 100%;
-    max-width: min(75vw, 1000px);
-    max-height: 96vh;
-    background: #0d0d0d;
+    max-width: min(80vw, 1200px);
+    max-height: 94vh;
+    background: rgba(13, 13, 13, 0.85);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     border-radius: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
-      0 24px 80px rgba(0, 0, 0, 0.9),
-      0 0 0 1px rgba(255, 255, 255, 0.05);
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      0 10px 40px rgba(0, 0, 0, 0.3),
+      0 30px 80px rgba(0, 0, 0, 0.5),
+      0 50px 120px rgba(0, 0, 0, 0.7);
     overflow: hidden;
-    animation: scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: modal-entrance 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
   .model-detail-modal__close {
@@ -974,7 +1003,7 @@ a:hover {
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: #1a1a1a;
     color: rgba(255, 255, 255, 0.6);
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
   }
 
@@ -982,6 +1011,7 @@ a:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
     border-color: rgba(249, 207, 0, 0.4);
+    transform: scale(1.04);
   }
 
   .model-detail-modal__body {

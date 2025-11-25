@@ -403,7 +403,12 @@ export default function ModelDetailModal({
           {model && !loading && !error && (
             <div className="flex flex-col md:flex-row h-full">
               {/* 左侧：3D 预览区域 - 58% */}
-              <div className="w-full md:w-[58%] relative">
+              <div
+                className="w-full md:w-[58%] relative"
+                style={{
+                  animation: 'content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.1s both'
+                }}
+              >
                 <div
                   ref={previewContainerRef}
                   className="h-full w-full bg-[radial-gradient(circle_at_50%_50%,#424242_0%,#2d2d2d_100%)]"
@@ -506,12 +511,17 @@ export default function ModelDetailModal({
               </div>
 
               {/* 右侧：模型信息区域 - 42% */}
-              <div className="w-full md:w-[42%] flex flex-col overflow-y-auto bg-gradient-to-b from-[#0d0d0d] to-[#1a1a1a] p-4 gap-3">
+              <div
+                className="w-full md:w-[42%] flex flex-col overflow-y-auto bg-gradient-to-b from-[#0d0d0d] to-[#1a1a1a] p-6 gap-4"
+                style={{
+                  animation: 'content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.15s both'
+                }}
+              >
                 {/* 基本信息 - 精简版 */}
-                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-4 backdrop-blur-sm shadow-lg">
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-5 backdrop-blur-sm shadow-lg">
                   {/* 模型名称和状态 */}
                   <div className="flex items-center justify-between mb-2">
-                    <h1 className="text-lg font-bold text-white leading-tight">
+                    <h1 className="text-xl font-semibold text-white leading-tight" style={{ letterSpacing: '-0.01em' }}>
                       {model.name}
                     </h1>
 
@@ -542,9 +552,9 @@ export default function ModelDetailModal({
                 </div>
 
                 {/* 📊 数据统计 - 无标题版 */}
-                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-3 backdrop-blur-sm shadow-lg">
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-4 backdrop-blur-sm shadow-lg">
                   {/* 2列统计布局 */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-yellow-1/10 to-yellow-1/5 border border-yellow-1/20 hover:from-yellow-1/15 hover:to-yellow-1/10 transition-all duration-200">
                       <div className="flex items-center justify-center mb-1">
                         <svg
@@ -600,12 +610,12 @@ export default function ModelDetailModal({
                 </div>
 
                 {/* 💝 互动操作 - 精简版 */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => handleInteraction("LIKE")}
                     disabled={isInteractionLoading}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg transition-all duration-200 group ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-250 group hover:scale-[1.02] active:scale-[0.98] ${
                       interactionStatus.isLiked
                         ? "bg-gradient-to-r from-red-1/20 to-red-1/10 border-red-1/30 text-red-1"
                         : "bg-gradient-to-r from-white/5 to-white/[0.02] border-white/10 text-white/70 hover:from-red-1/10 hover:to-red-1/5 hover:border-red-1/30 hover:text-red-1"
@@ -633,7 +643,7 @@ export default function ModelDetailModal({
                     type="button"
                     onClick={() => handleInteraction("FAVORITE")}
                     disabled={isInteractionLoading}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg transition-all duration-200 group ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-250 group hover:scale-[1.02] active:scale-[0.98] ${
                       interactionStatus.isFavorited
                         ? "bg-gradient-to-r from-amber-1/20 to-amber-1/10 border-amber-1/30 text-amber-1"
                         : "bg-gradient-to-r from-white/5 to-white/[0.02] border-white/10 text-white/70 hover:from-amber-1/10 hover:to-amber-1/5 hover:border-amber-1/30 hover:text-amber-1"
@@ -663,7 +673,7 @@ export default function ModelDetailModal({
                 </div>
 
                 {/* 🛠️ 工具与信息 - 紧凑版 */}
-                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-3 backdrop-blur-sm shadow-lg space-y-3">
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-5 backdrop-blur-sm shadow-lg space-y-4">
                   {/* 技术信息 */}
                   <div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -701,7 +711,7 @@ export default function ModelDetailModal({
                   {/* 下载按钮 */}
                   <button
                     type="button"
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-yellow-1 to-yellow-1/80 hover:from-yellow-1/90 hover:to-yellow-1/70 text-black font-bold transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-1/25 hover:shadow-xl hover:shadow-yellow-1/35 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-yellow-1 to-yellow-1/80 hover:from-yellow-1/90 hover:to-yellow-1/70 text-black font-bold transition-all duration-[250ms] transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-1/25 hover:shadow-xl hover:shadow-yellow-1/35 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm"
                     onClick={handleDownload}
                     disabled={downloading}
                   >
