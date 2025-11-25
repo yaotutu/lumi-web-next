@@ -5,7 +5,10 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { AuthStatus, type AuthState, type User } from "@/types/auth";
+import { type AuthState, AuthStatus, type User } from "@/types/auth";
+
+// 导出类型供外部使用
+export type { User } from "@/types/auth";
 
 /**
  * 认证状态 Store 接口
@@ -112,8 +115,8 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: "auth-store", // Store 名称，用于开发工具标识
-    }
-  )
+    },
+  ),
 );
 
 /**
@@ -126,7 +129,8 @@ export const useAuth = () => useAuthStore();
  */
 export const useAuthStatus = () => useAuthStore((state) => state.status);
 export const useUser = () => useAuthStore((state) => state.user);
-export const useIsAuthenticated = () => useAuthStore((state) => state.status === AuthStatus.AUTHENTICATED);
+export const useIsAuthenticated = () =>
+  useAuthStore((state) => state.status === AuthStatus.AUTHENTICATED);
 export const useIsLoaded = () => useAuthStore((state) => state.isLoaded);
 export const useLastChecked = () => useAuthStore((state) => state.lastChecked);
 

@@ -77,13 +77,13 @@ class SSEConnectionManager {
     }
 
     // 添加连接
-    this.connections.get(taskId)!.add(connection);
+    this.connections.get(taskId)?.add(connection);
 
     log.info("addConnection", "SSE 连接已建立", {
       taskId,
       processId: process.pid, // 记录进程 ID
       instanceId: this.instanceId, // 记录实例 ID
-      totalConnections: this.connections.get(taskId)!.size,
+      totalConnections: this.connections.get(taskId)?.size,
     });
 
     return connection;

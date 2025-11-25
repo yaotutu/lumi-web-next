@@ -14,15 +14,14 @@
  */
 
 import { API_CONFIG, buildApiUrl } from "@/lib/config/api";
-import type { ApiResponse } from "@/types/api-response";
 import type {
-  GenerationRequest,
   GenerationRequestResponse,
-  GeneratedModel,
+  Model,
   User,
   UserAsset,
   UserAssetWithUser,
 } from "@/types";
+import type { ApiResponse } from "@/types/api-response";
 
 /**
  * HTTP 请求方法
@@ -172,7 +171,7 @@ class ApiClient {
      * @returns 生成的模型
      */
     update: (id: string, data: { selectedImageIndex: number }) => {
-      return this.patch<{ model: GeneratedModel; selectedImageIndex: number }>(
+      return this.patch<{ model: Model; selectedImageIndex: number }>(
         `/api/tasks/${id}`,
         data,
       );

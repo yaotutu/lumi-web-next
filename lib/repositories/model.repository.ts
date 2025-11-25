@@ -7,12 +7,7 @@
  * - 不包含业务逻辑
  */
 
-import type {
-  Model,
-  Prisma,
-  ModelSource,
-  ModelVisibility,
-} from "@prisma/client";
+import type { Model, ModelSource, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 // ============================================

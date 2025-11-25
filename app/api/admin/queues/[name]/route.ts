@@ -5,9 +5,9 @@
  * PATCH /api/admin/queues/[name] - 更新队列配置
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import { QueueConfigRepository } from "@/lib/repositories";
+import { withErrorHandler } from "@/lib/utils/errors";
 import { workerConfigManager } from "@/lib/workers/worker-config-manager";
 
 /**
@@ -16,7 +16,7 @@ import { workerConfigManager } from "@/lib/workers/worker-config-manager";
  */
 export const GET = withErrorHandler(
   async (
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ name: string }> },
   ) => {
     const { name } = await params;

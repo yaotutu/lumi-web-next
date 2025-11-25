@@ -5,6 +5,7 @@ import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
+import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
 
 // 材质颜色选项（从详情页复制）
@@ -38,6 +39,16 @@ export default function ModelDetailModal({
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  // 用户状态和交互状态
+  const user = useUser();
+  const [interactionStatus, setInteractionStatus] = useState({
+    isLiked: false,
+    isFavorited: false,
+  });
+  const [currentLikes, setCurrentLikes] = useState(0);
+  const [currentFavorites, setCurrentFavorites] = useState(0);
+  const [isInteractionLoading, setIsInteractionLoading] = useState(false);
+
   // 引用
   const model3DViewerRef = useRef<Model3DViewerRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -46,27 +57,58 @@ export default function ModelDetailModal({
   /**
    * 加载模型详情
    */
-  const loadModel = useCallback(async (id: string) => {
-    setLoading(true);
-    setError(null);
+  const loadModel = useCallback(
+    async (id: string) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      // 使用统一的 API 客户端
-      const { apiClient } = await import("@/lib/api/client");
-      const response = await apiClient.gallery.get(id);
+      try {
+        // 使用统一的 API 客户端
+        const { apiClient } = await import("@/lib/api/client");
+        const response = await apiClient.gallery.get(id);
 
-      if (response.success) {
-        setModel(response.data);
-      } else {
-        throw new Error(response.error?.message || "加载失败");
+        if (response.success) {
+          const modelData = response.data;
+          setModel(modelData);
+
+          // 初始化交互状态
+          setCurrentLikes(modelData.likeCount);
+          setCurrentFavorites(modelData.favoriteCount || 0);
+
+          // 如果用户已登录，获取交互状态
+          if (user) {
+            try {
+              const interactionResponse = await fetch(
+                `/api/gallery/models/${id}/interactions`,
+              );
+              if (interactionResponse.ok) {
+                const interactionData = await interactionResponse.json();
+                if (
+                  interactionData.success &&
+                  interactionData.data.isAuthenticated
+                ) {
+                  setInteractionStatus({
+                    isLiked: interactionData.data.isLiked || false,
+                    isFavorited: interactionData.data.isFavorited || false,
+                  });
+                }
+              }
+            } catch (error) {
+              console.error("获取交互状态失败:", error);
+            }
+          }
+        } else {
+          throw new Error(response.error?.message || "加载失败");
+        }
+      } catch (err) {
+        console.error("加载模型详情失败:", err);
+        setError(err instanceof Error ? err.message : "加载失败");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("加载模型详情失败:", err);
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [user],
+  );
 
   /**
    * 当模型ID变化时重新加载模型
@@ -169,8 +211,10 @@ export default function ModelDetailModal({
       const { apiClient } = await import("@/lib/api/client");
       await apiClient.gallery.download(model.id);
 
-      // 打开下载链接
-      window.open(model.modelUrl, "_blank");
+      // 打开下载链接（检查 modelUrl 是否存在）
+      if (model.modelUrl) {
+        window.open(model.modelUrl, "_blank");
+      }
     } catch (error) {
       console.error("下载失败:", error);
     } finally {
@@ -185,6 +229,91 @@ export default function ModelDetailModal({
     if (!bytes) return "未知";
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
+
+  /**
+   * 处理交互操作（点赞/收藏）
+   */
+  const handleInteraction = useCallback(
+    async (type: "LIKE" | "FAVORITE") => {
+      if (!model || !user) {
+        alert("请先登录后再进行操作");
+        return;
+      }
+
+      if (isInteractionLoading) return;
+
+      setIsInteractionLoading(true);
+
+      // 保存原始状态（用于回滚）
+      const originalStatus = { ...interactionStatus };
+      const originalLikes = currentLikes;
+      const originalFavorites = currentFavorites;
+
+      // 乐观更新 UI
+      if (type === "LIKE") {
+        setInteractionStatus((prev) => ({ ...prev, isLiked: !prev.isLiked }));
+        setCurrentLikes((prev) =>
+          interactionStatus.isLiked ? prev - 1 : prev + 1,
+        );
+      } else {
+        setInteractionStatus((prev) => ({
+          ...prev,
+          isFavorited: !prev.isFavorited,
+        }));
+        setCurrentFavorites((prev) =>
+          interactionStatus.isFavorited ? prev - 1 : prev + 1,
+        );
+      }
+
+      try {
+        const response = await fetch(
+          `/api/gallery/models/${model.id}/interactions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ type }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("操作失败");
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // 使用服务器返回的权威数据（确保前后端同步）
+          setCurrentLikes(data.data.likeCount);
+          setCurrentFavorites(data.data.favoriteCount);
+          setInteractionStatus((prev) => ({
+            ...prev,
+            isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
+            isFavorited:
+              type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+          }));
+        } else {
+          throw new Error(data.error?.message || "操作失败");
+        }
+      } catch (error) {
+        console.error("Interaction failed:", error);
+        // 回滚到原始状态
+        setInteractionStatus(originalStatus);
+        setCurrentLikes(originalLikes);
+        setCurrentFavorites(originalFavorites);
+      } finally {
+        setIsInteractionLoading(false);
+      }
+    },
+    [
+      model,
+      user,
+      interactionStatus,
+      currentLikes,
+      currentFavorites,
+      isInteractionLoading,
+    ],
+  );
 
   /**
    * 格式化日期
@@ -215,18 +344,18 @@ export default function ModelDetailModal({
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: 只用于阻止冒泡，无需键盘事件 */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: 只用于阻止冒泡，无需role */}
       <div
-        className="model-detail-modal__content"
+        className="model-detail-modal__content relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 关闭按钮 */}
         <button
           type="button"
-          className="model-detail-modal__close"
+          className="absolute top-4 right-4 z-[60] flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-[#1a1a1a] text-white/60 transition-all duration-200 hover:bg-[#2d2d2d] hover:text-white hover:border-yellow-1/50"
           onClick={onClose}
           title="关闭弹窗"
         >
           <svg
-            className="h-5 w-5"
+            className="h-4 w-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -270,11 +399,11 @@ export default function ModelDetailModal({
             </div>
           )}
 
-          {/* 模型详情内容 - 左右布局 */}
+          {/* 模型详情内容 - 黄金比例布局 */}
           {model && !loading && !error && (
             <div className="flex flex-col md:flex-row h-full">
-              {/* 左侧：3D 预览区域 */}
-              <div className="w-full md:w-[65%] relative">
+              {/* 左侧：3D 预览区域 - 58% */}
+              <div className="w-full md:w-[58%] relative">
                 <div
                   ref={previewContainerRef}
                   className="h-full w-full bg-[radial-gradient(circle_at_50%_50%,#424242_0%,#2d2d2d_100%)]"
@@ -349,137 +478,289 @@ export default function ModelDetailModal({
                       />
                     </svg>
                   </button>
-                </div>
-              </div>
 
-              {/* 右侧：模型信息区域 */}
-              <div className="w-full md:w-[35%] flex flex-col overflow-y-auto bg-[#0d0d0d] p-6">
-                {/* 基本信息 */}
-                <div className="mb-6">
-                  <h1 className="text-xl font-bold text-white mb-2">
-                    {model.name}
-                  </h1>
-                  <div className="flex items-center gap-3 text-xs text-white/60">
-                    <span>作者: {model.user.name || "匿名用户"}</span>
-                    <span>•</span>
-                    <span>{formatDate(model.createdAt)}</span>
-                  </div>
-                </div>
+                  {/* 分隔线 */}
+                  <div className="h-6 w-px bg-white/20" />
 
-                {/* 材质切换按钮 */}
-                <div className="mb-6">
-                  <h3 className="text-xs font-bold text-white mb-3">
-                    更换材质
-                  </h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {MATERIAL_COLORS.map((color) => (
+                  {/* 材质切换 */}
+                  <div className="flex items-center gap-1.5">
+                    {MATERIAL_COLORS.slice(0, 3).map((color) => (
                       <button
                         key={color.name}
                         type="button"
                         onClick={() => handleMaterialChange(color.value)}
                         title={color.name}
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-200 ${
+                        className={`flex h-7 w-7 items-center justify-center rounded-md border transition-all duration-200 hover:scale-105 ${
                           currentMaterial === color.value
-                            ? "bg-yellow-1/20 border-yellow-1 ring-2 ring-yellow-1/50"
-                            : "border-white/10 bg-white/5 hover:border-yellow-1/50 hover:bg-white/10"
+                            ? "bg-gradient-to-br from-yellow-1/20 to-yellow-1/10 border-yellow-1/50 ring-1 ring-yellow-1/30"
+                            : "border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] hover:border-yellow-1/50 hover:bg-yellow-1/10"
                         }`}
                       >
-                        <span className="text-xl">{color.icon}</span>
+                        <span className="text-xs transition-transform">
+                          {color.icon}
+                        </span>
                       </button>
                     ))}
-                  </div>
-                </div>
-
-                {/* 统计数据 */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="text-center p-3 rounded-lg bg-white/5">
-                    <div className="text-xl font-bold text-yellow-1">
-                      {model.viewCount}
-                    </div>
-                    <div className="text-[10px] text-white/50">浏览</div>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-white/5">
-                    <div className="text-xl font-bold text-yellow-1">
-                      {model.likeCount}
-                    </div>
-                    <div className="text-[10px] text-white/50">点赞</div>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-white/5">
-                    <div className="text-xl font-bold text-yellow-1">
-                      {model.downloadCount}
-                    </div>
-                    <div className="text-[10px] text-white/50">下载</div>
-                  </div>
-                </div>
-
-                {/* 技术信息 */}
-                <div className="mb-6">
-                  <h3 className="text-xs font-bold text-white mb-3">
-                    技术信息
-                  </h3>
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex justify-between items-center py-2 border-b border-white/5">
-                      <span className="text-white/60">格式</span>
-                      <span className="px-2 py-0.5 rounded bg-yellow-1/10 text-yellow-1 font-medium text-[10px]">
-                        {model.format}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-white/5">
-                      <span className="text-white/60">文件大小</span>
-                      <span className="text-white font-medium">
-                        {formatFileSize(model.fileSize)}
-                      </span>
-                    </div>
-                    {model.faceCount && (
-                      <div className="flex justify-between items-center py-2 border-b border-white/5">
-                        <span className="text-white/60">面数</span>
-                        <span className="text-white font-medium">
-                          {model.faceCount.toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                    {model.vertexCount && (
-                      <div className="flex justify-between items-center py-2 border-b border-white/5">
-                        <span className="text-white/60">顶点数</span>
-                        <span className="text-white font-medium">
-                          {model.vertexCount.toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 下载按钮 */}
-                <button
-                  type="button"
-                  className="btn-primary w-full flex items-center justify-center gap-2 mt-auto"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                      下载中...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                    {MATERIAL_COLORS.length > 3 && (
+                      <button
+                        type="button"
+                        title="更多材质"
+                        className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] text-white/40 text-xs transition-all duration-200 hover:border-yellow-1/50 hover:bg-yellow-1/10 hover:text-yellow-1"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
+                        +{MATERIAL_COLORS.length - 3}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 右侧：模型信息区域 - 42% */}
+              <div className="w-full md:w-[42%] flex flex-col overflow-y-auto bg-gradient-to-b from-[#0d0d0d] to-[#1a1a1a] p-4 gap-3">
+                {/* 基本信息 - 精简版 */}
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-4 backdrop-blur-sm shadow-lg">
+                  {/* 模型名称和状态 */}
+                  <div className="flex items-center justify-between mb-2">
+                    <h1 className="text-lg font-bold text-white leading-tight">
+                      {model.name}
+                    </h1>
+
+                    {/* 状态标签 */}
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-green-1/20 to-green-1/10 border border-green-1/30">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-1 animate-pulse"></div>
+                      <span className="text-[10px] text-green-1 font-medium">
+                        已发布
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 作者和时间信息 */}
+                  <div className="flex items-center gap-3 text-xs text-text-subtle">
+                    <div className="flex items-center gap-1.5">
+                      <svg
+                        className="w-3.5 h-3.5 text-blue-1"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
                       </svg>
-                      下载 3D 模型
-                    </>
-                  )}
-                </button>
+                      <span>{model.user.name || "匿名用户"}</span>
+                    </div>
+                    <span className="text-text-subtle/20">•</span>
+                    <span>{formatDate(model.createdAt)}</span>
+                  </div>
+                </div>
+
+                {/* 📊 数据统计 - 无标题版 */}
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-3 backdrop-blur-sm shadow-lg">
+                  {/* 3列统计布局 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-yellow-1/10 to-yellow-1/5 border border-yellow-1/20 hover:from-yellow-1/15 hover:to-yellow-1/10 transition-all duration-200">
+                      <div className="flex items-center justify-center mb-1">
+                        <svg
+                          className="w-3.5 h-3.5 text-yellow-1"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                          />
+                        </svg>
+                      </div>
+                      <div className="text-base font-bold text-yellow-1">
+                        {model.viewCount > 1000
+                          ? `${(model.viewCount / 1000).toFixed(1)}k`
+                          : model.viewCount}
+                      </div>
+                      <div className="text-[8px] text-text-subtle">浏览</div>
+                    </div>
+
+                    <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-green-1/10 to-green-1/5 border border-green-1/20 hover:from-green-1/15 hover:to-green-1/10 transition-all duration-200">
+                      <div className="flex items-center justify-center mb-1">
+                        <svg
+                          className="w-3.5 h-3.5 text-green-1"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                      </div>
+                      <div className="text-base font-bold text-green-1">
+                        {model.downloadCount}
+                      </div>
+                      <div className="text-[8px] text-text-subtle">下载</div>
+                    </div>
+
+                    <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-red-1/10 to-red-1/5 border border-red-1/20 hover:from-red-1/15 hover:to-red-1/10 transition-all duration-200">
+                      <div className="flex items-center justify-center mb-1">
+                        <svg
+                          className="w-3.5 h-3.5 text-red-1"
+                          fill={currentLikes > 0 ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                          />
+                        </svg>
+                      </div>
+                      <div className="text-base font-bold text-red-1">
+                        {currentLikes}
+                      </div>
+                      <div className="text-[8px] text-text-subtle">点赞</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 💝 互动操作 - 精简版 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleInteraction("LIKE")}
+                    disabled={isInteractionLoading}
+                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg transition-all duration-200 group ${
+                      interactionStatus.isLiked
+                        ? "bg-gradient-to-r from-red-1/20 to-red-1/10 border-red-1/30 text-red-1"
+                        : "bg-gradient-to-r from-white/5 to-white/[0.02] border-white/10 text-white/70 hover:from-red-1/10 hover:to-red-1/5 hover:border-red-1/30 hover:text-red-1"
+                    } border`}
+                    title={user ? "点赞" : "请先登录"}
+                  >
+                    <svg
+                      className="h-4 w-4 transition-transform group-hover:scale-110"
+                      fill={interactionStatus.isLiked ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
+                    </svg>
+                    <div className="text-left">
+                      <div className="text-sm font-bold">{currentLikes}</div>
+                      <div className="text-[10px] opacity-80">
+                        {interactionStatus.isLiked ? "已点赞" : "点赞"}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleInteraction("FAVORITE")}
+                    disabled={isInteractionLoading}
+                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg transition-all duration-200 group ${
+                      interactionStatus.isFavorited
+                        ? "bg-gradient-to-r from-amber-1/20 to-amber-1/10 border-amber-1/30 text-amber-1"
+                        : "bg-gradient-to-r from-white/5 to-white/[0.02] border-white/10 text-white/70 hover:from-amber-1/10 hover:to-amber-1/5 hover:border-amber-1/30 hover:text-amber-1"
+                    } border`}
+                    title={user ? "收藏" : "请先登录"}
+                  >
+                    <svg
+                      className="h-4 w-4 transition-transform group-hover:scale-110"
+                      fill={
+                        interactionStatus.isFavorited ? "currentColor" : "none"
+                      }
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539 1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    <div className="text-left">
+                      <div className="text-sm font-bold">
+                        {currentFavorites}
+                      </div>
+                      <div className="text-[10px] opacity-80">
+                        {interactionStatus.isFavorited ? "已收藏" : "收藏"}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* 🛠️ 工具与信息 - 紧凑版 */}
+                <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-3 backdrop-blur-sm shadow-lg space-y-3">
+                  {/* 技术信息 */}
+                  <div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between items-center p-1.5 rounded-lg bg-white/5">
+                        <span className="text-text-subtle">格式</span>
+                        <span className="px-1.5 py-0.5 rounded bg-yellow-1/10 text-yellow-1 font-medium text-[10px]">
+                          {model.format}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-1.5 rounded-lg bg-white/5">
+                        <span className="text-text-subtle">大小</span>
+                        <span className="text-text-strong font-medium">
+                          {formatFileSize(model.fileSize)}
+                        </span>
+                      </div>
+                      {model.faceCount && (
+                        <div className="flex justify-between items-center p-1.5 rounded-lg bg-white/5">
+                          <span className="text-text-subtle">面数</span>
+                          <span className="text-text-strong font-medium text-[10px]">
+                            {model.faceCount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {model.vertexCount && (
+                        <div className="flex justify-between items-center p-1.5 rounded-lg bg-white/5">
+                          <span className="text-text-subtle">顶点</span>
+                          <span className="text-text-strong font-medium text-[10px]">
+                            {model.vertexCount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 下载按钮 */}
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-yellow-1 to-yellow-1/80 hover:from-yellow-1/90 hover:to-yellow-1/70 text-black font-bold transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-1/25 hover:shadow-xl hover:shadow-yellow-1/35 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                  >
+                    {downloading ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                        <span>下载中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                        <span>下载 3D 模型</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -21,23 +21,21 @@
  * ```
  */
 
+export { MockModel3DAdapter } from "./adapters/mock";
+// 导出适配器类（供直接实例化使用）
+export { TencentAPIError, TencentModel3DAdapter } from "./adapters/tencent";
+
+// 导出基类（供扩展使用）
+export { BaseModel3DProvider } from "./base";
+// 导出工厂函数
+export { createModel3DProvider, getModel3DProviderType } from "./factory";
 // 导出类型
 export type {
   Model3DProvider,
   Model3DProviderType,
-  SubmitModelJobParams,
+  ModelFile,
   ModelJobResponse,
   ModelTaskStatus,
-  ModelFile,
   ModelTaskStatusResponse,
+  SubmitModelJobParams,
 } from "./types";
-
-// 导出工厂函数
-export { createModel3DProvider, getModel3DProviderType } from "./factory";
-
-// 导出基类（供扩展使用）
-export { BaseModel3DProvider } from "./base";
-
-// 导出适配器类（供直接实例化使用）
-export { TencentModel3DAdapter, TencentAPIError } from "./adapters/tencent";
-export { MockModel3DAdapter } from "./adapters/mock";

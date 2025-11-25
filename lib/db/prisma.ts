@@ -22,7 +22,7 @@ export const prisma =
   });
 
 // 监听 Prisma 查询日志事件并重定向到 Pino
-// @ts-ignore
+// @ts-expect-error
 prisma.$on("query", (e: any) => {
   prismaLogger.debug("query", "Prisma Query", {
     query: (e as any).query,

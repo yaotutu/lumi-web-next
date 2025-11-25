@@ -17,8 +17,8 @@
  * - 登录成功后跳转到 redirect 参数指定的页面
  */
 
-import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 /**
  * 倒计时秒数
@@ -211,7 +211,6 @@ export default function EmailLoginForm() {
             maxLength={4}
             className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors text-center text-2xl font-mono tracking-widest"
             disabled={isLoggingIn}
-            autoFocus
             required
           />
           <p className="mt-2 text-xs text-text-subtle text-center">

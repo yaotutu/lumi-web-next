@@ -34,23 +34,20 @@
  * ```
  */
 
+export { AliyunOSSAdapter } from "./adapters/aliyun-oss";
+// 导出适配器类（供直接实例化使用）
+export { LocalStorageAdapter } from "./adapters/local";
+export { TencentCOSAdapter } from "./adapters/tencent-cos";
+// 导出基类（供扩展使用）
+export { BaseStorageProvider } from "./base";
+// 导出工厂函数
+export { createStorageProvider, getStorageProviderType } from "./factory";
 // 导出类型
 export type {
-  StorageProvider,
-  StorageProviderType,
+  FileInfo,
   FileType,
   SaveImageParams,
   SaveModelParams,
-  FileInfo,
+  StorageProvider,
+  StorageProviderType,
 } from "./types";
-
-// 导出工厂函数
-export { createStorageProvider, getStorageProviderType } from "./factory";
-
-// 导出基类（供扩展使用）
-export { BaseStorageProvider } from "./base";
-
-// 导出适配器类（供直接实例化使用）
-export { LocalStorageAdapter } from "./adapters/local";
-export { AliyunOSSAdapter } from "./adapters/aliyun-oss";
-export { TencentCOSAdapter } from "./adapters/tencent-cos";

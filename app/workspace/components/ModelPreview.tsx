@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Toast, { type ToastType } from "@/components/ui/Toast";
+import Tooltip from "@/components/ui/Tooltip";
+import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
-import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
-import Tooltip from "@/components/ui/Tooltip";
-import Toast, { type ToastType } from "@/components/ui/Toast";
 
 // 材质颜色选项
 const MATERIAL_COLORS = [
@@ -31,8 +31,8 @@ export default function ModelPreview({
   taskId,
   onGenerate3D,
 }: ModelPreviewProps) {
-  // 新架构：1 Request : 1 Model
-  // 直接使用 task.model（1:1 关系），不再需要复杂的查找逻辑
+  // 新架构：1 Request : 1 Model（1:1 关系）
+  // 直接使用 task.model（单数字段）
   const selectedModel = task?.model
     ? {
         ...task.model,
@@ -336,6 +336,7 @@ export default function ModelPreview({
     latestModel?.failedAt,
     latestModel,
     imageIndex,
+    task?.model,
   ]);
 
   return (
@@ -373,7 +374,7 @@ export default function ModelPreview({
                 originalUrl,
                 proxiedUrl,
                 latestModelFullData: latestModel,
-                allModels: task?.model ? [task.model] : null,
+                model: task?.model || null,
               });
               return (
                 <Model3DViewer

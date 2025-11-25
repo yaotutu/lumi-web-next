@@ -7,7 +7,7 @@
  * - 不包含业务逻辑
  */
 
-import type { ModelInteraction, InteractionType } from "@prisma/client";
+import type { InteractionType, ModelInteraction } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 // ============================================

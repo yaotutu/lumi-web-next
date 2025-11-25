@@ -33,13 +33,16 @@ export function useModal(initialState = false) {
    * 切换弹窗状态
    * @param modelId 模型ID，可选
    */
-  const toggleModal = useCallback((modelId?: string) => {
-    if (isOpen) {
-      closeModal();
-    } else {
-      openModal(modelId);
-    }
-  }, [isOpen, openModal, closeModal]);
+  const toggleModal = useCallback(
+    (modelId?: string) => {
+      if (isOpen) {
+        closeModal();
+      } else {
+        openModal(modelId);
+      }
+    },
+    [isOpen, openModal, closeModal],
+  );
 
   /**
    * 设置当前模型ID

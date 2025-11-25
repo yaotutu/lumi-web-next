@@ -13,14 +13,14 @@
  * const model = await ModelRepository.createModelWithJob({ ... });
  */
 
-import * as GenerationRequestRepository from "./generation-request.repository";
+import * as EmailVerificationRepository from "./email-verification.repository";
 import * as GeneratedImageRepository from "./generated-image.repository";
+import * as GenerationRequestRepository from "./generation-request.repository";
+import * as JobRepository from "./job.repository";
 import * as ModelRepository from "./model.repository";
 import * as ModelInteractionRepository from "./model-interaction.repository";
-import * as JobRepository from "./job.repository";
 import * as QueueConfigRepository from "./queue-config.repository";
 import * as UserRepository from "./user.repository";
-import * as EmailVerificationRepository from "./email-verification.repository";
 
 export {
   GenerationRequestRepository,

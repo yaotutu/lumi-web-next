@@ -30,7 +30,7 @@ export async function downloadAndUploadImage(
   log.info("downloadAndUploadImage", "开始下载并上传图片", {
     requestId,
     index,
-    remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
+    remoteUrlPreview: `${remoteUrl.substring(0, 80)}...`,
   });
 
   try {
@@ -154,7 +154,7 @@ export async function downloadAndUploadModel(
   log.info("downloadAndUploadModel", "开始下载并上传 3D 模型", {
     modelId,
     format,
-    remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
+    remoteUrlPreview: `${remoteUrl.substring(0, 80)}...`,
   });
 
   try {
@@ -242,7 +242,7 @@ export async function downloadAndUploadPreviewImage(
 ): Promise<string> {
   log.info("downloadAndUploadPreviewImage", "开始下载并上传预览图", {
     modelId,
-    remoteUrlPreview: remoteUrl.substring(0, 80) + "...",
+    remoteUrlPreview: `${remoteUrl.substring(0, 80)}...`,
   });
 
   try {
@@ -333,7 +333,7 @@ async function handleObjZipArchive(
     const zip = await JSZip.loadAsync(zipBuffer);
 
     // 2. 查找 OBJ 文件
-    let objFileName = "";
+    let _objFileName = "";
     let objFileUrl = "";
 
     const files = Object.keys(zip.files);
@@ -468,7 +468,7 @@ async function handleObjZipArchive(
 
       // 记录 OBJ 文件的 URL
       if (extension === "obj") {
-        objFileName = normalizedFileName;
+        _objFileName = normalizedFileName;
         objFileUrl = fileUrl;
       }
     }

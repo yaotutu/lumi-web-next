@@ -9,14 +9,14 @@
  * 注意：此脚本只读取现有代码，不会修改任何源文件
  */
 
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  extendZodWithOpenApi,
   OpenAPIRegistry,
   OpenApiGeneratorV3,
-  extendZodWithOpenApi,
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-import { writeFileSync } from "fs";
-import { join } from "path";
 
 // 扩展 Zod 支持 OpenAPI
 extendZodWithOpenApi(z);
@@ -87,7 +87,7 @@ const ImageStatusSchema = registry.register(
 );
 
 // Job 状态枚举
-const JobStatusSchema = registry.register(
+const _JobStatusSchema = registry.register(
   "JobStatus",
   z.enum([
     "PENDING",

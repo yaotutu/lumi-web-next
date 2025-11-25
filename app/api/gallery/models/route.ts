@@ -8,12 +8,12 @@
  * - offset: number (默认: 0)
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import {
-  findPublicModels,
   countPublicModels,
+  findPublicModels,
 } from "@/lib/repositories/model.repository";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 // GET /api/gallery/models - 获取公开模型列表
 export const GET = withErrorHandler(async (request: NextRequest) => {

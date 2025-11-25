@@ -10,10 +10,10 @@
  */
 
 import { createLogger } from "@/lib/logger";
-import type { ImageGenerationProvider, ImageProviderType } from "./types";
 import { AliyunImageAdapter } from "./adapters/aliyun";
-import { SiliconFlowImageAdapter } from "./adapters/siliconflow";
 import { MockImageAdapter } from "./adapters/mock";
+import { SiliconFlowImageAdapter } from "./adapters/siliconflow";
+import type { ImageGenerationProvider, ImageProviderType } from "./types";
 
 const log = createLogger("ImageProviderFactory");
 

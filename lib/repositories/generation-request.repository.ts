@@ -10,8 +10,8 @@
 import type {
   GenerationRequest,
   Prisma,
-  RequestStatus,
   RequestPhase,
+  RequestStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 

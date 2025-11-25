@@ -9,8 +9,8 @@
 
 import type {
   ImageGenerationJob,
-  ModelGenerationJob,
   JobStatus,
+  ModelGenerationJob,
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";

@@ -4,17 +4,17 @@
  * POST /api/gallery/models/[id]/download
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler, AppError } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import {
   findModelById,
   incrementModelCount,
 } from "@/lib/repositories/model.repository";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
 
 // POST /api/gallery/models/[id]/download - 增加下载计数
 export const POST = withErrorHandler(
   async (
-    request: NextRequest,
+    _request: NextRequest,
     context: { params: Promise<{ id: string }> },
   ) => {
     // 等待 params（Next.js 15 要求）

@@ -4,8 +4,8 @@
  * 职责：在服务端启动时执行一次性初始化操作
  */
 
-import { startAllWorkers } from "./workers";
 import { createLogger } from "./logger";
+import { startAllWorkers } from "./workers";
 
 const log = createLogger("AppInit");
 

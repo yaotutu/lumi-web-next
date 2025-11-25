@@ -12,9 +12,9 @@
  * - TENCENT_COS_REGION
  */
 
+import { resolve } from "node:path";
 // 加载环境变量
 import { config } from "dotenv";
-import { resolve } from "node:path";
 
 // 优先加载 .env.local，然后是 .env
 config({ path: resolve(process.cwd(), ".env.local") });

@@ -9,13 +9,13 @@
  */
 
 import type {
-  GenerationRequest,
   GeneratedImage,
-  Model,
+  GenerationRequest,
   ImageGenerationJob,
+  Model,
   ModelGenerationJob,
-  RequestStatus,
   RequestPhase,
+  RequestStatus,
 } from "@prisma/client";
 import type { TaskWithDetails } from "@/types";
 
@@ -146,7 +146,7 @@ function deriveStatusFromPhase(
   // 如果有明确的 phase，基于 phase 推导
   if (phase) {
     switch (phase) {
-      case "IMAGE_GENERATION":
+      case "IMAGE_GENERATION": {
         // 检查图片状态
         if (images.length === 0) return "IMAGE_PENDING";
         const anyImageGenerating = images.some(
@@ -158,6 +158,7 @@ function deriveStatusFromPhase(
         if (anyImageFailed) return "IMAGE_FAILED";
         if (anyImageGenerating) return "IMAGE_GENERATING";
         return "IMAGE_PENDING";
+      }
 
       case "AWAITING_SELECTION":
         return "IMAGE_COMPLETED";

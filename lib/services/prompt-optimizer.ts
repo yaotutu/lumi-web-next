@@ -8,12 +8,12 @@
  * - 阿里云通义千问 (Qwen) - 备选
  */
 
-import { createLLMProvider } from "@/lib/providers/llm";
-import {
-  IMAGE_3D_PRINT_PROMPT,
-  IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
-} from "@/lib/prompts";
 import { createLogger } from "@/lib/logger";
+import {
+  IMAGE_3D_PRINT_MULTI_VARIANT_PROMPT,
+  IMAGE_3D_PRINT_PROMPT,
+} from "@/lib/prompts";
+import { createLLMProvider } from "@/lib/providers/llm";
 
 // 创建日志器
 const log = createLogger("PromptOptimizer");

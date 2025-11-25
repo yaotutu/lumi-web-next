@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import type { GenerationStatus, TaskWithDetails } from "@/types";
-import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 import Tooltip from "@/components/ui/Tooltip";
+import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
+import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
   initialPrompt?: string;
@@ -69,7 +69,6 @@ export default function ImageGrid({
             case "FAILED":
               slotStatus = "failed";
               break;
-            case "PENDING":
             default:
               slotStatus = "pending";
               break;

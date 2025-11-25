@@ -13,12 +13,11 @@
  * - 不直接操作数据库，通过 Repository 层
  */
 
-import { AppError } from "@/lib/utils/errors";
 import {
-  ModelRepository,
-  GeneratedImageRepository,
   GenerationRequestRepository,
+  ModelRepository,
 } from "@/lib/repositories";
+import { AppError } from "@/lib/utils/errors";
 
 // ============================================
 // 查询操作

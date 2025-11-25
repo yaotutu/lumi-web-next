@@ -17,14 +17,14 @@
  * - 提供完整的类型安全
  */
 
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { getUserById } from "@/lib/services/auth-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import { AuthStatus } from "@/types/auth";
 
-export const GET = withErrorHandler(async (request: NextRequest) => {
+export const GET = withErrorHandler(async (_request: NextRequest) => {
   // 1. 检查认证状态（静默方式，不抛出异常）
   const authResult = await checkAuthStatus();
 

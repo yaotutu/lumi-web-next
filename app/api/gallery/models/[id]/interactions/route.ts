@@ -5,12 +5,12 @@
  * POST /api/gallery/models/[id]/interactions - 执行点赞/收藏操作
  */
 
-import { type NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
 import { InteractionType } from "@prisma/client";
+import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import * as InteractionService from "@/lib/services/interaction-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
-import { z } from "zod";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 // 请求体验证 schema
 const interactionSchema = z.object({
@@ -31,11 +31,14 @@ export const POST = withErrorHandler(
     // 检查认证状态
     const authResult = await checkAuthStatus();
     if (!authResult.isAuthenticated || !authResult.userSession) {
-      return NextResponse.json({
-        success: false,
-        error: "请先登录后再进行操作",
-        code: "UNAUTHORIZED",
-      }, { status: 401 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "请先登录后再进行操作",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 },
+      );
     }
 
     const body = await request.json();
@@ -48,11 +51,14 @@ export const POST = withErrorHandler(
       type,
     });
 
-    console.log(`👍 用户 ${authResult.userSession.userId} 对模型 ${modelId} 执行 ${type} 操作`, {
-      isInteracted: result.isInteracted,
-      newLikeCount: result.model.likeCount,
-      newFavoriteCount: result.model.favoriteCount,
-    });
+    console.log(
+      `👍 用户 ${authResult.userSession.userId} 对模型 ${modelId} 执行 ${type} 操作`,
+      {
+        isInteracted: result.isInteracted,
+        newLikeCount: result.model.likeCount,
+        newFavoriteCount: result.model.favoriteCount,
+      },
+    );
 
     return NextResponse.json({
       success: true,
@@ -72,7 +78,7 @@ export const POST = withErrorHandler(
  */
 export const GET = withErrorHandler(
   async (
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id: modelId } = await params;

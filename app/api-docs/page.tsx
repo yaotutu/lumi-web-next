@@ -36,18 +36,18 @@ export default function APIDocsPage() {
 
       const initSwaggerUI = () => {
         if (bundleLoaded && standaloneLoaded) {
-          // @ts-ignore - SwaggerUIBundle 和 SwaggerUIStandalonePreset 由外部脚本提供
+          // @ts-expect-error - SwaggerUIBundle 和 SwaggerUIStandalonePreset 由外部脚本提供
           if (window.SwaggerUIBundle && window.SwaggerUIStandalonePreset) {
-            // @ts-ignore
+            // @ts-expect-error
             window.SwaggerUIBundle({
               // 使用 /api/openapi 端点获取规范文件
               url: "/api/openapi",
               dom_id: "#swagger-ui",
               deepLinking: true,
               presets: [
-                // @ts-ignore
+                // @ts-expect-error
                 window.SwaggerUIBundle.presets.apis,
-                // @ts-ignore
+                // @ts-expect-error
                 window.SwaggerUIStandalonePreset,
               ],
               layout: "StandaloneLayout",

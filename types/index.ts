@@ -2,21 +2,20 @@
 // Prisma 导出的类型
 // ============================================
 export type {
-  User,
-  GenerationRequest,
   GeneratedImage,
-  GeneratedModel,
+  GenerationRequest,
   ImageGenerationJob,
+  Model,
   ModelGenerationJob,
   QueueConfig,
-  UserAsset,
+  User,
 } from "@prisma/client";
 
 export {
   ImageStatus, // ✅ 新架构：图片状态
   JobStatus,
-  AssetSource,
-  AssetVisibility,
+  ModelSource,
+  ModelVisibility,
 } from "@prisma/client";
 
 // ============================================
@@ -28,13 +27,11 @@ export type { GenerationRequestResponse } from "@/lib/utils/task-adapter-client"
 // 扩展类型: 包含关联数据的类型
 // ============================================
 import type {
-  GenerationRequest,
   GeneratedImage,
-  GeneratedModel,
+  GenerationRequest,
   ImageGenerationJob,
+  Model,
   ModelGenerationJob,
-  UserAsset,
-  User,
 } from "@prisma/client";
 
 /**
@@ -48,10 +45,20 @@ export type GenerationRequestWithDetails = GenerationRequest & {
 /**
  * 生成的模型详情（包含关联数据）
  */
-export type GeneratedModelWithDetails = GeneratedModel & {
+export type ModelWithDetails = Model & {
   request: GenerationRequest;
   sourceImage: GeneratedImage;
   generationJob?: ModelGenerationJob | null;
+};
+
+/**
+ * 用户资产（Model 的扩展，用于画廊功能）
+ * 包含可选的3D模型技术信息字段
+ */
+export type UserAsset = Model & {
+  faceCount?: number | null;
+  vertexCount?: number | null;
+  quality?: string | null;
 };
 
 /**
@@ -77,12 +84,12 @@ export type UserAssetWithUser = UserAsset & {
 export type TaskWithDetails = GenerationRequestWithDetails & {
   status: string; // 适配字段：从 images[].imageStatus 推导的整体状态
   selectedImageIndex?: number | null; // 兼容字段：从有模型的图片推导
-  models: Array<
-    GeneratedModel & {
-      generationStatus?: string; // 兼容字段：从模型状态推导
-      progress?: number; // 兼容字段：从模型状态推导
-    }
-  >; // 兼容字段：从 images[].generatedModel 收集
+  model:
+    | (Model & {
+        generationStatus?: string; // 兼容字段：从模型状态推导
+        progress?: number; // 兼容字段：从模型状态推导
+      })
+    | null; // 1:1 关系，单数字段（与数据库设计一致）
   modelGenerationStartedAt?: Date | null; // 兼容字段：从最早模型推导
   errorMessage?: string | null; // 兼容字段：错误信息
 };

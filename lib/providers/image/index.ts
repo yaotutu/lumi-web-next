@@ -20,24 +20,21 @@
  * ```
  */
 
-// 导出类型
-export type {
-  ImageGenerationProvider,
-  ImageGenerationConfig,
-  ImageGenerationParams,
-  ImageProviderType,
-} from "./types";
-
-// 导出工厂函数
-export { createImageProvider, getImageProviderType } from "./factory";
-
+// 导出适配器类（供直接实例化使用）
+export { AliyunAPIError, AliyunImageAdapter } from "./adapters/aliyun";
+export { MockImageAdapter } from "./adapters/mock";
+export {
+  SiliconFlowAPIError,
+  SiliconFlowImageAdapter,
+} from "./adapters/siliconflow";
 // 导出基类（供扩展使用）
 export { BaseImageProvider } from "./base";
-
-// 导出适配器类（供直接实例化使用）
-export { AliyunImageAdapter, AliyunAPIError } from "./adapters/aliyun";
-export {
-  SiliconFlowImageAdapter,
-  SiliconFlowAPIError,
-} from "./adapters/siliconflow";
-export { MockImageAdapter } from "./adapters/mock";
+// 导出工厂函数
+export { createImageProvider, getImageProviderType } from "./factory";
+// 导出类型
+export type {
+  ImageGenerationConfig,
+  ImageGenerationParams,
+  ImageGenerationProvider,
+  ImageProviderType,
+} from "./types";

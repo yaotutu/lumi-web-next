@@ -12,19 +12,18 @@
  * - Image.imageStatus 独立管理，Request 无状态
  */
 
-import { IMAGE_GENERATION } from "@/lib/constants";
+import type { ImageGenerationJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
 import { createImageProvider } from "@/lib/providers/image";
 import { generateMultiStylePrompts } from "@/lib/services/prompt-optimizer";
+import { sseConnectionManager } from "@/lib/sse/connection-manager";
 import { downloadAndUploadImage } from "@/lib/utils/image-storage";
 import {
-  workerConfigManager,
   QUEUE_NAMES,
   type WorkerConfig,
+  workerConfigManager,
 } from "./worker-config-manager";
-import type { ImageGenerationJob, JobStatus } from "@prisma/client";
-import { sseConnectionManager } from "@/lib/sse/connection-manager";
 
 // 创建日志器
 const log = createLogger("ImageWorker");
@@ -538,7 +537,7 @@ async function generateSingleImage(
     requestId,
     imageIndex,
     provider: imageProvider.getName(),
-    promptPreview: currentPrompt.substring(0, 80) + "...",
+    promptPreview: `${currentPrompt.substring(0, 80)}...`,
   });
 
   // 生成单张图片
@@ -555,7 +554,7 @@ async function generateSingleImage(
     {
       requestId,
       imageIndex,
-      remoteUrlPreview: remoteImageUrl.substring(0, 80) + "...",
+      remoteUrlPreview: `${remoteImageUrl.substring(0, 80)}...`,
     },
   );
 

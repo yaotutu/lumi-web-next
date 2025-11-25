@@ -9,13 +9,13 @@
  */
 export enum AuthStatus {
   /** 已认证 - 用户有效登录 */
-  AUTHENTICATED = 'authenticated',
+  AUTHENTICATED = "authenticated",
   /** 未认证 - 用户未登录或会话失效 */
-  UNAUTHENTICATED = 'unauthenticated',
+  UNAUTHENTICATED = "unauthenticated",
   /** 已过期 - 登录会话已过期 */
-  EXPIRED = 'expired',
+  EXPIRED = "expired",
   /** 错误状态 - 认证检查过程中出现异常 */
-  ERROR = 'error',
+  ERROR = "error",
 }
 
 /**

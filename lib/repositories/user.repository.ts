@@ -8,8 +8,8 @@
  * - 统一命名规范：find*, create*, update*, delete*
  */
 
-import { prisma } from "@/lib/prisma";
 import type { User } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 /**
  * 根据邮箱查询用户

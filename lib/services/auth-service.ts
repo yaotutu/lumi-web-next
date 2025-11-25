@@ -12,6 +12,7 @@
  * - Utils 层：Cookie 会话管理
  */
 
+import type { User } from "@prisma/client";
 import {
   createVerificationCode,
   findLatestValidCode,
@@ -23,7 +24,6 @@ import {
   updateLastLoginAt,
 } from "@/lib/repositories/user.repository";
 import { AppError } from "@/lib/utils/errors";
-import type { User } from "@prisma/client";
 
 /**
  * 验证码有效期（默认 5 分钟，单位：秒）

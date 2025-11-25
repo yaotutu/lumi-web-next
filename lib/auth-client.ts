@@ -17,6 +17,7 @@
  */
 
 import { authActions } from "@/stores/auth-store";
+import type { User } from "@/types/auth";
 
 /**
  * 用户信息类型 (从 stores/auth-store 重新导出)
@@ -41,7 +42,7 @@ export type { User } from "@/types/auth";
  */
 export async function getCurrentUser(): Promise<User | null> {
   console.warn(
-    "getCurrentUser() 已弃用，请使用 stores/auth-store.ts 中的 useUser() Hook"
+    "getCurrentUser() 已弃用，请使用 stores/auth-store.ts 中的 useUser() Hook",
   );
 
   try {

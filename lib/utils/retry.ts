@@ -136,7 +136,7 @@ export function calculateRetryDelay(
   const baseDelay = isRateLimit ? config.rateLimitDelay : config.baseDelay;
 
   // 指数退避: baseDelay * 2^retryCount
-  const delay = baseDelay * Math.pow(2, retryCount);
+  const delay = baseDelay * 2 ** retryCount;
 
   log.debug("calculateRetryDelay", "计算重试延迟", {
     isRateLimit,

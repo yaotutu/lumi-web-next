@@ -12,12 +12,12 @@
  * - 清除 HTTP-only Cookie（auth-session）
  */
 
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { clearUserCookie } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export const POST = withErrorHandler(async (request: NextRequest) => {
+export const POST = withErrorHandler(async (_request: NextRequest) => {
   // 1. 清除用户会话 Cookie（三重保障）
   await clearUserCookie();
 

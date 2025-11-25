@@ -35,7 +35,7 @@ const RESULT_FORMAT = "OBJ" as const; // 当前硬编码为 OBJ
 /**
  * 支持的模型格式列表（用于结果文件匹配）
  */
-const SUPPORTED_FORMATS = ["OBJ", "GLB"] as const;
+const _SUPPORTED_FORMATS = ["OBJ", "GLB"] as const;
 
 /**
  * 腾讯云 API 错误类
@@ -114,7 +114,7 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
       };
 
       this.log.info("submitModelGenerationJobImpl", "提交3D生成任务", {
-        imageUrl: params.imageUrl.substring(0, 80) + "...",
+        imageUrl: `${params.imageUrl.substring(0, 80)}...`,
         resultFormat: RESULT_FORMAT,
         enablePBR: false,
       });

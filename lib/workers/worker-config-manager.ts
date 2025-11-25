@@ -12,8 +12,8 @@
  * - 提供类型安全的配置访问
  */
 
-import { prisma } from "@/lib/db/prisma";
 import type { QueueConfig } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
 
 // 队列名称常量
 export const QUEUE_NAMES = {
@@ -214,7 +214,7 @@ class WorkerConfigManager {
    */
   public calculateRetryDelay(retryCount: number, config: WorkerConfig): number {
     // 指数退避：baseDelay * (2 ^ retryCount)
-    const delay = config.retryDelayBase * Math.pow(2, retryCount);
+    const delay = config.retryDelayBase * 2 ** retryCount;
 
     // 限制最大延迟
     return Math.min(delay, config.retryDelayMax);

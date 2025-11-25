@@ -12,12 +12,12 @@
  * - 不直接操作数据库，通过 Repository 层
  */
 
-import { AppError } from "@/lib/utils/errors";
-import {
-  ModelRepository,
-  ModelInteractionRepository,
-} from "@/lib/repositories";
 import type { InteractionType } from "@prisma/client";
+import {
+  ModelInteractionRepository,
+  ModelRepository,
+} from "@/lib/repositories";
+import { AppError } from "@/lib/utils/errors";
 
 // ============================================
 // 点赞操作

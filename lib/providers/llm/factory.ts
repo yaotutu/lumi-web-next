@@ -10,10 +10,10 @@
  */
 
 import { createLogger } from "@/lib/logger";
-import type { LLMProvider, LLMProviderType } from "./types";
+import { MockLLMAdapter } from "./adapters/mock";
 import { QwenLLMAdapter } from "./adapters/qwen";
 import { SiliconFlowLLMAdapter } from "./adapters/siliconflow";
-import { MockLLMAdapter } from "./adapters/mock";
+import type { LLMProvider, LLMProviderType } from "./types";
 
 const log = createLogger("LLMProviderFactory");
 

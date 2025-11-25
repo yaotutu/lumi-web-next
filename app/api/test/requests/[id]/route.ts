@@ -4,9 +4,9 @@
  * GET /api/test/requests/[id] - 获取生成请求详情
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * GET /api/test/requests/[id]
@@ -14,7 +14,7 @@ import * as GenerationRequestService from "@/lib/services/generation-request-ser
  */
 export const GET = withErrorHandler(
   async (
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;

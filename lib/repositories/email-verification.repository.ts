@@ -8,8 +8,8 @@
  * - 统一命名规范：find*, create*, update*, delete*
  */
 
-import { prisma } from "@/lib/prisma";
 import type { EmailVerificationCode } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 /**
  * 创建验证码记录

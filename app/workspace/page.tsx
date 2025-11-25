@@ -23,13 +23,13 @@ import { Suspense, useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 // 加载中的骨架屏组件
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
-// 任务数据类型定义（包含图片、模型等完整信息）
-import type { TaskWithDetails } from "@/types";
 // 后端数据适配器（将后端返回的数据转换为前端需要的格式）
 import {
   adaptTaskResponse,
   adaptTasksResponse,
 } from "@/lib/utils/task-adapter-client";
+// 任务数据类型定义（包含图片、模型等完整信息）
+import type { TaskWithDetails } from "@/types";
 // 左侧图片生成和选择组件
 import ImageGrid from "./components/ImageGrid";
 // 右侧 3D 模型预览组件
@@ -173,7 +173,10 @@ function WorkspaceContent() {
 
     // 注意：router 在组件生命周期内稳定，不需要添加到依赖数组
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]); // 依赖项：taskId 变化时重新执行
+  }, [
+    taskId, // 3. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
+    router.replace,
+  ]); // 依赖项：taskId 变化时重新执行
 
   // ============================================
   // Effect 2: SSE 实时状态推送
@@ -366,7 +369,8 @@ function WorkspaceContent() {
         }
 
         // 修复：正确设置状态，优先使用服务器返回的 status
-        const generationStatus = status || (progress >= 100 ? "COMPLETED" : "GENERATING");
+        const generationStatus =
+          status || (progress >= 100 ? "COMPLETED" : "GENERATING");
 
         const updatedModel = {
           ...prev.model,
@@ -432,14 +436,15 @@ function WorkspaceContent() {
       setTask((prev) => {
         if (!prev) return prev;
 
-        const updatedModel = prev.model?.id === modelId
-          ? {
-              ...prev.model,
-              generationStatus: "FAILED",
-              errorMessage,
-              failedAt: new Date(),
-            }
-          : prev.model;
+        const updatedModel =
+          prev.model?.id === modelId
+            ? {
+                ...prev.model,
+                generationStatus: "FAILED",
+                errorMessage,
+                failedAt: new Date(),
+              }
+            : prev.model;
 
         return {
           ...prev,

@@ -14,11 +14,11 @@
  * - task:init - 任务初始状态（连接建立后立即发送）
  */
 
-import { type NextRequest } from "next/server";
-import { sseConnectionManager } from "@/lib/sse/connection-manager";
-import * as GenerationRequestService from "@/lib/services/generation-request-service";
-import { adaptGenerationRequest } from "@/lib/utils/task-adapter-client";
+import type { NextRequest } from "next/server";
 import { createLogger } from "@/lib/logger";
+import * as GenerationRequestService from "@/lib/services/generation-request-service";
+import { sseConnectionManager } from "@/lib/sse/connection-manager";
+import { adaptGenerationRequest } from "@/lib/utils/task-adapter-client";
 
 const log = createLogger("SSE-API");
 

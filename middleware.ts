@@ -13,8 +13,8 @@
  * - 跳转回 redirect 参数指定的页面
  */
 
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 /**
  * Cookie 名称
@@ -50,7 +50,7 @@ function isAuthenticated(request: NextRequest): boolean {
 
     // 验证必需字段
     return !!(userSession.userId && userSession.email);
-  } catch (error) {
+  } catch (_error) {
     // JSON 解析失败或格式错误
     return false;
   }
@@ -63,8 +63,8 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 检查是否是公开路由
-  const isPublicRoute = PUBLIC_ROUTES.some((route) =>
-    pathname === route || pathname.startsWith(route)
+  const isPublicRoute = PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route),
   );
 
   // 如果是公开路由，直接放行
@@ -73,8 +73,8 @@ export function middleware(request: NextRequest) {
   }
 
   // 检查是否是受保护的路由
-  const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
-    pathname === route || pathname.startsWith(route)
+  const isProtectedRoute = PROTECTED_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route),
   );
 
   // 如果是受保护的路由，检查用户登录状态

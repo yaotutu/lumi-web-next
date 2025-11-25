@@ -5,10 +5,10 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { z } from "zod";
 import * as InteractionService from "@/lib/services/interaction-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
-import { z } from "zod";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 // 请求体验证 schema
 const batchInteractionsSchema = z.object({
@@ -37,14 +37,18 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const { modelIds } = batchInteractionsSchema.parse(body);
 
   // 批量获取用户对多个模型的交互状态
-  const interactionsMap = await InteractionService.getBatchUserModelInteractions(
-    authResult.userSession.userId,
-    modelIds
-  );
+  const interactionsMap =
+    await InteractionService.getBatchUserModelInteractions(
+      authResult.userSession.userId,
+      modelIds,
+    );
 
-  console.log(`📊 用户 ${authResult.userSession.userId} 批量查询 ${modelIds.length} 个模型的交互状态`, {
-    interactionCount: Object.keys(interactionsMap).length,
-  });
+  console.log(
+    `📊 用户 ${authResult.userSession.userId} 批量查询 ${modelIds.length} 个模型的交互状态`,
+    {
+      interactionCount: Object.keys(interactionsMap).length,
+    },
+  );
 
   return NextResponse.json({
     success: true,

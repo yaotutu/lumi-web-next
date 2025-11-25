@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { useUser, useIsLoaded, type User, authActions } from "@/stores/auth-store";
+import { useEffect, useState } from "react";
 import { logout } from "@/lib/auth-client";
+import { authActions, useIsLoaded, useUser } from "@/stores/auth-store";
 
 type NavLink = {
   label: string;
@@ -125,7 +125,7 @@ export default function Navigation() {
                 <IconAI3DGlyph />
               </span>
               <span className="text-[13px] font-semibold uppercase tracking-[0.18em] text-foreground">
-                AI3D STUDIO
+                AI3D
               </span>
             </Link>
             <nav className="hidden items-center gap-7 text-[13px] text-foreground-subtle lg:flex">

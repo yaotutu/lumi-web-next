@@ -4,9 +4,9 @@
  * 职责：在应用启动时自动启动所有后台Worker
  */
 
+import { createLogger } from "@/lib/logger";
 import { startWorker as startImageWorker } from "./image-worker";
 import { startWorker as startModel3DWorker } from "./model3d-worker";
-import { createLogger } from "@/lib/logger";
 
 const log = createLogger("WorkerManager");
 

@@ -13,22 +13,20 @@
  * - 完成后更新 GenerationRequest 状态
  */
 
+import type { ModelGenerationJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createLogger, timer } from "@/lib/logger";
-import type { ModelTaskStatus } from "@/lib/providers/model3d";
 import { createModel3DProvider } from "@/lib/providers/model3d";
-import { retryWithBackoff, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
+import { sseConnectionManager } from "@/lib/sse/connection-manager";
 import {
   downloadAndUploadModel,
   downloadAndUploadPreviewImage,
 } from "@/lib/utils/image-storage";
 import {
-  workerConfigManager,
   QUEUE_NAMES,
   type WorkerConfig,
+  workerConfigManager,
 } from "./worker-config-manager";
-import type { ModelGenerationJob } from "@prisma/client";
-import { sseConnectionManager } from "@/lib/sse/connection-manager";
 
 // 创建日志器
 const log = createLogger("Model3DWorker");

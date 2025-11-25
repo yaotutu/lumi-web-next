@@ -30,7 +30,7 @@ async function testMultiStylePrompts() {
       console.error(`❌ 生成失败:`, error);
     }
 
-    console.log("\n" + "=".repeat(80));
+    console.log(`\n${"=".repeat(80)}`);
   }
 
   console.log("\n✨ 测试完成！");

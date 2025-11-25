@@ -16,9 +16,9 @@ import path from "node:path";
 import { BaseStorageProvider } from "../base";
 import type {
   FileInfo,
+  SaveFileParams,
   SaveImageParams,
   SaveModelParams,
-  SaveFileParams,
 } from "../types";
 
 // 存储根目录

@@ -10,9 +10,9 @@
 import { createLogger } from "@/lib/logger";
 import type {
   FileInfo,
+  SaveFileParams,
   SaveImageParams,
   SaveModelParams,
-  SaveFileParams,
   StorageProvider,
 } from "./types";
 

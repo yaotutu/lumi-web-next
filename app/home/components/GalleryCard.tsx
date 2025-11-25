@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useUser } from "@/stores/auth-store";
 
 export type GalleryCardProps = {
@@ -45,19 +45,21 @@ export default function GalleryCard({
   useEffect(() => {
     if (user && !initialInteractionStatus) {
       try {
-        fetch(`/api/gallery/models/${modelId}/interactions`).then(async (response) => {
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data.isAuthenticated) {
-              setInteractionStatus({
-                isLiked: data.data.isLiked || false,
-                isFavorited: data.data.isFavorited || false,
-              });
+        fetch(`/api/gallery/models/${modelId}/interactions`)
+          .then(async (response) => {
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.data.isAuthenticated) {
+                setInteractionStatus({
+                  isLiked: data.data.isLiked || false,
+                  isFavorited: data.data.isFavorited || false,
+                });
+              }
             }
-          }
-        }).catch((error) => {
-          console.error("Failed to fetch interaction status:", error);
-        });
+          })
+          .catch((error) => {
+            console.error("Failed to fetch interaction status:", error);
+          });
       } catch (error) {
         console.error("Failed to fetch interaction status:", error);
       }
@@ -77,56 +79,63 @@ export default function GalleryCard({
     setIsLoading(true);
 
     // 乐观更新 UI
-    const isInteracted = type === "LIKE" ? interactionStatus.isLiked : interactionStatus.isFavorited;
+    const isInteracted =
+      type === "LIKE"
+        ? interactionStatus.isLiked
+        : interactionStatus.isFavorited;
 
     if (type === "LIKE") {
-      setInteractionStatus(prev => ({ ...prev, isLiked: !prev.isLiked }));
-      setCurrentLikes(prev => isInteracted ? prev - 1 : prev + 1);
+      setInteractionStatus((prev) => ({ ...prev, isLiked: !prev.isLiked }));
+      setCurrentLikes((prev) => (isInteracted ? prev - 1 : prev + 1));
     } else {
-      setInteractionStatus(prev => ({ ...prev, isFavorited: !prev.isFavorited }));
-      setCurrentFavorites(prev => isInteracted ? prev - 1 : prev + 1);
+      setInteractionStatus((prev) => ({
+        ...prev,
+        isFavorited: !prev.isFavorited,
+      }));
+      setCurrentFavorites((prev) => (isInteracted ? prev - 1 : prev + 1));
     }
 
     try {
-      const response = await fetch(`/api/gallery/models/${modelId}/interactions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `/api/gallery/models/${modelId}/interactions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ type }),
         },
-        body: JSON.stringify({ type }),
-      });
+      );
 
       if (!response.ok) {
-        // 回滚乐观更新
-        if (type === "LIKE") {
-          setInteractionStatus(prev => ({ ...prev, isLiked }));
-          setCurrentLikes(likes);
-        } else {
-          setInteractionStatus(prev => ({ ...prev, isFavorited }));
-          setCurrentFavorites(favorites);
-        }
         throw new Error("操作失败");
       }
 
       const data = await response.json();
       if (data.success) {
-        // 使用服务器返回的最新数据
+        // 使用服务器返回的权威数据（确保前后端同步）
         setCurrentLikes(data.data.likeCount);
         setCurrentFavorites(data.data.favoriteCount);
-        setInteractionStatus(prev => ({
+        setInteractionStatus((prev) => ({
           ...prev,
           isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
-          isFavorited: type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+          isFavorited:
+            type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
         }));
+      } else {
+        throw new Error(data.error?.message || "操作失败");
       }
     } catch (error) {
       console.error("Interaction failed:", error);
       // 回滚到初始状态
       if (type === "LIKE") {
-        setInteractionStatus(prev => ({ ...prev, isLiked: initialInteractionStatus?.isLiked || false }));
+        setInteractionStatus((prev) => ({ ...prev, isLiked: isInteracted }));
         setCurrentLikes(likes);
       } else {
-        setInteractionStatus(prev => ({ ...prev, isFavorited: initialInteractionStatus?.isFavorited || false }));
+        setInteractionStatus((prev) => ({
+          ...prev,
+          isFavorited: isInteracted,
+        }));
         setCurrentFavorites(favorites);
       }
     } finally {
@@ -141,17 +150,13 @@ export default function GalleryCard({
       className="gallery-card cursor-pointer text-left"
       onClick={handleClick}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           handleClick();
         }
       }}
     >
       <div className="gallery-card__media">
-        <div className="gallery-card__icons">
-          <span>📘</span>
-          <span>⭐</span>
-        </div>
         <Image
           src={image}
           alt={title}
@@ -166,7 +171,10 @@ export default function GalleryCard({
         <p className="gallery-card__title">{title}</p>
         <div className="gallery-card__footer">
           <span>{author}</span>
-          <div className="gallery-card__interactions" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="gallery-card__interactions"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 点赞按钮 */}
             <button
               onClick={(e) => {
@@ -175,7 +183,9 @@ export default function GalleryCard({
               }}
               disabled={isLoading}
               className={`gallery-card__interaction-btn ${
-                interactionStatus.isLiked ? "gallery-card__interaction-btn--liked" : ""
+                interactionStatus.isLiked
+                  ? "gallery-card__interaction-btn--liked"
+                  : ""
               }`}
               title={user ? "点赞" : "请先登录"}
             >
@@ -201,7 +211,9 @@ export default function GalleryCard({
               }}
               disabled={isLoading}
               className={`gallery-card__interaction-btn ${
-                interactionStatus.isFavorited ? "gallery-card__interaction-btn--favorited" : ""
+                interactionStatus.isFavorited
+                  ? "gallery-card__interaction-btn--favorited"
+                  : ""
               }`}
               title={user ? "收藏" : "请先登录"}
             >

@@ -5,9 +5,9 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
-import { getCurrentUserId } from "@/lib/utils/auth";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
+import { getCurrentUserId } from "@/lib/utils/auth";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * GET /api/tasks
@@ -16,9 +16,9 @@ import * as GenerationRequestService from "@/lib/services/generation-request-ser
  * 返回格式：
  * - GenerationRequest（无 status/phase）
  * - images: GeneratedImage[]（每个有 imageStatus）
- * - generatedModels: GeneratedModel[]
+ * - model: Model | null（1:1 关系）
  */
-export const GET = withErrorHandler(async (request: NextRequest) => {
+export const GET = withErrorHandler(async (_request: NextRequest) => {
   const userId = await getCurrentUserId();
   const requests = await GenerationRequestService.listRequests(userId);
 

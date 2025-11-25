@@ -5,9 +5,9 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { withErrorHandler, AppError } from "@/lib/utils/errors";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
 import * as ModelService from "@/lib/services/model-service";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * POST /api/tasks/:id/print

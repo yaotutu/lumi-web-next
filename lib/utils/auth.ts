@@ -8,8 +8,8 @@
  */
 
 import { cookies } from "next/headers";
+import { type AuthCheckResult, AuthStatus } from "@/types/auth";
 import { AppError } from "./errors";
-import { AuthStatus, type AuthCheckResult } from "@/types/auth";
 
 // ============================================
 // 配置常量
@@ -120,7 +120,7 @@ export async function getCurrentUser(): Promise<UserSession> {
     }
 
     return user;
-  } catch (error) {
+  } catch (_error) {
     throw new AppError("UNAUTHORIZED", "登录信息无效，请重新登录");
   }
 }
@@ -175,7 +175,7 @@ export async function clearUserCookie(): Promise<void> {
  * }
  * ```
  */
-export function canAccessResource(resourceUserId: string): boolean {
+export function canAccessResource(_resourceUserId: string): boolean {
   // TODO: 替换为真实的权限检查逻辑
   // 示例实现：
   // const currentUserId = getCurrentUserId();
@@ -200,7 +200,7 @@ export function canAccessResource(resourceUserId: string): boolean {
  * // 继续处理...
  * ```
  */
-export function requireResourceAccess(resourceUserId: string): void {
+export function requireResourceAccess(_resourceUserId: string): void {
   // 导入 AppError（延迟导入避免循环依赖）
   // if (!canAccessResource(resourceUserId)) {
   //   const { AppError } = require("./errors");
@@ -276,7 +276,7 @@ export async function checkAuthStatus(): Promise<AuthCheckResult> {
         email: userSession.email,
       },
     };
-  } catch (error) {
+  } catch (_error) {
     // JSON 解析失败，视为认证错误
     return {
       isAuthenticated: false,

@@ -6,9 +6,9 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
 import * as ModelService from "@/lib/services/model-service";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * GET /api/tasks/[id]
@@ -21,7 +21,7 @@ import * as ModelService from "@/lib/services/model-service";
  */
 export const GET = withErrorHandler(
   async (
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;

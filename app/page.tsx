@@ -1,6 +1,6 @@
 import Navigation from "@/components/layout/Navigation";
-import ModelGallery from "./home/components/ModelGallery";
 import HeroSection from "./home/components/HeroSection";
+import ModelGallery from "./home/components/ModelGallery";
 
 export default function Home() {
   return (

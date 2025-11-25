@@ -5,9 +5,9 @@
  * 用途：为 Swagger UI 提供规范文件
  */
 
-import { NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function GET() {
         "Cache-Control": "no-cache", // 开发环境不缓存，方便调试
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       {
         success: false,

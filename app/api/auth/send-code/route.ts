@@ -14,11 +14,11 @@
  * }
  */
 
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { sendVerificationCode } from "@/lib/services/auth-service";
 import { withErrorHandler } from "@/lib/utils/errors";
 import { SendCodeSchema } from "@/lib/validators/auth.validator";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
   // 1. 解析请求体

@@ -6,9 +6,9 @@
  * 新架构：1 Request : 1 Model，接受 requestId 和 imageIndex
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import * as ModelService from "@/lib/services/model-service";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * POST /api/test/models/generate

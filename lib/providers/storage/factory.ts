@@ -10,10 +10,10 @@
  */
 
 import { createLogger } from "@/lib/logger";
-import type { StorageProvider, StorageProviderType } from "./types";
-import { LocalStorageAdapter } from "./adapters/local";
 import { AliyunOSSAdapter } from "./adapters/aliyun-oss";
+import { LocalStorageAdapter } from "./adapters/local";
 import { TencentCOSAdapter } from "./adapters/tencent-cos";
+import type { StorageProvider, StorageProviderType } from "./types";
 
 const log = createLogger("StorageProviderFactory");
 

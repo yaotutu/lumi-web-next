@@ -1,12 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Navigation from "@/components/layout/Navigation";
-import type { TaskWithDetails } from "@/types";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
+import type { TaskWithDetails } from "@/types";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -148,7 +148,7 @@ export default function HistoryPage() {
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">
                       <span>{task.images.length} 张图片</span>
-                      {task.model && <span>• 已生成3D</span>}
+                      {task.model != null && <span>• 已生成3D</span>}
                     </div>
 
                     <div className="text-xs text-white/40">

@@ -23,21 +23,18 @@
  * ```
  */
 
-// 导出类型
-export type {
-  LLMProvider,
-  LLMProviderType,
-  LLMConfig,
-  ChatCompletionRequest,
-} from "./types";
-
-// 导出工厂函数
-export { createLLMProvider, getLLMProviderType } from "./factory";
-
-// 导出基类（供扩展使用）
-export { BaseLLMProvider } from "./base";
-
+export { MockLLMAdapter } from "./adapters/mock";
 // 导出适配器类（供直接实例化使用）
 export { QwenLLMAdapter } from "./adapters/qwen";
 export { SiliconFlowLLMAdapter } from "./adapters/siliconflow";
-export { MockLLMAdapter } from "./adapters/mock";
+// 导出基类（供扩展使用）
+export { BaseLLMProvider } from "./base";
+// 导出工厂函数
+export { createLLMProvider, getLLMProviderType } from "./factory";
+// 导出类型
+export type {
+  ChatCompletionRequest,
+  LLMConfig,
+  LLMProvider,
+  LLMProviderType,
+} from "./types";

@@ -9,9 +9,9 @@
  */
 
 import { createLogger } from "@/lib/logger";
-import type { Model3DProvider, Model3DProviderType } from "./types";
-import { TencentModel3DAdapter } from "./adapters/tencent";
 import { MockModel3DAdapter } from "./adapters/mock";
+import { TencentModel3DAdapter } from "./adapters/tencent";
+import type { Model3DProvider, Model3DProviderType } from "./types";
 
 const log = createLogger("Model3DProviderFactory");
 

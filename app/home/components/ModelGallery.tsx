@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { GalleryCardProps } from "./GalleryCard";
-import GalleryCard from "./GalleryCard";
 import { useUser } from "@/stores/auth-store";
 import { useModal } from "../hooks/useModal";
+import type { GalleryCardProps } from "./GalleryCard";
+import GalleryCard from "./GalleryCard";
 import ModelDetailModal from "./ModelDetailModal";
 
 // UserAsset 类型（从 API 返回）
@@ -46,7 +46,10 @@ const collections: Collection[] = [
 function mapUserAssetToGalleryCard(
   asset: UserAsset,
   onCardClick: (modelId: string) => void,
-  interactionStatuses?: Record<string, { isLiked: boolean; isFavorited: boolean }>
+  interactionStatuses?: Record<
+    string,
+    { isLiked: boolean; isFavorited: boolean }
+  >,
 ): GalleryCardProps {
   const status = interactionStatuses?.[asset.id];
 
@@ -58,10 +61,12 @@ function mapUserAssetToGalleryCard(
     likes: asset.likeCount,
     favorites: asset.favoriteCount,
     onClick: onCardClick, // 使用点击回调而不是 href
-    initialInteractionStatus: status ? {
-      isLiked: status.isLiked,
-      isFavorited: status.isFavorited,
-    } : undefined,
+    initialInteractionStatus: status
+      ? {
+          isLiked: status.isLiked,
+          isFavorited: status.isFavorited,
+        }
+      : undefined,
   };
 }
 
@@ -79,7 +84,9 @@ export default function ModelGallery() {
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [interactionStatuses, setInteractionStatuses] = useState<Record<string, { isLiked: boolean; isFavorited: boolean }>>({});
+  const [interactionStatuses, setInteractionStatuses] = useState<
+    Record<string, { isLiked: boolean; isFavorited: boolean }>
+  >({});
 
   // 每次加载的数量
   const LIMIT = 20;
@@ -99,28 +106,31 @@ export default function ModelGallery() {
    * 批量加载用户的交互状态
    * @param modelIds 模型ID数组
    */
-  const loadInteractionStatuses = useCallback(async (modelIds: string[]) => {
-    try {
-      if (!user) return;
+  const loadInteractionStatuses = useCallback(
+    async (modelIds: string[]) => {
+      try {
+        if (!user) return;
 
-      const response = await fetch("/api/gallery/models/batch-interactions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ modelIds }),
-      });
+        const response = await fetch("/api/gallery/models/batch-interactions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ modelIds }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data.isAuthenticated) {
-          setInteractionStatuses(data.data.interactions);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data.isAuthenticated) {
+            setInteractionStatuses(data.data.interactions);
+          }
         }
+      } catch (error) {
+        console.error("批量加载交互状态失败:", error);
       }
-    } catch (error) {
-      console.error("批量加载交互状态失败:", error);
-    }
-  }, [user]);
+    },
+    [user],
+  );
 
   /**
    * 加载模型数据
@@ -147,9 +157,7 @@ export default function ModelGallery() {
           const newModels = data.data.models;
 
           // 更新模型列表
-          setModels((prev) =>
-            reset ? newModels : [...prev, ...newModels],
-          );
+          setModels((prev) => (reset ? newModels : [...prev, ...newModels]));
           setHasMore(data.data.hasMore);
           setOffset(reset ? LIMIT : currentOffset + LIMIT);
 
@@ -177,7 +185,7 @@ export default function ModelGallery() {
   useEffect(() => {
     loadModels(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 仅在首次渲染时执行
+  }, [loadModels]); // 仅在首次渲染时执行
 
   /**
    * 切换排序方式

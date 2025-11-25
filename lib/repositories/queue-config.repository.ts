@@ -7,7 +7,7 @@
  * - 不包含业务逻辑
  */
 
-import type { QueueConfig, Prisma } from "@prisma/client";
+import type { Prisma, QueueConfig } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 // ============================================

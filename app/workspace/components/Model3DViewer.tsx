@@ -1,19 +1,19 @@
 "use client";
 
-import {
-  Suspense,
-  useRef,
-  useImperativeHandle,
-  forwardRef,
-  useMemo,
-  useEffect,
-} from "react";
+import { Environment, Grid, OrbitControls, useGLTF } from "@react-three/drei";
 import { Canvas, useLoader } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment, Grid } from "@react-three/drei";
-import type { OrbitControls as OrbitControlsType } from "three-stdlib";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import {
+  forwardRef,
+  Suspense,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react";
 import * as THREE from "three";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 
 // GLB 模型组件
 function GLBModel({
@@ -216,19 +216,6 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
     // 调试日志：查看传入的 modelUrl
     console.log("Model3DViewer 接收到的 modelUrl:", modelUrl);
 
-    // 如果没有 modelUrl，显示错误提示
-    if (!modelUrl) {
-      console.error("Model3DViewer: modelUrl 为空，无法加载模型");
-      return (
-        <div className="flex h-full w-full items-center justify-center">
-          <div className="text-center">
-            <div className="mb-2 text-4xl">⚠️</div>
-            <p className="text-sm text-white/60">模型 URL 为空</p>
-          </div>
-        </div>
-      );
-    }
-
     // 应用材质颜色（单色或恢复原始贴图）
     const applyMaterial = (color: string | null) => {
       if (!sceneRef.current) return;
@@ -259,7 +246,7 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
       });
     };
 
-    // 暴露方法给父组件
+    // 暴露方法给父组件（必须在所有 return 之前调用）
     useImperativeHandle(ref, () => ({
       resetCamera: () => {
         if (controlsRef.current) {
@@ -269,6 +256,19 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
       },
       applyMaterial,
     }));
+
+    // 如果没有 modelUrl，显示错误提示
+    if (!modelUrl) {
+      console.error("Model3DViewer: modelUrl 为空，无法加载模型");
+      return (
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="text-center">
+            <div className="mb-2 text-4xl">⚠️</div>
+            <p className="text-sm text-white/60">模型 URL 为空</p>
+          </div>
+        </div>
+      );
+    }
     return (
       // Canvas 是 React Three Fiber 的根容器
       <Canvas

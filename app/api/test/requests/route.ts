@@ -5,9 +5,9 @@
  * GET /api/test/requests - 获取用户的生成请求列表
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { type NextRequest, NextResponse } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
+import { withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * POST /api/test/requests
