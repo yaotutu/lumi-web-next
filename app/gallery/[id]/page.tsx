@@ -497,7 +497,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
             )}
 
             {/* 统计数据 */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="text-center p-3 rounded-lg bg-white/5">
                 <div className="text-2xl font-bold text-yellow-1">
                   {model.viewCount}
@@ -505,6 +505,16 @@ export default function GalleryDetailPage({ params }: PageProps) {
                 <div className="text-xs text-white/50">浏览</div>
               </div>
 
+              <div className="text-center p-3 rounded-lg bg-white/5">
+                <div className="text-2xl font-bold text-yellow-1">
+                  {model.downloadCount}
+                </div>
+                <div className="text-xs text-white/50">下载</div>
+              </div>
+            </div>
+
+            {/* 交互按钮 */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
               {/* 点赞按钮 */}
               <button
                 type="button"

@@ -484,7 +484,7 @@ export default function ModelDetailModal({
 
                   {/* 材质切换 */}
                   <div className="flex items-center gap-1.5">
-                    {MATERIAL_COLORS.slice(0, 3).map((color) => (
+                    {MATERIAL_COLORS.map((color) => (
                       <button
                         key={color.name}
                         type="button"
@@ -501,15 +501,6 @@ export default function ModelDetailModal({
                         </span>
                       </button>
                     ))}
-                    {MATERIAL_COLORS.length > 3 && (
-                      <button
-                        type="button"
-                        title="更多材质"
-                        className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] text-white/40 text-xs transition-all duration-200 hover:border-yellow-1/50 hover:bg-yellow-1/10 hover:text-yellow-1"
-                      >
-                        +{MATERIAL_COLORS.length - 3}
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -552,8 +543,8 @@ export default function ModelDetailModal({
 
                 {/* 📊 数据统计 - 无标题版 */}
                 <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-3 backdrop-blur-sm shadow-lg">
-                  {/* 3列统计布局 */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* 2列统计布局 */}
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-yellow-1/10 to-yellow-1/5 border border-yellow-1/20 hover:from-yellow-1/15 hover:to-yellow-1/10 transition-all duration-200">
                       <div className="flex items-center justify-center mb-1">
                         <svg
@@ -604,28 +595,6 @@ export default function ModelDetailModal({
                         {model.downloadCount}
                       </div>
                       <div className="text-[8px] text-text-subtle">下载</div>
-                    </div>
-
-                    <div className="text-center p-2.5 rounded-lg bg-gradient-to-br from-red-1/10 to-red-1/5 border border-red-1/20 hover:from-red-1/15 hover:to-red-1/10 transition-all duration-200">
-                      <div className="flex items-center justify-center mb-1">
-                        <svg
-                          className="w-3.5 h-3.5 text-red-1"
-                          fill={currentLikes > 0 ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                          />
-                        </svg>
-                      </div>
-                      <div className="text-base font-bold text-red-1">
-                        {currentLikes}
-                      </div>
-                      <div className="text-[8px] text-text-subtle">点赞</div>
                     </div>
                   </div>
                 </div>
