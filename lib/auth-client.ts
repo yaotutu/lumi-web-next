@@ -88,6 +88,11 @@ export async function logout(): Promise<boolean> {
       credentials: "include", // 携带 Cookie
     });
 
+    // 清除前端状态
+    if (response.ok) {
+      authActions.resetAuth();
+    }
+
     return response.ok;
   } catch {
     return false;
