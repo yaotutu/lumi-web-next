@@ -52,6 +52,7 @@ npm start
 
 | 文档 | 说明 |
 |------|------|
+| **[AUTHENTICATION.md](docs/AUTHENTICATION.md)** | 认证与鉴权架构：统一路由配置、Middleware 实现、前端 401 处理、表单持久化 |
 | **[PROMPT_OPTIMIZATION.md](docs/PROMPT_OPTIMIZATION.md)** | Prompt 优化功能详解：工作流程、配置步骤、优化规则、技术架构、故障处理 |
 | **[快速开始.md](docs/快速开始.md)** | Prompt 优化快速入门：配置步骤、验证效果、故障排查 |
 | **[日志输出示例.md](docs/日志输出示例.md)** | 日志输出示例：优化成功、功能关闭、优化失败场景 |
@@ -382,6 +383,19 @@ await logout();
 - **不要引入JWT**：严禁重新引入jose或其他JWT库
 - **保持Cookie方案**：后续维护必须保持当前的纯Cookie实现
 - **性能优先**：选择简单直接的方案，避免过度工程化
+
+### 统一鉴权架构
+
+**设计原则**：页面路由全部公开，API 路由在 Middleware 统一拦截。Cookie 只在 Middleware 解析一次，通过请求头（`x-user-id`、`x-user-email`）传递给 API。前端遇到 401 自动弹出登录弹窗，登录成功后自动重试请求。
+
+**核心实现**：
+- `lib/config/api-routes.ts` - 统一路由配置（支持路径模板 `:id` 和方法级保护）
+- `lib/utils/request-auth.ts` - 从请求头获取用户信息（`getUserIdFromRequest()`）
+- `middleware.ts` - 验证身份并通过请求头传递用户信息
+- `components/auth/LoginModal.tsx` + `lib/api-client.ts` - 前端 401 自动弹窗登录
+- `stores/workspace-form-store.ts` - 表单持久化（登录过程不丢失数据）
+
+**详细文档**：[AUTHENTICATION.md](docs/AUTHENTICATION.md) - 完整架构设计、实现细节、工作流程、测试方法
 
 ## 日志系统
 
