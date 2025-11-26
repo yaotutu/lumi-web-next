@@ -6,9 +6,9 @@
 
 import { NextResponse } from "next/server";
 import type {
-  ApiSuccessResponse,
-  ApiFailResponse,
   ApiErrorResponse,
+  ApiFailResponse,
+  ApiSuccessResponse,
 } from "@/types/api-response";
 
 /**

@@ -18,8 +18,8 @@
 
 import type { NextRequest } from "next/server";
 import { sendVerificationCode } from "@/lib/services/auth-service";
-import { withErrorHandler } from "@/lib/utils/errors";
 import { success } from "@/lib/utils/api-response";
+import { withErrorHandler } from "@/lib/utils/errors";
 import { SendCodeSchema } from "@/lib/validators/auth.validator";
 
 export const POST = withErrorHandler(async (request: NextRequest) => {

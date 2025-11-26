@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser } from "@/stores/auth-store";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 export type GalleryCardProps = {
   modelId: string;

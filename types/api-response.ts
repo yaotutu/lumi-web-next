@@ -16,7 +16,7 @@
  */
 export interface ApiSuccessResponse<T = unknown> {
   /** 响应状态 */
-  status: 'success';
+  status: "success";
   /** 响应数据 */
   data: T;
 }
@@ -27,7 +27,7 @@ export interface ApiSuccessResponse<T = unknown> {
  */
 export interface ApiFailResponse {
   /** 响应状态 */
-  status: 'fail';
+  status: "fail";
   /** 失败详情 */
   data: {
     /** 错误描述 */
@@ -45,7 +45,7 @@ export interface ApiFailResponse {
  */
 export interface ApiErrorResponse {
   /** 响应状态 */
-  status: 'error';
+  status: "error";
   /** 错误描述 */
   message: string;
   /** 错误代码 */
@@ -90,7 +90,7 @@ export interface SortParams {
 export function isSuccessResponse<T>(
   response: ApiResponse<T>,
 ): response is ApiSuccessResponse<T> {
-  return response.status === 'success';
+  return response.status === "success";
 }
 
 /**
@@ -99,7 +99,7 @@ export function isSuccessResponse<T>(
 export function isFailResponse(
   response: ApiResponse<unknown>,
 ): response is ApiFailResponse {
-  return response.status === 'fail';
+  return response.status === "fail";
 }
 
 /**
@@ -108,5 +108,5 @@ export function isFailResponse(
 export function isErrorResponse(
   response: ApiResponse<unknown>,
 ): response is ApiErrorResponse {
-  return response.status === 'error';
+  return response.status === "error";
 }

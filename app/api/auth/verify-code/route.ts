@@ -22,9 +22,9 @@
 
 import type { NextRequest } from "next/server";
 import { verifyCodeAndLogin } from "@/lib/services/auth-service";
+import { success } from "@/lib/utils/api-response";
 import { setUserCookie } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { success } from "@/lib/utils/api-response";
 import { VerifyCodeSchema } from "@/lib/validators/auth.validator";
 
 export const POST = withErrorHandler(async (request: NextRequest) => {

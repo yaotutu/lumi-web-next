@@ -5,10 +5,10 @@
  * PATCH /api/admin/queues/[name] - 更新队列配置
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { QueueConfigRepository } from "@/lib/repositories";
-import { withErrorHandler, AppError } from "@/lib/utils/errors";
 import { success } from "@/lib/utils/api-response";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
 import { workerConfigManager } from "@/lib/workers/worker-config-manager";
 
 /**

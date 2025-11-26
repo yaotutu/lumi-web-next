@@ -26,9 +26,7 @@ export function isSuccess<T>(response: ApiResponse<T>): response is {
 /**
  * 判断 API 响应是否失败（业务失败）
  */
-export function isFail(
-  response: ApiResponse<unknown>,
-): response is {
+export function isFail(response: ApiResponse<unknown>): response is {
   status: "fail";
   data: { message: string; code?: string; details?: unknown };
 } {
@@ -38,9 +36,7 @@ export function isFail(
 /**
  * 判断 API 响应是否错误（系统错误）
  */
-export function isError(
-  response: ApiResponse<unknown>,
-): response is {
+export function isError(response: ApiResponse<unknown>): response is {
   status: "error";
   message: string;
   code?: string;
@@ -71,7 +67,9 @@ export function getErrorMessage(response: ApiResponse<unknown>): string {
 /**
  * 从 API 响应中提取错误代码
  */
-export function getErrorCode(response: ApiResponse<unknown>): string | undefined {
+export function getErrorCode(
+  response: ApiResponse<unknown>,
+): string | undefined {
   if (response.status === "fail") {
     return response.data.code;
   }

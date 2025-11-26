@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 

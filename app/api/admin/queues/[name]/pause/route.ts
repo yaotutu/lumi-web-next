@@ -5,10 +5,10 @@
  * DELETE /api/admin/queues/[name]/pause - 恢复队列
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { QueueConfigRepository } from "@/lib/repositories";
-import { withErrorHandler } from "@/lib/utils/errors";
 import { success } from "@/lib/utils/api-response";
+import { withErrorHandler } from "@/lib/utils/errors";
 import { workerConfigManager } from "@/lib/workers/worker-config-manager";
 
 /**

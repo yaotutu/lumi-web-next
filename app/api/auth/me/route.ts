@@ -19,9 +19,9 @@
 
 import type { NextRequest } from "next/server";
 import { getUserById } from "@/lib/services/auth-service";
+import { success } from "@/lib/utils/api-response";
 import { checkAuthStatus } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { success } from "@/lib/utils/api-response";
 import { AuthStatus } from "@/types/auth";
 
 export const GET = withErrorHandler(async (_request: NextRequest) => {

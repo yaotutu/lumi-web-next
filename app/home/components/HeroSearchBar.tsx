@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
 

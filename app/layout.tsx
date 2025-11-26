@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// 全局登录弹窗组件
+import LoginModal from "@/components/auth/LoginModal";
 
 // 移除自定义字体配置,使用系统默认字体以兼容 Turbopack
 export const metadata: Metadata = {
@@ -14,7 +16,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {/* 页面内容 */}
+        {children}
+
+        {/* 全局登录弹窗（响应 API 401 错误） */}
+        <LoginModal />
+      </body>
     </html>
   );
 }

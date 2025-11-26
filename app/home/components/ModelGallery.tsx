@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser } from "@/stores/auth-store";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import { useModal } from "../hooks/useModal";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
@@ -126,7 +126,10 @@ export default function ModelGallery() {
           if (isSuccess(data)) {
             const batchResult = data.data as {
               isAuthenticated: boolean;
-              interactions: Record<string, { isLiked: boolean; isFavorited: boolean }>;
+              interactions: Record<
+                string,
+                { isLiked: boolean; isFavorited: boolean }
+              >;
             };
             if (batchResult.isAuthenticated) {
               setInteractionStatuses(batchResult.interactions);

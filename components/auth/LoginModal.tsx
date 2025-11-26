@@ -1,35 +1,37 @@
 "use client";
 
 /**
- * 邮箱验证码登录表单
+ * 全局登录弹窗组件
  *
  * 功能：
- * - 邮箱输入
- * - 发送验证码（60秒倒计时）
- * - 验证码输入（4位数字）
- * - 登录
- * - Loading 状态
- * - 错误提示
+ * - 响应全局登录状态，显示/隐藏弹窗
+ * - 复用邮箱验证码登录逻辑
+ * - 登录成功后执行回调（如重试失败的请求）
+ * - 自动刷新认证状态
  *
- * 用户体验：
- * - 验证码输入框自动聚焦
- * - 发送验证码后显示倒计时
- * - 登录成功后跳转到 redirect 参数指定的页面
+ * 设计：
+ * - 居中显示
+ * - 遮罩层（点击关闭）
+ * - ESC 键关闭
+ * - 登录成功后自动关闭
  */
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { authActions } from "@/stores/auth-store";
+import { loginModalActions, useLoginModal } from "@/stores/login-modal-store";
 
 /**
  * 倒计时秒数
  */
 const COUNTDOWN_SECONDS = 60;
 
-export default function EmailLoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+/**
+ * 登录弹窗内容组件
+ * 复用 EmailLoginForm 的逻辑，但适配弹窗模式
+ */
+function LoginModalContent() {
+  const { onSuccess } = useLoginModal();
 
   // 表单状态
   const [email, setEmail] = useState("");
@@ -134,9 +136,17 @@ export default function EmailLoginForm() {
 
       // JSend 格式判断
       if (isSuccess(data)) {
-        // 登录成功，跳转
-        router.push(redirect);
-        router.refresh(); // 刷新服务端组件
+        // 登录成功
+        // 1. 刷新认证状态
+        await authActions.refreshAuth();
+
+        // 2. 执行成功回调（如重试失败的请求）
+        if (onSuccess) {
+          await onSuccess();
+        }
+
+        // 3. 关闭弹窗
+        loginModalActions.close();
       } else {
         throw new Error(getErrorMessage(data));
       }
@@ -159,13 +169,13 @@ export default function EmailLoginForm() {
       {/* 邮箱输入 */}
       <div>
         <label
-          htmlFor="email"
+          htmlFor="modal-email"
           className="block text-sm font-medium text-text-muted mb-2"
         >
           邮箱
         </label>
         <input
-          id="email"
+          id="modal-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -196,13 +206,13 @@ export default function EmailLoginForm() {
       {codeSent && (
         <div className="fade-in-up">
           <label
-            htmlFor="code"
+            htmlFor="modal-code"
             className="block text-sm font-medium text-text-muted mb-2"
           >
             验证码
           </label>
           <input
-            id="code"
+            id="modal-code"
             type="text"
             value={code}
             onChange={(e) => {
@@ -232,6 +242,85 @@ export default function EmailLoginForm() {
           {isLoggingIn ? "登录中..." : "登录"}
         </button>
       )}
+
+      {/* 在完整页面登录链接 */}
+      <div className="text-center">
+        <a
+          href="/login"
+          className="text-sm text-text-subtle hover:text-accent-yellow transition-colors"
+        >
+          在完整页面登录
+        </a>
+      </div>
     </form>
+  );
+}
+
+/**
+ * 全局登录弹窗组件
+ */
+export default function LoginModal() {
+  const { isOpen, context } = useLoginModal();
+
+  // ESC 键关闭弹窗
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        loginModalActions.close();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOpen]);
+
+  // 弹窗未打开，不渲染
+  if (!isOpen) {
+    return null;
+  }
+
+  // 根据上下文显示不同的标题
+  const getTitle = () => {
+    switch (context) {
+      case "workspace":
+        return "登录后继续创作";
+      case "gallery":
+        return "登录后继续操作";
+      case "history":
+        return "登录后查看历史记录";
+      default:
+        return "欢迎回来";
+    }
+  };
+
+  return (
+    <>
+      {/* 遮罩层 */}
+      <div
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 fade-in"
+        onClick={() => loginModalActions.close()}
+      />
+
+      {/* 弹窗内容 */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="glass-panel w-full max-w-md p-8 fade-in-up"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 标题 */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-text-strong mb-2">
+              {getTitle()}
+            </h2>
+            <p className="text-sm text-text-subtle">
+              使用邮箱验证码登录，无需密码
+            </p>
+          </div>
+
+          {/* 登录表单 */}
+          <LoginModalContent />
+        </div>
+      </div>
+    </>
   );
 }

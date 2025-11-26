@@ -3,13 +3,17 @@
  *
  * 直接返回 GenerationRequest 数据，无适配层
  * 采用 JSend 响应规范
+ *
+ * 认证架构：
+ * - Middleware 已验证用户身份并通过请求头传递 userId
+ * - 直接从请求头读取 userId，无需重复验证
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
-import { getCurrentUserId } from "@/lib/utils/auth";
-import { withErrorHandler, AppError } from "@/lib/utils/errors";
-import { success, fail } from "@/lib/utils/api-response";
+import { success } from "@/lib/utils/api-response";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
+import { getUserIdFromRequest } from "@/lib/utils/request-auth";
 
 /**
  * GET /api/tasks
@@ -24,8 +28,9 @@ import { success, fail } from "@/lib/utils/api-response";
  *   }
  * }
  */
-export const GET = withErrorHandler(async (_request: NextRequest) => {
-  const userId = await getCurrentUserId();
+export const GET = withErrorHandler(async (request: NextRequest) => {
+  // 从请求头读取 userId（middleware 已验证）
+  const userId = getUserIdFromRequest(request);
   const requests = await GenerationRequestService.listRequests(userId);
 
   // JSend success 格式 - 列表数据嵌套在 data.items 中
@@ -59,7 +64,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     throw new AppError("VALIDATION_ERROR", "提示词不能为空");
   }
 
-  const userId = await getCurrentUserId();
+  // 从请求头读取 userId（middleware 已验证）
+  const userId = getUserIdFromRequest(request);
   const generationRequest = await GenerationRequestService.createRequest(
     userId,
     prompt.trim(),

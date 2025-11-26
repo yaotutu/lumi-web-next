@@ -4,12 +4,12 @@
  * POST /api/gallery/models/batch-interactions - 批量获取用户对多个模型的交互状态
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import * as InteractionService from "@/lib/services/interaction-service";
+import { success } from "@/lib/utils/api-response";
 import { checkAuthStatus } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { success } from "@/lib/utils/api-response";
 
 // 请求体验证 schema
 const batchInteractionsSchema = z.object({

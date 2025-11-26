@@ -5,10 +5,10 @@
  * 采用 JSend 响应规范
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
-import { AppError, withErrorHandler } from "@/lib/utils/errors";
 import { success } from "@/lib/utils/api-response";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
 
 /**
  * GET /api/tasks/:id/print-status

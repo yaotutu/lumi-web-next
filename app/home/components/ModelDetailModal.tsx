@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import { useUser } from "@/stores/auth-store";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import type { UserAssetWithUser } from "@/types";
 
 // 材质颜色选项（从详情页复制）
@@ -425,7 +425,8 @@ export default function ModelDetailModal({
               <div
                 className="w-full md:w-[58%] relative"
                 style={{
-                  animation: 'content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.1s both'
+                  animation:
+                    "content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.1s both",
                 }}
               >
                 <div
@@ -533,14 +534,18 @@ export default function ModelDetailModal({
               <div
                 className="w-full md:w-[42%] flex flex-col overflow-y-auto bg-gradient-to-b from-[#0d0d0d] to-[#1a1a1a] p-6 gap-4"
                 style={{
-                  animation: 'content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.15s both'
+                  animation:
+                    "content-fade-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.15s both",
                 }}
               >
                 {/* 基本信息 - 精简版 */}
                 <div className="rounded-xl bg-gradient-to-br from-surface-2/80 to-surface-3/60 border border-white/5 p-5 backdrop-blur-sm shadow-lg">
                   {/* 模型名称和状态 */}
                   <div className="flex items-center justify-between mb-2">
-                    <h1 className="text-xl font-semibold text-white leading-tight" style={{ letterSpacing: '-0.01em' }}>
+                    <h1
+                      className="text-xl font-semibold text-white leading-tight"
+                      style={{ letterSpacing: "-0.01em" }}
+                    >
                       {model.name}
                     </h1>
 

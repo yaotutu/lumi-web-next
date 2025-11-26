@@ -4,13 +4,13 @@
  * POST /api/gallery/models/[id]/download
  */
 
-import { type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import {
   findModelById,
   incrementModelCount,
 } from "@/lib/repositories/model.repository";
-import { AppError, withErrorHandler } from "@/lib/utils/errors";
 import { success } from "@/lib/utils/api-response";
+import { AppError, withErrorHandler } from "@/lib/utils/errors";
 
 // POST /api/gallery/models/[id]/download - 增加下载计数
 export const POST = withErrorHandler(

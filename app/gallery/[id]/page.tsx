@@ -6,9 +6,9 @@ import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
 import Navigation from "@/components/layout/Navigation";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import { useUser } from "@/stores/auth-store";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 // 材质颜色选项（从 ModelPreview 复制）
 const MATERIAL_COLORS = [

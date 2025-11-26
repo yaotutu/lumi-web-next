@@ -23,13 +23,13 @@ import { Suspense, useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 // 加载中的骨架屏组件
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
+// API 响应辅助函数（JSend 格式）
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 // 后端数据适配器（将后端返回的数据转换为前端需要的格式）
 import {
   adaptTaskResponse,
   adaptTasksResponse,
 } from "@/lib/utils/task-adapter-client";
-// API 响应辅助函数（JSend 格式）
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 // 任务数据类型定义（包含图片、模型等完整信息）
 import type { TaskWithDetails } from "@/types";
 // 左侧图片生成和选择组件

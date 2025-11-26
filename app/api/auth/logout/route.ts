@@ -15,9 +15,9 @@
  */
 
 import type { NextRequest } from "next/server";
+import { success } from "@/lib/utils/api-response";
 import { clearUserCookie } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
-import { success } from "@/lib/utils/api-response";
 
 export const POST = withErrorHandler(async (_request: NextRequest) => {
   // 1. 清除用户会话 Cookie（三重保障）

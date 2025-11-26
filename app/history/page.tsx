@@ -6,13 +6,27 @@ import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
-import { isSuccess } from "@/lib/utils/api-helpers";
+// 认证状态管理
+import { useIsAuthenticated, useIsLoaded } from "@/stores/auth-store";
+// 登录弹窗管理
+import { loginModalActions } from "@/stores/login-modal-store";
 import type { TaskWithDetails } from "@/types";
 
 export default function HistoryPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 认证状态
+  const isAuthenticated = useIsAuthenticated();
+  const isAuthLoaded = useIsLoaded();
+
+  // 检查登录状态：未登录时自动弹出登录弹窗
+  useEffect(() => {
+    if (isAuthLoaded && !isAuthenticated) {
+      loginModalActions.open("history");
+    }
+  }, [isAuthLoaded, isAuthenticated]);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -32,8 +46,13 @@ export default function HistoryPage() {
       }
     };
 
-    fetchTasks();
-  }, []);
+    // 只在已登录时获取任务列表
+    if (isAuthenticated) {
+      fetchTasks();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
 
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("确定要删除这个任务吗？")) return;

@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Tooltip from "@/components/ui/Tooltip";
+// 全局 API 客户端（自动处理 401 登录）
+import { apiPost } from "@/lib/api-client";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
+import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
-import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
+// 表单持久化 store
+import { useWorkspaceFormStore } from "@/stores/workspace-form-store";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
@@ -30,7 +34,17 @@ export default function ImageGrid({
   task,
   taskId,
 }: ImageGridProps) {
-  const [inputText, setInputText] = useState(initialPrompt);
+  // 使用 Zustand store 管理 prompt（持久化到 localStorage）
+  const prompt = useWorkspaceFormStore((state) => state.prompt);
+  const setPrompt = useWorkspaceFormStore((state) => state.setPrompt);
+
+  // 初始化 prompt（只在第一次加载或有 initialPrompt 时）
+  useEffect(() => {
+    if (initialPrompt && !prompt) {
+      setPrompt(initialPrompt);
+    }
+  }, [initialPrompt, prompt, setPrompt]);
+
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [status, setStatus] = useState<GenerationStatus>("idle");
@@ -119,7 +133,7 @@ export default function ImageGrid({
   // 重新生成图片 - 创建新任务
   const handleGenerate = useCallback(async () => {
     // 验证输入
-    const trimmedText = inputText.trim();
+    const trimmedText = prompt.trim();
     if (!trimmedText) {
       setError(VALIDATION_MESSAGES.PROMPT_REQUIRED);
       return;
@@ -148,16 +162,13 @@ export default function ImageGrid({
     setImageSlots(slots);
 
     try {
-      // 创建新任务，后端会自动触发图片生成
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: trimmedText,
-        }),
-      });
+      // 使用 apiPost 创建新任务（自动处理 401 登录）
+      // 登录成功后会自动重试请求，prompt 保留在 store 中
+      const response = await apiPost(
+        "/api/tasks",
+        { prompt: trimmedText },
+        { context: "workspace" }, // 指定上下文为 workspace
+      );
 
       const data = await response.json();
 
@@ -174,7 +185,7 @@ export default function ImageGrid({
       setError(err instanceof Error ? err.message : "创建任务失败,请重试");
       setStatus("failed");
     }
-  }, [inputText]);
+  }, [prompt]);
 
   // 处理图片选择
   const handleImageSelect = useCallback(
@@ -252,7 +263,7 @@ export default function ImageGrid({
               原始描述
             </div>
             <div className="flex-1 text-text-muted text-sm leading-relaxed">
-              {task?.prompt || inputText}
+              {task?.prompt || prompt}
             </div>
           </div>
         </div>
@@ -261,9 +272,9 @@ export default function ImageGrid({
         <div className="glass-panel flex shrink-0 flex-col gap-2.5 p-4">
           <div className="relative">
             <textarea
-              value={inputText}
+              value={prompt}
               onChange={(e) => {
-                setInputText(e.target.value);
+                setPrompt(e.target.value);
                 if (error) setError("");
               }}
               onKeyDown={handleKeyPress}
@@ -283,7 +294,7 @@ export default function ImageGrid({
                 {error || "placeholder"}
               </span>
               <span className="text-white/50">
-                {inputText.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
+                {prompt.length}/{IMAGE_GENERATION.MAX_PROMPT_LENGTH}
               </span>
             </div>
           </div>
