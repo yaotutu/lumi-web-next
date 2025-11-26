@@ -5,6 +5,7 @@ import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
 
@@ -121,7 +122,8 @@ export default function ModelPreview({
 
       const data = await response.json();
 
-      if (data.success) {
+      // JSend 格式判断
+      if (isSuccess(data)) {
         setToast({
           type: "success",
           message: "打印任务已开始，正在处理中...",
@@ -129,7 +131,7 @@ export default function ModelPreview({
       } else {
         setToast({
           type: "error",
-          message: `打印任务提交失败：${data.error?.message || "未知错误"}`,
+          message: `打印任务提交失败：${getErrorMessage(data)}`,
         });
       }
     } catch (error) {
@@ -816,12 +818,13 @@ export default function ModelPreview({
                     });
 
                     const data = await response.json();
-                    if (data.success) {
+                    // JSend 格式判断
+                    if (isSuccess(data)) {
                       // 重试成功,刷新页面以获取最新任务状态
                       window.location.reload();
                     } else {
-                      console.error("重试失败:", data.error);
-                      alert(`重试失败: ${data.error?.message || "未知错误"}`);
+                      console.error("重试失败:", getErrorMessage(data));
+                      alert(`重试失败: ${getErrorMessage(data)}`);
                     }
                   } catch (error) {
                     console.error("重试请求失败:", error);

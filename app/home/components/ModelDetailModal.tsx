@@ -6,6 +6,7 @@ import Model3DViewer, {
 } from "@/app/workspace/components/Model3DViewer";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import { useUser } from "@/stores/auth-store";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import type { UserAssetWithUser } from "@/types";
 
 // 材质颜色选项（从详情页复制）
@@ -63,12 +64,16 @@ export default function ModelDetailModal({
       setError(null);
 
       try {
-        // 使用统一的 API 客户端
-        const { apiClient } = await import("@/lib/api/client");
-        const response = await apiClient.gallery.get(id);
+        // 直接使用 fetch + JSend 格式
+        const response = await fetch(`/api/gallery/models/${id}`);
+        if (!response.ok) {
+          throw new Error(`加载失败: ${response.status}`);
+        }
 
-        if (response.success) {
-          const modelData = response.data;
+        const data = await response.json();
+        // JSend 格式判断
+        if (isSuccess(data)) {
+          const modelData = data.data as UserAssetWithUser;
           setModel(modelData);
 
           // 初始化交互状态
@@ -83,14 +88,19 @@ export default function ModelDetailModal({
               );
               if (interactionResponse.ok) {
                 const interactionData = await interactionResponse.json();
-                if (
-                  interactionData.success &&
-                  interactionData.data.isAuthenticated
-                ) {
-                  setInteractionStatus({
-                    isLiked: interactionData.data.isLiked || false,
-                    isFavorited: interactionData.data.isFavorited || false,
-                  });
+                // JSend 格式判断
+                if (isSuccess(interactionData)) {
+                  const interactionInfo = interactionData.data as {
+                    isAuthenticated: boolean;
+                    isLiked?: boolean;
+                    isFavorited?: boolean;
+                  };
+                  if (interactionInfo.isAuthenticated) {
+                    setInteractionStatus({
+                      isLiked: interactionInfo.isLiked || false,
+                      isFavorited: interactionInfo.isFavorited || false,
+                    });
+                  }
                 }
               }
             } catch (error) {
@@ -98,7 +108,7 @@ export default function ModelDetailModal({
             }
           }
         } else {
-          throw new Error(response.error?.message || "加载失败");
+          throw new Error(getErrorMessage(data));
         }
       } catch (err) {
         console.error("加载模型详情失败:", err);
@@ -282,18 +292,27 @@ export default function ModelDetailModal({
         }
 
         const data = await response.json();
-        if (data.success) {
+        // JSend 格式判断
+        if (isSuccess(data)) {
           // 使用服务器返回的权威数据（确保前后端同步）
-          setCurrentLikes(data.data.likeCount);
-          setCurrentFavorites(data.data.favoriteCount);
+          const interactionResult = data.data as {
+            isInteracted: boolean;
+            likeCount: number;
+            favoriteCount: number;
+          };
+          setCurrentLikes(interactionResult.likeCount);
+          setCurrentFavorites(interactionResult.favoriteCount);
           setInteractionStatus((prev) => ({
             ...prev,
-            isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
+            isLiked:
+              type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
             isFavorited:
-              type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+              type === "FAVORITE"
+                ? interactionResult.isInteracted
+                : prev.isFavorited,
           }));
         } else {
-          throw new Error(data.error?.message || "操作失败");
+          throw new Error(getErrorMessage(data));
         }
       } catch (error) {
         console.error("Interaction failed:", error);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Tooltip from "@/components/ui/Tooltip";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
@@ -158,19 +159,16 @@ export default function ImageGrid({
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "创建任务失败");
-      }
-
       const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || "创建任务失败");
+      // JSend 格式判断
+      if (!isSuccess(data)) {
+        throw new Error(getErrorMessage(data));
       }
 
+      const taskData = data.data as { id: string };
       // 任务创建成功，导航到新任务页面(轮询逻辑会自动更新任务状态)
-      window.location.href = `/workspace?taskId=${data.data.id}`;
+      window.location.href = `/workspace?taskId=${taskData.id}`;
     } catch (err) {
       console.error("创建任务失败:", err);
       setError(err instanceof Error ? err.message : "创建任务失败,请重试");

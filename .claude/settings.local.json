@@ -35,9 +35,13 @@
       "Bash(tree:*)",
       "mcp__chrome-devtools__list_pages",
       "mcp__chrome-devtools__select_page",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__chrome-devtools__evaluate_script",
+      "Bash(npx prisma:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["context7"]
+  "enabledMcpjsonServers": [
+    "context7"
+  ]
 }

@@ -79,7 +79,8 @@ export const useAuthStore = create<AuthStore>()(
 
           const data = await response.json();
 
-          if (data.success) {
+          // JSend 格式判断
+          if (data.status === "success") {
             get().setAuthState(data.data.status, data.data.user);
           } else {
             // API 返回错误，重置为错误状态

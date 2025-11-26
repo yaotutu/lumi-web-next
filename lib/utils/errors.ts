@@ -70,7 +70,7 @@ const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
 };
 
 /**
- * 将任意错误转换为标准HTTP响应
+ * 将任意错误转换为标准HTTP响应（JSend 格式）
  * @param error 任意错误对象
  * @returns NextResponse对象，包含统一的错误格式
  */
@@ -82,12 +82,15 @@ export function toErrorResponse(error: unknown): NextResponse {
       fields: error.issues.map((i) => i.path.join(".")),
     });
 
+    // JSend fail 格式 - 客户端错误
     return NextResponse.json(
       {
-        success: false,
-        error: "输入验证失败",
-        code: "VALIDATION_ERROR",
-        details: error.issues, // Zod的详细错误信息
+        status: "fail",
+        data: {
+          message: "输入验证失败",
+          code: "VALIDATION_ERROR",
+          details: error.issues, // Zod的详细错误信息
+        },
       },
       { status: 400 },
     );
@@ -111,24 +114,33 @@ export function toErrorResponse(error: unknown): NextResponse {
       });
     }
 
-    // 构建响应体，条件性添加details字段
-    const responseBody: {
-      success: false;
-      error: string;
-      code: ErrorCode;
-      details?: unknown;
-    } = {
-      success: false,
-      error: error.message,
-      code: error.code,
-    };
+    // 区分客户端错误（fail）和服务端错误（error）
+    const isClientError = status < 500;
 
-    // 只有当details存在时才添加到响应中
-    if (error.details !== undefined) {
-      responseBody.details = error.details;
+    if (isClientError) {
+      // JSend fail 格式 - 客户端错误（4xx）
+      return NextResponse.json(
+        {
+          status: "fail",
+          data: {
+            message: error.message,
+            code: error.code,
+            ...(error.details !== undefined && { details: error.details }),
+          },
+        },
+        { status },
+      );
+    } else {
+      // JSend error 格式 - 服务端错误（5xx）
+      return NextResponse.json(
+        {
+          status: "error",
+          message: error.message,
+          code: error.code,
+        },
+        { status },
+      );
     }
-
-    return NextResponse.json(responseBody, { status });
   }
 
   // 情况3: ExternalAPIError - 外部API错误（阿里云、腾讯云等）
@@ -153,13 +165,12 @@ export function toErrorResponse(error: unknown): NextResponse {
         : error.statusCode
       : 500;
 
+    // JSend error 格式 - 外部 API 错误属于系统错误
     return NextResponse.json(
       {
-        success: false,
-        error: error.message,
+        status: "error",
+        message: error.message,
         code: "EXTERNAL_API_ERROR",
-        provider: error.provider, // 标识提供商
-        statusCode: error.statusCode, // 保留原始状态码用于调试
       },
       { status: httpStatus },
     );
@@ -168,10 +179,11 @@ export function toErrorResponse(error: unknown): NextResponse {
   // 情况4: 未知错误（兜底处理）
   log.error("toErrorResponse", "未知错误", error);
 
+  // JSend error 格式 - 未知错误属于系统错误
   return NextResponse.json(
     {
-      success: false,
-      error: "服务器内部错误",
+      status: "error",
+      message: "服务器内部错误",
       code: "UNKNOWN_ERROR",
     },
     { status: 500 },

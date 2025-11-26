@@ -28,6 +28,8 @@ import {
   adaptTaskResponse,
   adaptTasksResponse,
 } from "@/lib/utils/task-adapter-client";
+// API 响应辅助函数（JSend 格式）
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 // 任务数据类型定义（包含图片、模型等完整信息）
 import type { TaskWithDetails } from "@/types";
 // 左侧图片生成和选择组件
@@ -113,7 +115,8 @@ function WorkspaceContent() {
           // 2. 适配后端数据（将 Worker 架构的数据转换为前端需要的格式）
           const data = adaptTaskResponse(rawData);
 
-          if (data.success) {
+          // JSend 格式判断
+          if (data.status === "success") {
             // 3. 更新任务状态
             setTask(data.data);
 
@@ -125,7 +128,7 @@ function WorkspaceContent() {
               setSelectedImageIndex(data.data.selectedImageIndex);
             }
           } else {
-            console.error("Failed to load task:", rawData.error);
+            console.error("Failed to load task:", getErrorMessage(rawData));
           }
         } else {
           // ========================================
@@ -140,7 +143,8 @@ function WorkspaceContent() {
           // 2. 适配任务列表数据
           const data = adaptTasksResponse(rawData);
 
-          if (data.success && data.data.length > 0) {
+          // JSend 格式判断
+          if (data.status === "success" && data.data.length > 0) {
             const latestTask = data.data[0];
 
             // 3. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
@@ -572,7 +576,8 @@ function WorkspaceContent() {
         // 因为 PATCH /api/tasks/[id] 返回的是简化格式（只有 model 和 selectedImageIndex）
         // 不是完整的 GenerationRequest 对象
 
-        if (rawData.success) {
+        // JSend 格式判断
+        if (isSuccess(rawData)) {
           // ========================================
           // 成功：立即合并新模型到 task 状态
           // ========================================
@@ -581,7 +586,8 @@ function WorkspaceContent() {
           console.log("✅ 图片选择成功，3D 模型生成已加入队列");
 
           // 从响应中提取新创建的模型
-          const newModel = rawData.model;
+          const resultData = rawData.data as { model: any };
+          const newModel = resultData.model;
 
           if (newModel) {
             console.log("🔥 立即合并新模型到 task 状态", {
@@ -625,15 +631,11 @@ function WorkspaceContent() {
           // ========================================
           // 失败：回滚乐观更新
           // ========================================
-          console.error(
-            "❌ 图片选择失败:",
-            rawData.message || rawData.error || "Unknown error",
-          );
+          const errorMessage = getErrorMessage(rawData);
+          console.error("❌ 图片选择失败:", errorMessage);
 
           // 显示错误提示
-          alert(
-            `选择图片失败: ${rawData.message || rawData.error || "Unknown error"}`,
-          );
+          alert(`选择图片失败: ${errorMessage}`);
 
           // 回滚到之前的状态
           console.log("⏪ 回滚乐观更新（请求失败）", previousTaskState);

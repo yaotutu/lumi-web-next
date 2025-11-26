@@ -1,10 +1,10 @@
 /**
  * GET /api/auth/me
- * 获取当前用户认证状态和用户信息
+ * 获取当前用户认证状态和用户信息（JSend 规范）
  *
- * **新的响应格式**：
+ * **响应格式**：
  * {
- *   "success": true,
+ *   "status": "success",
  *   "data": {
  *     "status": "authenticated" | "unauthenticated" | "expired" | "error",
  *     "user": User | null
@@ -18,10 +18,10 @@
  */
 
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 import { getUserById } from "@/lib/services/auth-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 import { AuthStatus } from "@/types/auth";
 
 export const GET = withErrorHandler(async (_request: NextRequest) => {
@@ -33,27 +33,23 @@ export const GET = withErrorHandler(async (_request: NextRequest) => {
     // 用户已登录，查询详细信息
     const user = await getUserById(authResult.userSession.userId);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        status: AuthStatus.AUTHENTICATED,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          createdAt: user.createdAt,
-          lastLoginAt: user.lastLoginAt,
-        },
+    // JSend success 格式
+    return success({
+      status: AuthStatus.AUTHENTICATED,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
       },
     });
   } else {
     // 用户未登录或认证状态异常
-    return NextResponse.json({
-      success: true,
-      data: {
-        status: authResult.status,
-        user: null,
-      },
+    // JSend success 格式（未登录也是正常状态）
+    return success({
+      status: authResult.status,
+      user: null,
     });
   }
 });

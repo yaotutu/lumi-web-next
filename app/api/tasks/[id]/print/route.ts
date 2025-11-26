@@ -2,12 +2,14 @@
  * 打印接口 - 一键打印功能
  *
  * 新架构：1 Request : 1 Model
+ * 采用 JSend 响应规范
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
 import * as ModelService from "@/lib/services/model-service";
 import { AppError, withErrorHandler } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 
 /**
  * POST /api/tasks/:id/print
@@ -90,15 +92,12 @@ export const POST = withErrorHandler(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        requestId: id,
-        modelId: model.id,
-        sliceTaskId,
-        printResult,
-      },
-      message: "打印任务已提交",
+    // JSend success 格式
+    return success({
+      requestId: id,
+      modelId: model.id,
+      sliceTaskId,
+      printResult,
     });
   },
 );

@@ -83,6 +83,26 @@ npm start
 
 ---
 
+## API 响应规范（JSend）
+
+**所有 API 必须使用 JSend 规范**：后端用 `success(data)` 返回，前端用 `isSuccess(data)` 判断，列表数据嵌套为 `data: { items, total }`。
+
+```typescript
+// 后端：必须使用 success() 返回
+import { success } from "@/lib/utils/api-response";
+return success({ items: [...], total: 100 });
+
+// 前端：必须使用 isSuccess() 判断
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
+if (isSuccess(data)) {
+  const items = data.data.items;  // 列表数据访问 items
+} else {
+  alert(getErrorMessage(data));
+}
+```
+
+---
+
 ## 核心架构
 
 ### 1. 数据库架构：五层设计

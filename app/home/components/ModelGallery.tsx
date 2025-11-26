@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useUser } from "@/stores/auth-store";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 import { useModal } from "../hooks/useModal";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
@@ -121,8 +122,15 @@ export default function ModelGallery() {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.data.isAuthenticated) {
-            setInteractionStatuses(data.data.interactions);
+          // JSend 格式判断
+          if (isSuccess(data)) {
+            const batchResult = data.data as {
+              isAuthenticated: boolean;
+              interactions: Record<string, { isLiked: boolean; isFavorited: boolean }>;
+            };
+            if (batchResult.isAuthenticated) {
+              setInteractionStatuses(batchResult.interactions);
+            }
           }
         }
       } catch (error) {
@@ -153,12 +161,17 @@ export default function ModelGallery() {
 
         const data = await response.json();
 
-        if (data.success) {
-          const newModels = data.data.models;
+        // JSend 格式判断（注意：后端返回 data.items，不是 data.models）
+        if (isSuccess(data)) {
+          const galleryData = data.data as {
+            items: UserAsset[];
+            hasMore: boolean;
+          };
+          const newModels = galleryData.items;
 
           // 更新模型列表
           setModels((prev) => (reset ? newModels : [...prev, ...newModels]));
-          setHasMore(data.data.hasMore);
+          setHasMore(galleryData.hasMore);
           setOffset(reset ? LIMIT : currentOffset + LIMIT);
 
           // 批量加载交互状态
@@ -167,7 +180,7 @@ export default function ModelGallery() {
             await loadInteractionStatuses(modelIds);
           }
         } else {
-          throw new Error(data.error?.message || "加载失败");
+          throw new Error(getErrorMessage(data));
         }
       } catch (err) {
         console.error("加载模型失败:", err);

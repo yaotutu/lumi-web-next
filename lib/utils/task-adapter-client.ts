@@ -196,37 +196,69 @@ function deriveStatusFromPhase(
 }
 
 /**
- * 适配 API 响应（单个任务）
+ * 适配 API 响应（单个任务）- JSend 格式
  */
 export function adaptTaskResponse(response: {
-  success: boolean;
-  data: GenerationRequestResponse;
+  status: "success" | "fail" | "error";
+  data?: GenerationRequestResponse;
   message?: string;
-}): {
-  success: boolean;
-  data: TaskWithDetails;
-  message?: string;
-} {
-  return {
-    ...response,
-    data: adaptGenerationRequest(response.data),
+}):
+  | {
+      status: "success";
+      data: TaskWithDetails;
+    }
+  | {
+      status: "fail" | "error";
+      data?: GenerationRequestResponse;
+      message?: string;
+    } {
+  // JSend success 格式
+  if (response.status === "success" && response.data) {
+    return {
+      status: "success",
+      data: adaptGenerationRequest(response.data),
+    };
+  }
+
+  // JSend fail/error 格式（不适配，直接返回）
+  return response as {
+    status: "fail" | "error";
+    data?: GenerationRequestResponse;
+    message?: string;
   };
 }
 
 /**
- * 适配 API 响应（任务列表）
+ * 适配 API 响应（任务列表）- JSend 格式
  */
 export function adaptTasksResponse(response: {
-  success: boolean;
-  data: GenerationRequestResponse[];
-  count?: number;
-}): {
-  success: boolean;
-  data: TaskWithDetails[];
-  count?: number;
-} {
-  return {
-    ...response,
-    data: response.data.map(adaptGenerationRequest),
+  status: "success" | "fail" | "error";
+  data?: { items: GenerationRequestResponse[]; total: number };
+  message?: string;
+}):
+  | {
+      status: "success";
+      data: TaskWithDetails[];
+      total: number;
+    }
+  | {
+      status: "fail" | "error";
+      data?: { items: GenerationRequestResponse[]; total: number };
+      message?: string;
+    } {
+  // JSend success 格式
+  if (response.status === "success" && response.data) {
+    return {
+      status: "success",
+      data: response.data.items.map(adaptGenerationRequest),
+      total: response.data.total,
+    };
+  }
+
+  // JSend fail/error 格式（不适配，直接返回）
+  return response as {
+    status: "fail" | "error";
+    data?: { items: GenerationRequestResponse[]; total: number };
+    message?: string;
   };
 }

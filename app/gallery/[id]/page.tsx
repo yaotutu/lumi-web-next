@@ -8,6 +8,7 @@ import Model3DViewer, {
 import Navigation from "@/components/layout/Navigation";
 import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import { useUser } from "@/stores/auth-store";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 // 材质颜色选项（从 ModelPreview 复制）
 const MATERIAL_COLORS = [
@@ -90,8 +91,9 @@ export default function GalleryDetailPage({ params }: PageProps) {
 
         const data = await response.json();
 
-        if (data.success) {
-          const modelData = data.data;
+        // JSend 格式判断
+        if (isSuccess(data)) {
+          const modelData = data.data as UserAsset;
           setModel(modelData);
           setCurrentLikes(modelData.likeCount);
           setCurrentFavorites(modelData.favoriteCount || 0);
@@ -104,14 +106,19 @@ export default function GalleryDetailPage({ params }: PageProps) {
               );
               if (interactionResponse.ok) {
                 const interactionData = await interactionResponse.json();
-                if (
-                  interactionData.success &&
-                  interactionData.data.isAuthenticated
-                ) {
-                  setInteractionStatus({
-                    isLiked: interactionData.data.isLiked || false,
-                    isFavorited: interactionData.data.isFavorited || false,
-                  });
+                // JSend 格式判断
+                if (isSuccess(interactionData)) {
+                  const interactionInfo = interactionData.data as {
+                    isAuthenticated: boolean;
+                    isLiked?: boolean;
+                    isFavorited?: boolean;
+                  };
+                  if (interactionInfo.isAuthenticated) {
+                    setInteractionStatus({
+                      isLiked: interactionInfo.isLiked || false,
+                      isFavorited: interactionInfo.isFavorited || false,
+                    });
+                  }
                 }
               }
             } catch (error) {
@@ -119,7 +126,7 @@ export default function GalleryDetailPage({ params }: PageProps) {
             }
           }
         } else {
-          throw new Error(data.error?.message || "加载失败");
+          throw new Error(getErrorMessage(data));
         }
       } catch (err) {
         console.error("加载模型详情失败:", err);
@@ -276,18 +283,27 @@ export default function GalleryDetailPage({ params }: PageProps) {
         }
 
         const data = await response.json();
-        if (data.success) {
+        // JSend 格式判断
+        if (isSuccess(data)) {
           // 使用服务器返回的权威数据（确保前后端同步）
-          setCurrentLikes(data.data.likeCount);
-          setCurrentFavorites(data.data.favoriteCount);
+          const interactionResult = data.data as {
+            isInteracted: boolean;
+            likeCount: number;
+            favoriteCount: number;
+          };
+          setCurrentLikes(interactionResult.likeCount);
+          setCurrentFavorites(interactionResult.favoriteCount);
           setInteractionStatus((prev) => ({
             ...prev,
-            isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
+            isLiked:
+              type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
             isFavorited:
-              type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+              type === "FAVORITE"
+                ? interactionResult.isInteracted
+                : prev.isFavorited,
           }));
         } else {
-          throw new Error(data.error?.message || "操作失败");
+          throw new Error(getErrorMessage(data));
         }
       } catch (error) {
         console.error("Interaction failed:", error);

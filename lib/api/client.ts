@@ -61,13 +61,11 @@ class ApiClient {
 
       return data as ApiResponse<T>;
     } catch (error) {
-      // 网络错误或 JSON 解析失败
+      // 网络错误或 JSON 解析失败（JSend error 格式）
       return {
-        success: false,
-        error: {
-          code: "NETWORK_ERROR",
-          message: error instanceof Error ? error.message : "网络请求失败",
-        },
+        status: "error",
+        message: error instanceof Error ? error.message : "网络请求失败",
+        code: "NETWORK_ERROR",
       };
     }
   }

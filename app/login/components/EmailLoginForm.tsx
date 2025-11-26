@@ -19,6 +19,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 /**
  * 倒计时秒数
@@ -79,14 +80,15 @@ export default function EmailLoginForm() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error?.message || "发送验证码失败");
+      // JSend 格式判断
+      if (isSuccess(data)) {
+        // 发送成功
+        setCodeSent(true);
+        setCountdown(COUNTDOWN_SECONDS);
+        setError("");
+      } else {
+        throw new Error(getErrorMessage(data));
       }
-
-      // 发送成功
-      setCodeSent(true);
-      setCountdown(COUNTDOWN_SECONDS);
-      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "发送验证码失败");
     } finally {
@@ -130,13 +132,14 @@ export default function EmailLoginForm() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error?.message || "登录失败");
+      // JSend 格式判断
+      if (isSuccess(data)) {
+        // 登录成功，跳转
+        router.push(redirect);
+        router.refresh(); // 刷新服务端组件
+      } else {
+        throw new Error(getErrorMessage(data));
       }
-
-      // 登录成功，跳转
-      router.push(redirect);
-      router.refresh(); // 刷新服务端组件
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");
     } finally {

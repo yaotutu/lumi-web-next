@@ -2,11 +2,13 @@
  * 打印状态查询接口
  *
  * 新架构：1 Request : 1 Model
+ * 采用 JSend 响应规范
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import * as GenerationRequestService from "@/lib/services/generation-request-service";
 import { AppError, withErrorHandler } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 
 /**
  * GET /api/tasks/:id/print-status
@@ -36,14 +38,12 @@ export const GET = withErrorHandler(
 
     // 3. 检查是否有 sliceTaskId
     if (!model.sliceTaskId) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          requestId: id,
-          modelId: model.id,
-          hasPrintTask: false,
-          message: "尚未提交打印任务",
-        },
+      // JSend success 格式
+      return success({
+        requestId: id,
+        modelId: model.id,
+        hasPrintTask: false,
+        message: "尚未提交打印任务",
       });
     }
 
@@ -79,15 +79,13 @@ export const GET = withErrorHandler(
 
       console.log(`✅ [打印状态] 查询成功:`, printStatus);
 
-      return NextResponse.json({
-        success: true,
-        data: {
-          requestId: id,
-          modelId: model.id,
-          sliceTaskId: model.sliceTaskId,
-          hasPrintTask: true,
-          printStatus,
-        },
+      // JSend success 格式
+      return success({
+        requestId: id,
+        modelId: model.id,
+        sliceTaskId: model.sliceTaskId,
+        hasPrintTask: true,
+        printStatus,
       });
     } catch (error) {
       if (error instanceof AppError) {

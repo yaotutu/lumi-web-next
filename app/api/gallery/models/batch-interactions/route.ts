@@ -1,14 +1,15 @@
 /**
- * 批量交互状态查询 API
+ * 批量交互状态查询 API（JSend 规范）
  *
  * POST /api/gallery/models/batch-interactions - 批量获取用户对多个模型的交互状态
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import { z } from "zod";
 import * as InteractionService from "@/lib/services/interaction-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
 import { withErrorHandler } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 
 // 请求体验证 schema
 const batchInteractionsSchema = z.object({
@@ -23,13 +24,10 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   // 检查认证状态
   const authResult = await checkAuthStatus();
   if (!authResult.isAuthenticated || !authResult.userSession) {
-    // 用户未登录
-    return NextResponse.json({
-      success: true,
-      data: {
-        isAuthenticated: false,
-        interactions: {},
-      },
+    // 用户未登录（JSend success 格式）
+    return success({
+      isAuthenticated: false,
+      interactions: {},
     });
   }
 
@@ -50,11 +48,9 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     },
   );
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      isAuthenticated: true,
-      interactions: interactionsMap,
-    },
+  // JSend success 格式
+  return success({
+    isAuthenticated: true,
+    interactions: interactionsMap,
   });
 });

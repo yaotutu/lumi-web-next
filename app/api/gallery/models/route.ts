@@ -1,5 +1,5 @@
 /**
- * 模型画廊 API - 获取公开模型列表
+ * 模型画廊 API - 获取公开模型列表（JSend 规范）
  *
  * GET /api/gallery/models
  * 查询参数：
@@ -8,12 +8,13 @@
  * - offset: number (默认: 0)
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import {
   countPublicModels,
   findPublicModels,
 } from "@/lib/repositories/model.repository";
 import { withErrorHandler } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 
 // GET /api/gallery/models - 获取公开模型列表
 export const GET = withErrorHandler(async (request: NextRequest) => {
@@ -39,13 +40,10 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
   // 判断是否还有更多
   const hasMore = offset + models.length < total;
 
-  // 返回标准响应
-  return NextResponse.json({
-    success: true,
-    data: {
-      models,
-      total,
-      hasMore,
-    },
+  // JSend success 格式 - 列表数据嵌套在 data 中
+  return success({
+    items: models,
+    total,
+    hasMore,
   });
 });

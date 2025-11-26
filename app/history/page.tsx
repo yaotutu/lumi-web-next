@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
 import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
+import { isSuccess } from "@/lib/utils/api-helpers";
 import type { TaskWithDetails } from "@/types";
 
 export default function HistoryPage() {
@@ -20,7 +21,8 @@ export default function HistoryPage() {
         const rawData = await response.json();
         const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
-        if (data.success) {
+        // JSend 格式判断
+        if (data.status === "success") {
           setTasks(data.data);
         }
       } catch (error) {

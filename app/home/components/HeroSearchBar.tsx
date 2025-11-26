@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
 
@@ -67,12 +68,14 @@ export default function HeroSearchBar({
 
       const data = await response.json();
 
-      if (data.success && data.data?.id) {
+      // JSend 格式判断
+      if (isSuccess(data)) {
+        const taskData = data.data as { id: string };
         // 使用任务ID跳转到工作台
-        router.push(`/workspace?taskId=${data.data.id}`);
+        router.push(`/workspace?taskId=${taskData.id}`);
       } else {
         // 处理API错误
-        setError(data.error?.message || "创建任务失败，请重试");
+        setError(getErrorMessage(data));
         setIsCreating(false);
       }
     } catch (err) {

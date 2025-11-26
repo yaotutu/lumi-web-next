@@ -1,16 +1,17 @@
 /**
- * 模型交互 API - 点赞/收藏操作
+ * 模型交互 API - 点赞/收藏操作（JSend 规范）
  *
  * GET  /api/gallery/models/[id]/interactions - 获取用户对该模型的交互状态
  * POST /api/gallery/models/[id]/interactions - 执行点赞/收藏操作
  */
 
 import { InteractionType } from "@prisma/client";
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import { z } from "zod";
 import * as InteractionService from "@/lib/services/interaction-service";
 import { checkAuthStatus } from "@/lib/utils/auth";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { withErrorHandler, AppError } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 
 // 请求体验证 schema
 const interactionSchema = z.object({
@@ -28,17 +29,10 @@ export const POST = withErrorHandler(
   ) => {
     const { id: modelId } = await params;
 
-    // 检查认证状态
+    // 检查认证状态（使用 AppError 自动转换为 JSend fail 格式）
     const authResult = await checkAuthStatus();
     if (!authResult.isAuthenticated || !authResult.userSession) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "请先登录后再进行操作",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      );
+      throw new AppError("UNAUTHORIZED", "请先登录后再进行操作");
     }
 
     const body = await request.json();
@@ -60,14 +54,12 @@ export const POST = withErrorHandler(
       },
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        isInteracted: result.isInteracted,
-        type,
-        likeCount: result.model.likeCount,
-        favoriteCount: result.model.favoriteCount,
-      },
+    // JSend success 格式
+    return success({
+      isInteracted: result.isInteracted,
+      type,
+      likeCount: result.model.likeCount,
+      favoriteCount: result.model.favoriteCount,
     });
   },
 );
@@ -86,13 +78,10 @@ export const GET = withErrorHandler(
     // 检查认证状态
     const authResult = await checkAuthStatus();
     if (!authResult.isAuthenticated || !authResult.userSession) {
-      // 用户未登录
-      return NextResponse.json({
-        success: true,
-        data: {
-          isAuthenticated: false,
-          interactions: [],
-        },
+      // 用户未登录（JSend success 格式）
+      return success({
+        isAuthenticated: false,
+        interactions: [],
       });
     }
 
@@ -102,14 +91,12 @@ export const GET = withErrorHandler(
       modelId,
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        isAuthenticated: true,
-        interactions,
-        isLiked: interactions.includes(InteractionType.LIKE),
-        isFavorited: interactions.includes(InteractionType.FAVORITE),
-      },
+    // JSend success 格式
+    return success({
+      isAuthenticated: true,
+      interactions,
+      isLiked: interactions.includes(InteractionType.LIKE),
+      isFavorited: interactions.includes(InteractionType.FAVORITE),
     });
   },
 );

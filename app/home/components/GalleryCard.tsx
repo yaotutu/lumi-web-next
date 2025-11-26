@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useUser } from "@/stores/auth-store";
+import { isSuccess, getErrorMessage } from "@/lib/utils/api-helpers";
 
 export type GalleryCardProps = {
   modelId: string;
@@ -49,11 +50,19 @@ export default function GalleryCard({
           .then(async (response) => {
             if (response.ok) {
               const data = await response.json();
-              if (data.success && data.data.isAuthenticated) {
-                setInteractionStatus({
-                  isLiked: data.data.isLiked || false,
-                  isFavorited: data.data.isFavorited || false,
-                });
+              // JSend 格式判断
+              if (isSuccess(data)) {
+                const interactionInfo = data.data as {
+                  isAuthenticated: boolean;
+                  isLiked?: boolean;
+                  isFavorited?: boolean;
+                };
+                if (interactionInfo.isAuthenticated) {
+                  setInteractionStatus({
+                    isLiked: interactionInfo.isLiked || false,
+                    isFavorited: interactionInfo.isFavorited || false,
+                  });
+                }
               }
             }
           })
@@ -112,18 +121,27 @@ export default function GalleryCard({
       }
 
       const data = await response.json();
-      if (data.success) {
+      // JSend 格式判断
+      if (isSuccess(data)) {
         // 使用服务器返回的权威数据（确保前后端同步）
-        setCurrentLikes(data.data.likeCount);
-        setCurrentFavorites(data.data.favoriteCount);
+        const interactionResult = data.data as {
+          isInteracted: boolean;
+          likeCount: number;
+          favoriteCount: number;
+        };
+        setCurrentLikes(interactionResult.likeCount);
+        setCurrentFavorites(interactionResult.favoriteCount);
         setInteractionStatus((prev) => ({
           ...prev,
-          isLiked: type === "LIKE" ? data.data.isInteracted : prev.isLiked,
+          isLiked:
+            type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
           isFavorited:
-            type === "FAVORITE" ? data.data.isInteracted : prev.isFavorited,
+            type === "FAVORITE"
+              ? interactionResult.isInteracted
+              : prev.isFavorited,
         }));
       } else {
-        throw new Error(data.error?.message || "操作失败");
+        throw new Error(getErrorMessage(data));
       }
     } catch (error) {
       console.error("Interaction failed:", error);

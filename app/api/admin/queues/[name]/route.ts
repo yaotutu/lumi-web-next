@@ -1,13 +1,14 @@
 /**
- * 管理 API：队列配置管理
+ * 管理 API：队列配置管理（JSend 规范）
  *
  * GET /api/admin/queues/[name] - 获取队列配置
  * PATCH /api/admin/queues/[name] - 更新队列配置
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import { QueueConfigRepository } from "@/lib/repositories";
-import { withErrorHandler } from "@/lib/utils/errors";
+import { withErrorHandler, AppError } from "@/lib/utils/errors";
+import { success } from "@/lib/utils/api-response";
 import { workerConfigManager } from "@/lib/workers/worker-config-manager";
 
 /**
@@ -23,17 +24,13 @@ export const GET = withErrorHandler(
 
     const config = await QueueConfigRepository.findConfigByQueueName(name);
 
+    // 使用 AppError 自动转换为 JSend fail 格式
     if (!config) {
-      return NextResponse.json(
-        { success: false, error: "队列配置不存在" },
-        { status: 404 },
-      );
+      throw new AppError("NOT_FOUND", "队列配置不存在");
     }
 
-    return NextResponse.json({
-      success: true,
-      data: config,
-    });
+    // JSend success 格式
+    return success(config);
   },
 );
 
@@ -63,10 +60,7 @@ export const PATCH = withErrorHandler(
     // 强制刷新 WorkerConfigManager 缓存
     await workerConfigManager.forceRefresh();
 
-    return NextResponse.json({
-      success: true,
-      data: updatedConfig,
-      message: "队列配置已更新，Worker 将在下一轮轮询时生效",
-    });
+    // JSend success 格式
+    return success(updatedConfig);
   },
 );
