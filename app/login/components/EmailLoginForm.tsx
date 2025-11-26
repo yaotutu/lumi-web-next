@@ -20,6 +20,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { authActions } from "@/stores/auth-store";
 
 /**
  * 倒计时秒数
@@ -134,7 +135,11 @@ export default function EmailLoginForm() {
 
       // JSend 格式判断
       if (isSuccess(data)) {
-        // 登录成功，跳转
+        // 登录成功
+        // 1. 更新认证状态
+        await authActions.refreshAuth();
+
+        // 2. 跳转
         router.push(redirect);
         router.refresh(); // 刷新服务端组件
       } else {
