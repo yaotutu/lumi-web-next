@@ -483,3 +483,4 @@ loader.load(modelProxyUrl, (gltf) => scene.add(gltf.scene));
 6. **Repository 层只负责数据访问，Service 层包含业务逻辑**
 7. **代码注释必须使用中文，解释代码作用和目的**
 8. **优先使用函数式编程，统一使用 ESM 语法**
+9. **未经允许，不允许去提交代码到仓库**
