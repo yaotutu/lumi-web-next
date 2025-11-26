@@ -11,7 +11,7 @@ Lumi Web Next API 使用指南，帮助你快速上手。
 启动开发服务器后，访问：
 
 ```
-http://localhost:4000/api-docs
+http://localhost:4100/api-docs
 ```
 
 **优势**：
@@ -39,7 +39,7 @@ http://localhost:4000/api-docs
 
 ```bash
 # 步骤 1: 发送验证码
-curl -X POST http://localhost:4000/api/auth/send-code \
+curl -X POST http://localhost:4100/api/auth/send-code \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 
@@ -50,7 +50,7 @@ curl -X POST http://localhost:4000/api/auth/send-code \
 }
 
 # 步骤 2: 验证码登录（开发环境验证码固定为 0000）
-curl -X POST http://localhost:4000/api/auth/verify-code \
+curl -X POST http://localhost:4100/api/auth/verify-code \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "code": "0000"}' \
   -c cookies.txt  # 保存 Cookie
@@ -70,7 +70,7 @@ curl -X POST http://localhost:4000/api/auth/verify-code \
 }
 
 # 步骤 3: 验证登录状态
-curl http://localhost:4000/api/auth/me \
+curl http://localhost:4100/api/auth/me \
   -b cookies.txt  # 使用保存的 Cookie
 
 # 响应
@@ -86,7 +86,7 @@ curl http://localhost:4000/api/auth/me \
 
 ```bash
 # 需要登录
-curl -X POST http://localhost:4000/api/tasks \
+curl -X POST http://localhost:4100/api/tasks \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d '{"prompt": "一只可爱的小猫"}'
@@ -117,7 +117,7 @@ curl -X POST http://localhost:4000/api/tasks \
 ```javascript
 // 客户端代码（浏览器）
 const taskId = 'clxxxx1234567890';
-const eventSource = new EventSource(`http://localhost:4000/api/tasks/${taskId}/events`);
+const eventSource = new EventSource(`http://localhost:4100/api/tasks/${taskId}/events`);
 
 // 监听图片生成完成事件
 eventSource.addEventListener('image:completed', (e) => {
@@ -147,7 +147,7 @@ eventSource.addEventListener('model:completed', (e) => {
 
 ```bash
 # 如果不使用 SSE，可以定时轮询任务状态
-curl http://localhost:4000/api/tasks/clxxxx1234567890 \
+curl http://localhost:4100/api/tasks/clxxxx1234567890 \
   -b cookies.txt
 
 # 响应
@@ -177,7 +177,7 @@ curl http://localhost:4000/api/tasks/clxxxx1234567890 \
 
 ```bash
 # 选择 index=0 的图片生成 3D 模型
-curl -X PATCH http://localhost:4000/api/tasks/clxxxx1234567890 \
+curl -X PATCH http://localhost:4100/api/tasks/clxxxx1234567890 \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d '{"selectedImageIndex": 0}'
@@ -205,7 +205,7 @@ curl -X PATCH http://localhost:4000/api/tasks/clxxxx1234567890 \
 
 ```bash
 # 无需登录
-curl "http://localhost:4000/api/gallery/models?sortBy=latest&limit=20&offset=0"
+curl "http://localhost:4100/api/gallery/models?sortBy=latest&limit=20&offset=0"
 
 # 响应
 {
@@ -338,7 +338,7 @@ curl "http://localhost:4000/api/gallery/models?sortBy=latest&limit=20&offset=0"
    - 自动生成所有 API 的请求模板
 
 2. 设置环境变量：
-   - `baseUrl`: `http://localhost:4000`
+   - `baseUrl`: `http://localhost:4100`
    - `email`: `test@example.com`
 
 ### 使用 curl（命令行）
@@ -346,13 +346,13 @@ curl "http://localhost:4000/api/gallery/models?sortBy=latest&limit=20&offset=0"
 ```bash
 # 完整流程测试脚本
 # 1. 登录
-curl -X POST http://localhost:4000/api/auth/verify-code \
+curl -X POST http://localhost:4100/api/auth/verify-code \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "code": "0000"}' \
   -c cookies.txt
 
 # 2. 创建任务
-TASK_ID=$(curl -X POST http://localhost:4000/api/tasks \
+TASK_ID=$(curl -X POST http://localhost:4100/api/tasks \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d '{"prompt": "一只可爱的小猫"}' \
@@ -362,7 +362,7 @@ echo "任务 ID: $TASK_ID"
 
 # 3. 等待图片生成（轮询）
 while true; do
-  STATUS=$(curl -s http://localhost:4000/api/tasks/$TASK_ID -b cookies.txt \
+  STATUS=$(curl -s http://localhost:4100/api/tasks/$TASK_ID -b cookies.txt \
     | jq -r '.data.images[0].imageStatus')
   echo "图片状态: $STATUS"
 
@@ -378,7 +378,7 @@ while true; do
 done
 
 # 4. 选择图片生成 3D 模型
-curl -X PATCH http://localhost:4000/api/tasks/$TASK_ID \
+curl -X PATCH http://localhost:4100/api/tasks/$TASK_ID \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d '{"selectedImageIndex": 0}'
@@ -390,7 +390,7 @@ curl -X PATCH http://localhost:4000/api/tasks/$TASK_ID \
 // 完整流程示例
 async function testFullWorkflow() {
   // 1. 登录
-  const loginRes = await fetch('http://localhost:4000/api/auth/verify-code', {
+  const loginRes = await fetch('http://localhost:4100/api/auth/verify-code', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',  // 自动处理 Cookie
@@ -404,7 +404,7 @@ async function testFullWorkflow() {
   console.log('登录成功:', user.email);
 
   // 2. 创建任务
-  const createRes = await fetch('http://localhost:4000/api/tasks', {
+  const createRes = await fetch('http://localhost:4100/api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -418,7 +418,7 @@ async function testFullWorkflow() {
 
   // 3. 使用 SSE 监听状态
   const eventSource = new EventSource(
-    `http://localhost:4000/api/tasks/${task.id}/events`
+    `http://localhost:4100/api/tasks/${task.id}/events`
   );
 
   eventSource.addEventListener('image:completed', (e) => {
@@ -444,7 +444,7 @@ async function testFullWorkflow() {
 }
 
 async function selectImageAndGenerateModel(taskId, imageIndex) {
-  const res = await fetch(`http://localhost:4000/api/tasks/${taskId}`, {
+  const res = await fetch(`http://localhost:4100/api/tasks/${taskId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -515,7 +515,7 @@ testFullWorkflow();
 3. **代理接口 `/api/proxy/*`**：解决前端跨域问题，直接使用即可
 4. **测试接口 `/api/test/*`**：无需登录，方便快速测试
 5. **管理接口 `/api/admin/*`**：动态调整 Worker 配置，无需重启服务
-6. **完整文档**：访问 http://localhost:4000/api-docs 查看交互式文档
+6. **完整文档**：访问 http://localhost:4100/api-docs 查看交互式文档
 
 ---
 

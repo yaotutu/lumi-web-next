@@ -17,24 +17,24 @@
 #### `status` - 业务状态（细粒度）
 **定义**：描述 GenerationRequest 当前的**具体执行状态**
 
-**枚举值**（共 12 个）：
+**枚举值**（共 11 个）：
 ```typescript
 enum RequestStatus {
   // 图片生成阶段（4个状态）
-  IMAGE_GENERATION_PENDING      // ⏳ 图片生成：等待开始
-  IMAGE_GENERATION_RUNNING      // 🔄 图片生成：执行中
-  IMAGE_GENERATION_COMPLETED    // ✅ 图片生成：已完成，等待用户选择
-  IMAGE_GENERATION_FAILED       // ❌ 图片生成：失败
+  IMAGE_PENDING                 // ⏳ 图片生成：等待开始
+  IMAGE_GENERATING              // 🔄 图片生成：执行中
+  IMAGE_COMPLETED               // ✅ 图片生成：已完成，等待用户选择
+  IMAGE_FAILED                  // ❌ 图片生成：失败
 
-  // 模型生成阶段（5个状态）
-  MODEL_GENERATION_PENDING      // ⏳ 模型生成：等待开始
-  MODEL_GENERATION_RUNNING      // 🔄 模型生成：执行中
-  MODEL_GENERATION_PARTIAL      // 🟡 模型生成：部分完成（未来多模型功能）
-  MODEL_GENERATION_COMPLETED    // ✅ 模型生成：已完成
-  MODEL_GENERATION_FAILED       // ❌ 模型生成：失败
+  // 模型生成阶段（4个状态）
+  MODEL_PENDING                 // ⏳ 模型生成：等待开始
+  MODEL_GENERATING              // 🔄 模型生成：执行中
+  MODEL_COMPLETED               // ✅ 模型生成：已完成
+  MODEL_FAILED                  // ❌ 模型生成：失败
 
-  // 终态（2个状态）
+  // 终态（3个状态）
   COMPLETED                     // ✅ 请求完成（至少生成了一个模型）
+  FAILED                        // ❌ 请求失败
   CANCELLED                     // 🚫 用户取消
 }
 ```
@@ -47,10 +47,11 @@ enum RequestStatus {
 #### `phase` - 业务阶段（粗粒度）
 **定义**：描述 GenerationRequest 当前处于**哪个业务阶段**
 
-**枚举值**（共 3 个）：
+**枚举值**（共 4 个）：
 ```typescript
 enum RequestPhase {
   IMAGE_GENERATION   // 📸 图片生成阶段
+  AWAITING_SELECTION // ⏸️  等待用户选择图片
   MODEL_GENERATION   // 🎨 模型生成阶段
   COMPLETED          // ✅ 已完成
 }
@@ -65,12 +66,12 @@ enum RequestPhase {
 
 | 场景 | status | phase | 说明 |
 |------|--------|-------|------|
-| 用户刚创建任务 | `IMAGE_GENERATION_PENDING` | `IMAGE_GENERATION` | 图片生成阶段，等待 Worker 处理 |
-| Worker 正在生成第2张图 | `IMAGE_GENERATION_RUNNING` | `IMAGE_GENERATION` | 图片生成阶段，执行中 |
-| 4张图片已生成完成 | `IMAGE_GENERATION_COMPLETED` | `IMAGE_GENERATION` | 图片生成阶段，等待用户选图 |
-| 用户选图后触发3D生成 | `MODEL_GENERATION_PENDING` | `MODEL_GENERATION` | 模型生成阶段，等待 Worker 处理 |
-| Worker 正在生成3D模型 | `MODEL_GENERATION_RUNNING` | `MODEL_GENERATION` | 模型生成阶段，执行中 |
-| 模型生成完成 | `MODEL_GENERATION_COMPLETED` | `COMPLETED` | 已完成 |
+| 用户刚创建任务 | `IMAGE_PENDING` | `IMAGE_GENERATION` | 图片生成阶段，等待 Worker 处理 |
+| Worker 正在生成第2张图 | `IMAGE_GENERATING` | `IMAGE_GENERATION` | 图片生成阶段，执行中 |
+| 4张图片已生成完成 | `IMAGE_COMPLETED` | `AWAITING_SELECTION` | 等待用户选图 |
+| 用户选图后触发3D生成 | `MODEL_PENDING` | `MODEL_GENERATION` | 模型生成阶段，等待 Worker 处理 |
+| Worker 正在生成3D模型 | `MODEL_GENERATING` | `MODEL_GENERATION` | 模型生成阶段，执行中 |
+| 模型生成完成 | `MODEL_COMPLETED` | `COMPLETED` | 已完成 |
 
 ---
 

@@ -20,7 +20,7 @@ AI 3D 模型生成平台：用户输入文本 → 生成 4 张图片 → 选择�
 ## 快速开始
 
 ```bash
-# 启动开发（端口 4000，自动美化日志）
+# 启动开发（端口 4100，自动美化日志）
 npm run dev
 
 # 数据库操作
@@ -106,31 +106,32 @@ if (isSuccess(data)) {
 
 ## 核心架构
 
-### 1. 数据库架构：五层设计
+### 1. 数据库架构：四层设计
 
 ```
 用户层 (User, EmailVerificationCode)
    ↓
-业务层 (GenerationRequest → GeneratedImage → GeneratedModel)
+任务层 (GenerationRequest → GeneratedImage)
    ↓
-执行层 (ImageGenerationJob, ModelGenerationJob)
+模型层 (Model - 统一AI生成和用户上传)
    ↓
-配置层 (QueueConfig) + 资源层 (UserAsset)
+执行层 (ImageGenerationJob, ModelGenerationJob) + 配置层 (QueueConfig)
 ```
 
-**核心原则**：业务状态和执行状态分离
+**核心原则**：业务状态和执行状态分离，Model 统一管理
 
 | 实体 | 状态字段 | 职责 |
 |------|---------|------|
-| GenerationRequest | **无** | 容器，管理请求元信息 |
+| GenerationRequest | `status` + `phase` | 生成请求容器，管理整体状态和阶段 |
 | GeneratedImage | `imageStatus` | 图片业务状态 (PENDING/GENERATING/COMPLETED/FAILED) |
-| GeneratedModel | **无** | 模型实体，状态通过 Job 体现 |
+| Model | `source` | 统一模型表，区分来源 (AI_GENERATED/USER_UPLOADED) |
 | ImageGenerationJob | `status` | 图片生成执行状态 (PENDING/RUNNING/RETRYING/COMPLETED/FAILED/TIMEOUT) |
 | ModelGenerationJob | `status` + `progress` | 模型生成执行状态 (0-100) |
 
 **关键设计**：
-- ✅ 每张图片有独立的 Job，支持独立重试和优先级
-- ✅ GeneratedModel 1:1 绑定 GeneratedImage (通过 sourceImageId)
+- ✅ GenerationRequest 有 `status` (细粒度) 和 `phase` (粗粒度) 双层状态
+- ✅ Model 统一管理 AI 生成和用户上传的模型
+- ✅ Model 1:1 绑定 GenerationRequest 和 GeneratedImage
 - ✅ Job 层提供细粒度的执行控制（重试、超时、优先级）
 
 ### 2. 后端架构：四层分离
@@ -147,13 +148,16 @@ lib/
 ├── repositories/      # 数据访问层（封装 Prisma CRUD）
 │   ├── generation-request.repository.ts
 │   ├── generated-image.repository.ts
-│   ├── generated-model.repository.ts
+│   ├── model.repository.ts              # 统一模型 Repository
+│   ├── model-interaction.repository.ts  # 模型交互（点赞/收藏）
 │   ├── job.repository.ts
+│   ├── queue-config.repository.ts       # 队列配置
 │   ├── user.repository.ts
 │   └── email-verification.repository.ts
 ├── services/          # 业务逻辑层（调用 Repository + Provider）
 │   ├── generation-request-service.ts
-│   ├── generated-model-service.ts
+│   ├── model-service.ts                 # 统一模型服务
+│   ├── interaction-service.ts           # 交互服务
 │   ├── auth-service.ts
 │   └── prompt-optimizer.ts
 ├── providers/         # 外部 API 封装（适配器模式）
