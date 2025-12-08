@@ -2,13 +2,15 @@
  * 本地文件系统 Storage 适配器
  *
  * 特性：
- * - 存储到 public/generated 目录
+ * - 存储到 storage 目录（服务端专用）
  * - 适合开发和小规模部署
  * - 无需额外配置
+ * - 通过代理API提供服务
  *
  * 注意：
  * - 文件存储在服务器本地，不适合多实例部署
  * - 生产环境建议使用 OSS/COS
+ * - 本地资源需要通过代理API访问，不可直接访问
  */
 
 import fs from "node:fs";
@@ -21,8 +23,8 @@ import type {
   SaveModelParams,
 } from "../types";
 
-// 存储根目录
-const STORAGE_ROOT = path.join(process.cwd(), "public", "generated");
+// 存储根目录（服务端专用）
+const STORAGE_ROOT = path.join(process.cwd(), "storage");
 
 /**
  * 本地文件系统 Storage 适配器
@@ -62,7 +64,7 @@ export class LocalStorageAdapter extends BaseStorageProvider {
 
     fs.writeFileSync(filepath, buffer);
 
-    // 返回可访问的 URL (相对于 public 目录)
+    // 返回可访问的 URL (相对于 storage 目录，通过代理API服务)
     return `/generated/images/${params.requestId}/${filename}`;
   }
 
@@ -121,7 +123,19 @@ export class LocalStorageAdapter extends BaseStorageProvider {
    */
   protected async getFileInfoImpl(url: string): Promise<FileInfo> {
     try {
-      const filepath = path.join(process.cwd(), "public", url);
+      // 本地文件需要映射到 storage 目录
+      let filepath: string;
+      if (url.startsWith('/generated/images/')) {
+        const relativePath = url.replace('/generated/images/', '');
+        filepath = path.join(STORAGE_ROOT, "images", relativePath);
+      } else if (url.startsWith('/generated/models/')) {
+        const relativePath = url.replace('/generated/models/', '');
+        filepath = path.join(STORAGE_ROOT, "models", relativePath);
+      } else {
+        // 兼容旧路径格式
+        filepath = path.join(process.cwd(), "public", url);
+      }
+
       const exists = fs.existsSync(filepath);
 
       if (exists) {
@@ -153,7 +167,19 @@ export class LocalStorageAdapter extends BaseStorageProvider {
    */
   protected async fileExistsImpl(url: string): Promise<boolean> {
     try {
-      const filepath = path.join(process.cwd(), "public", url);
+      // 本地文件需要映射到 storage 目录
+      let filepath: string;
+      if (url.startsWith('/generated/images/')) {
+        const relativePath = url.replace('/generated/images/', '');
+        filepath = path.join(STORAGE_ROOT, "images", relativePath);
+      } else if (url.startsWith('/generated/models/')) {
+        const relativePath = url.replace('/generated/models/', '');
+        filepath = path.join(STORAGE_ROOT, "models", relativePath);
+      } else {
+        // 兼容旧路径格式
+        filepath = path.join(process.cwd(), "public", url);
+      }
+
       return fs.existsSync(filepath);
     } catch (_error) {
       return false;

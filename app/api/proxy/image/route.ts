@@ -1,16 +1,19 @@
 /**
  * 图片代理接口
- * 作用：解决腾讯云COS的CORS跨域问题
+ * 作用：解决跨域问题 + 提供本地文件服务
  *
  * 工作原理：
- * 1. 接收前端请求（带有腾讯云图片URL作为查询参数）
- * 2. 后端服务器fetch腾讯云URL（服务端请求无CORS限制）
- * 3. 将获取的图片流式传输给前端
- * 4. 设置正确的Content-Type和CORS头
+ * 1. 接收前端请求（带有图片URL作为查询参数）
+ * 2. 智能判断：本地文件 vs 外部OSS URL
+ * 3. 本地文件：直接从storage目录读取
+ * 4. 外部URL：后端fetch并转发（服务端无CORS限制）
+ * 5. 设置正确的Content-Type和CORS头
  */
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import fs from "node:fs";
+import path from "node:path";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +28,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 验证URL是腾讯云COS域名（安全检查，防止代理被滥用）
+    // 检查是否为本地文件路径
+    if (imageUrl.startsWith('/generated/images/')) {
+      return handleLocalImage(imageUrl);
+    }
+
+    // 验证URL是允许的外部域名（安全检查，防止代理被滥用）
     // 支持两种格式：
     // 1. 图片生成 API 的临时 URL：xxx.aliyuncs.com, xxx.siliconflow.cn 等
     // 2. 我们自己的 COS：xxx.myqcloud.com
@@ -94,6 +102,71 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
+    );
+  }
+}
+
+/**
+ * 处理本地图片文件服务
+ */
+function handleLocalImage(imageUrl: string): NextResponse {
+  try {
+    // 映射URL到本地文件系统路径
+    const relativePath = imageUrl.replace('/generated/images/', '');
+    const storageRoot = path.join(process.cwd(), 'storage');
+    const filePath = path.join(storageRoot, 'images', relativePath);
+
+    // 检查文件是否存在
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json(
+        { error: "Image file not found" },
+        { status: 404 }
+      );
+    }
+
+    // 读取文件
+    const buffer = fs.readFileSync(filePath);
+
+    // 根据文件扩展名确定Content-Type
+    const ext = path.extname(filePath).toLowerCase();
+    let contentType = 'image/png'; // 默认
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        contentType = 'image/jpeg';
+        break;
+      case '.png':
+        contentType = 'image/png';
+        break;
+      case '.gif':
+        contentType = 'image/gif';
+        break;
+      case '.webp':
+        contentType = 'image/webp';
+        break;
+      case '.svg':
+        contentType = 'image/svg+xml';
+        break;
+    }
+
+    // 返回文件
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Length": buffer.length.toString(),
+        "Cache-Control": "public, max-age=31536000", // 缓存1年
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+
+  } catch (error) {
+    console.error("Local image file error:", error);
+    return NextResponse.json(
+      { error: "Failed to read local image file" },
+      { status: 500 }
     );
   }
 }

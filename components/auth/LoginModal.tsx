@@ -261,6 +261,12 @@ function LoginModalContent() {
  */
 export default function LoginModal() {
   const { isOpen, context } = useLoginModal();
+  const [isDemoMode, setIsDemoMode] = useState(true);
+
+  // 演示模式下禁用登录弹窗
+  if (isDemoMode) {
+    return null; // 不渲染任何内容
+  }
 
   // ESC 键关闭弹窗
   useEffect(() => {

@@ -1,6 +1,7 @@
 /**
- * Next.js Middleware - API 认证拦截器
+ * Next.js Middleware - API 认证拦截器 + 图片代理
  * 职责：统一拦截需要认证的 API 请求，验证用户身份，并通过请求头传递用户信息
+ *        处理本地图片路径的代理重定向
  *
  * 架构设计：
  * - 所有页面路由公开访问（无拦截）
@@ -8,6 +9,7 @@
  * - 验证通过后，通过请求头 (x-user-id) 传递用户信息给 API
  * - API 直接从请求头读取 userId，无需重复验证
  * - 前端拦截 401 响应，弹出登录弹窗
+ * - 图片路径处理：/generated/images/* 重定向到代理API
  *
  * 受保护的 API：
  * - /api/tasks/* - 任务管理（创建、查询）
@@ -38,6 +40,16 @@ import { isProtectedRoute } from "@/lib/config/api-routes";
 const AUTH_COOKIE_NAME = "auth-session";
 
 /**
+ * 演示模式配置
+ */
+const DEMO_MODE = true; // 演示模式开关
+const DEMO_USER = {
+  id: "cmix02id90001i0nmu7wmtnlh",
+  email: "demo@demo.com",
+  name: "Demo User"
+};
+
+/**
  * 验证用户会话并返回用户信息
  *
  * @param request - Next.js 请求对象
@@ -48,6 +60,15 @@ function checkAuth(request: NextRequest): {
   userId?: string;
   email?: string;
 } {
+  // 演示模式：自动登录为演示用户
+  if (DEMO_MODE) {
+    return {
+      isAuthenticated: true,
+      userId: DEMO_USER.id,
+      email: DEMO_USER.email,
+    };
+  }
+
   const sessionCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (!sessionCookie) {
@@ -86,6 +107,20 @@ function checkAuth(request: NextRequest): {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
+
+  // 处理本地图片路径重定向到代理API
+  if (pathname.startsWith("/generated/images/")) {
+    const imageUrl = `${request.nextUrl.origin}${pathname}`;
+    const proxyUrl = `${request.nextUrl.origin}/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
+    return NextResponse.redirect(proxyUrl);
+  }
+
+  // 处理本地模型路径重定向到代理API
+  if (pathname.startsWith("/generated/models/")) {
+    const modelUrl = `${request.nextUrl.origin}${pathname}`;
+    const proxyUrl = `${request.nextUrl.origin}/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
+    return NextResponse.redirect(proxyUrl);
+  }
 
   // 只拦截 /api/* 路由
   if (!pathname.startsWith("/api/")) {

@@ -244,6 +244,24 @@ export function requireResourceAccess(_resourceUserId: string): void {
  * ```
  */
 export async function checkAuthStatus(): Promise<AuthCheckResult> {
+  // 演示模式自动登录检查
+  const DEMO_MODE = true; // 演示模式开关
+  const DEMO_USER = {
+    id: "cmix02id90001i0nmu7wmtnlh",
+    email: "demo@demo.com"
+  };
+
+  if (DEMO_MODE) {
+    return {
+      isAuthenticated: true,
+      status: AuthStatus.AUTHENTICATED,
+      userSession: {
+        userId: DEMO_USER.id,
+        email: DEMO_USER.email,
+      },
+    };
+  }
+
   const cookieStore = await cookies();
   const userData = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 

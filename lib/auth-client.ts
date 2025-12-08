@@ -18,6 +18,7 @@
 
 import { authActions } from "@/stores/auth-store";
 import type { User } from "@/types/auth";
+import { AuthStatus } from "@/types/auth";
 
 /**
  * 用户信息类型 (从 stores/auth-store 重新导出)
@@ -69,9 +70,41 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
- * 退出登录
+ * 演示模式自动登录
  *
- * @returns 是否成功退出
+ * 在演示模式下自动获取演示用户身份
+ *
+ * @returns 用户对象或 null
+ */
+export async function autoLoginDemo(): Promise<User | null> {
+  try {
+    const response = await fetch("/api/auth/demo-login", {
+      method: "GET",
+      credentials: "include", // 携带 Cookie
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    // 更新 Zustand store
+    if (data.status === "success") {
+      authActions.setAuthState(AuthStatus.AUTHENTICATED, data.data.user);
+      return data.data.user;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 退出登录 (演示模式禁用)
+ *
+ * @returns 始终返回 false（演示模式不允许退出）
  *
  * @example
  * ```typescript
@@ -82,19 +115,7 @@ export async function getCurrentUser(): Promise<User | null> {
  * ```
  */
 export async function logout(): Promise<boolean> {
-  try {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include", // 携带 Cookie
-    });
-
-    // 清除前端状态
-    if (response.ok) {
-      authActions.resetAuth();
-    }
-
-    return response.ok;
-  } catch {
-    return false;
-  }
+  // 演示模式禁止退出
+  console.warn("演示模式下禁止退出登录");
+  return false;
 }

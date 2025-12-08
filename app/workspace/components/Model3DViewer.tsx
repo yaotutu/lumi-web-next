@@ -7,13 +7,31 @@ import {
   Suspense,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
 } from "react";
 import * as THREE from "three";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
+
+// 获取对应的 MTL 文件 URL
+function getMTLUrl(objUrl: string): string {
+  // 从 OBJ URL 提取基础路径
+  const urlObj = new URL(objUrl, window.location.origin);
+  const actualUrl = urlObj.searchParams.get("url") || "";
+
+  if (actualUrl.startsWith('/generated/models/')) {
+    // 本地文件：在相同目录下查找 MTL 文件
+    const basePath = actualUrl.substring(0, actualUrl.lastIndexOf('/'));
+    const mtlUrl = `${basePath}/material.mtl`;
+    const proxyMtlUrl = `/api/proxy/model?url=${encodeURIComponent(mtlUrl)}`;
+    return proxyMtlUrl;
+  }
+
+  // 外部文件：尝试在同一目录下查找 material.mtl
+  const objBaseUrl = actualUrl.substring(0, actualUrl.lastIndexOf('/'));
+  return `${objBaseUrl}/material.mtl`;
+}
 
 // GLB 模型组件
 function GLBModel({
@@ -39,7 +57,7 @@ function GLBModel({
   );
 }
 
-// OBJ 模型组件（参考官方示例，使用统一的文件命名）
+// OBJ 模型组件
 function OBJModel({
   url,
   onSceneLoad,
@@ -47,113 +65,43 @@ function OBJModel({
   url: string;
   onSceneLoad?: (scene: THREE.Group) => void;
 }) {
-  // 从代理 URL 中提取实际的 COS URL 和目录
-  const urlObj = new URL(url, window.location.origin);
-  const actualUrl = urlObj.searchParams.get("url") || "";
-  const baseDir = actualUrl.substring(0, actualUrl.lastIndexOf("/"));
-
-  // 🔑 从 baseDir 中提取唯一标识（通常是任务 ID）
-  // 例如：https://xxx.cos.xxx.myqcloud.com/models/TASK_ID/model.obj
-  // 提取 TASK_ID 作为唯一标识，既保证缓存独立，又保持相对路径形式
-  const uniqueId = baseDir.split("/").pop() || Date.now().toString();
-  const mtlKey = `${uniqueId}/material.mtl`; // 唯一的缓存 key
-  const objKey = `${uniqueId}/model.obj`; // 唯一的缓存 key
-
-  console.log("OBJ 解析:", {
-    actualUrl,
-    baseDir,
-    uniqueId,
-    mtlKey,
-    objKey,
-    note: "使用任务ID作为缓存key前缀，确保不同任务的模型独立缓存，同时保持相对路径形式以正确加载纹理",
-  });
-
-  // 创建统一的 LoadingManager，将文件名转换为代理 URL
-  const manager = useMemo(() => {
-    const mgr = new THREE.LoadingManager();
-
-    mgr.setURLModifier((fileName) => {
-      console.log("LoadingManager 拦截文件名:", fileName);
-
-      // 如果已经是完整的代理 URL，直接返回
-      if (fileName.startsWith("/api/proxy/model")) {
-        return fileName;
-      }
-
-      // 移除唯一ID前缀，获取实际文件名
-      const actualFileName = fileName.includes("/")
-        ? fileName.split("/").pop() || fileName
-        : fileName;
-
-      // 构建完整的代理 URL
-      const fullUrl = `${baseDir}/${actualFileName}`;
-      const proxyUrl = `/api/proxy/model?url=${encodeURIComponent(fullUrl)}`;
-
-      console.log("文件名转代理 URL:", {
-        fileName,
-        actualFileName,
-        fullUrl,
-        proxyUrl,
-      });
-      return proxyUrl;
-    });
-
-    return mgr;
-  }, [baseDir]);
-
-  // 🔑 加载 MTL 材质：使用带唯一ID的相对路径作为 key
-  // 这样不同任务有不同的缓存，LoadingManager 还能正确转换路径
-  const materials = useLoader(MTLLoader, mtlKey, (loader) => {
-    loader.manager = manager;
-  });
-  materials.preload();
-
-  // 🔑 加载 OBJ 模型：使用带唯一ID的相对路径作为 key
-  const obj = useLoader(OBJLoader, objKey, (loader) => {
-    loader.manager = manager;
-    loader.setMaterials(materials);
-  });
-
-  // 优化材质和纹理
-  obj.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-
-      // 优化材质设置
-      if (child.material) {
-        const materials = Array.isArray(child.material)
-          ? child.material
-          : [child.material];
-
-        for (const material of materials) {
-          // 设置纹理过滤和色彩空间
-          if (material.map) {
-            material.map.colorSpace = THREE.SRGBColorSpace;
-            material.map.minFilter = THREE.LinearMipmapLinearFilter;
-            material.map.magFilter = THREE.LinearFilter;
-            material.map.anisotropy = 16;
-            material.map.needsUpdate = true;
-          }
-
-          // 调整材质属性
-          if (material.type === "MeshPhongMaterial") {
-            material.shininess = 30;
-            material.specular = new THREE.Color(0x111111);
-          }
-
-          material.needsUpdate = true;
-        }
-      }
+  // 使用 useLoader 统一处理 OBJ 和 MTL 文件加载
+  const materials = useLoader(MTLLoader, getMTLUrl(url));
+  const obj = useLoader(OBJLoader, url, (loader) => {
+    // 预加载材质
+    if (materials) {
+      materials.preload();
+      loader.setMaterials(materials);
     }
   });
 
   // 场景加载后通知父组件
   useEffect(() => {
     if (obj && onSceneLoad) {
-      onSceneLoad(obj as THREE.Group);
+      onSceneLoad(obj);
     }
   }, [obj, onSceneLoad]);
+
+  // 为模型设置默认材质（如果没有材质或材质加载失败）
+  useEffect(() => {
+    if (obj) {
+      obj.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // 如果没有材质，使用默认材质
+          if (!child.material) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0xcccccc, // 浅灰色
+              metalness: 0.3,
+              roughness: 0.7,
+            });
+          }
+          // 启用阴影
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+    }
+  }, [obj]);
 
   return <primitive object={obj} />;
 }

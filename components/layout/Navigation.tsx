@@ -65,7 +65,8 @@ export default function Navigation() {
   const user = useUser();
   const isLoaded = useIsLoaded();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(true); // 演示模式标识
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // 退出登录状态
 
   // 组件挂载时刷新认证状态
   useEffect(() => {
@@ -91,8 +92,14 @@ export default function Navigation() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, [showUserMenu]);
 
-  // 退出登录
+  // 退出登录 (演示模式下禁用)
   const handleLogout = async () => {
+    // 演示模式下禁止退出
+    if (isDemoMode) {
+      alert("演示模式下禁止退出登录");
+      return;
+    }
+
     try {
       setIsLoggingOut(true);
       const success = await logout();
@@ -194,16 +201,28 @@ export default function Navigation() {
                         {user.email}
                       </p>
                     </div>
-                    <div className="p-2">
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        disabled={isLoggingOut}
-                        className="w-full rounded-md px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-3 hover:text-text-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isLoggingOut ? "退出中..." : "退出登录"}
-                      </button>
-                    </div>
+                    {/* 演示模式下隐藏登出按钮 */}
+                    {!isDemoMode && (
+                      <div className="p-2">
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
+                          className="w-full rounded-md px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-3 hover:text-text-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isLoggingOut ? "退出中..." : "退出登录"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 演示模式提示 */}
+                    {isDemoMode && (
+                      <div className="p-2">
+                        <div className="w-full rounded-md px-3 py-2 text-left text-sm text-yellow-400 bg-yellow-500/10 border border-yellow-500/20">
+                          演示模式：禁止退出
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

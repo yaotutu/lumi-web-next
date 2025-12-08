@@ -38,7 +38,9 @@
       "Bash(npm run build:*)",
       "mcp__chrome-devtools__evaluate_script",
       "Bash(npx prisma:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(sqlite3:*)",
+      "Bash(cat:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
