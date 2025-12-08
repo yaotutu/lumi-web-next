@@ -59,29 +59,19 @@ export default function HeroSearchBar({
     setIsCreating(true);
 
     try {
-      // 调用API创建任务
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmedPrompt }),
-      });
+      // 演示模式：直接跳转到工作台，不创建新任务
+      // 工作台会自动加载最新的任务
+      console.log("演示模式：直接跳转到3D工作台，输入内容:", trimmedPrompt);
 
-      const data = await response.json();
+      // 模拟短暂加载效果
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        const taskData = data.data as { id: string };
-        // 使用任务ID跳转到工作台
-        router.push(`/workspace?taskId=${taskData.id}`);
-      } else {
-        // 处理API错误
-        setError(getErrorMessage(data));
-        setIsCreating(false);
-      }
+      // 直接跳转到工作台（不带taskId，让工作台自动加载最新任务）
+      router.push("/workspace");
     } catch (err) {
-      // 处理网络错误
-      console.error("Failed to create task:", err);
-      setError("网络错误，请检查连接后重试");
+      // 处理跳转错误
+      console.error("Failed to navigate to workspace:", err);
+      setError("跳转失败，请重试");
       setIsCreating(false);
     }
   };

@@ -40,7 +40,8 @@
       "Bash(npx prisma:*)",
       "Bash(sed:*)",
       "Bash(sqlite3:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(rm:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

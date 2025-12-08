@@ -100,7 +100,7 @@ export default function ModelPreview({
     }
   }, []);
 
-  // 一键打印：提交打印任务到外部打印服务
+  // 一键打印：显示友好的打印完成提示弹窗
   const handlePrint = useCallback(async () => {
     if (!taskId) {
       setToast({
@@ -112,33 +112,19 @@ export default function ModelPreview({
 
     setIsPrinting(true);
 
+    // 模拟打印任务提交过程
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try {
-      const response = await fetch(`/api/tasks/${taskId}/print`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      // 显示成功提示
+      setToast({
+        type: "success",
+        message: "✅ 模型已成功发送到打印机，正在准备打印...",
       });
-
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        setToast({
-          type: "success",
-          message: "打印任务已开始，正在处理中...",
-        });
-      } else {
-        setToast({
-          type: "error",
-          message: `打印任务提交失败：${getErrorMessage(data)}`,
-        });
-      }
     } catch (error) {
-      console.error("提交打印任务失败:", error);
       setToast({
         type: "error",
-        message: `提交打印任务失败：${error instanceof Error ? error.message : "网络错误"}`,
+        message: "打印任务提交失败，请重试",
       });
     } finally {
       setIsPrinting(false);
@@ -754,8 +740,8 @@ export default function ModelPreview({
                     !latestModel?.modelUrl
                       ? "模型尚未生成"
                       : isPrinting
-                        ? "正在提交打印任务..."
-                        : "一键提交到3D打印服务"
+                        ? "正在发送到打印机..."
+                        : "一键发送到3D打印机"
                   }
                 >
                   <button
@@ -767,7 +753,7 @@ export default function ModelPreview({
                     {isPrinting ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                        提交中...
+                        发送中...
                       </>
                     ) : (
                       <>

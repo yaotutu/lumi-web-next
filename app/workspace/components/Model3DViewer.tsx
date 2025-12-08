@@ -16,9 +16,13 @@ import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 
 // 获取对应的 MTL 文件 URL
 function getMTLUrl(objUrl: string): string {
-  // 从 OBJ URL 提取基础路径
-  const urlObj = new URL(objUrl, window.location.origin);
-  const actualUrl = urlObj.searchParams.get("url") || "";
+  let actualUrl = objUrl;
+
+  // 如果是代理 URL，提取原始 URL
+  if (objUrl.includes('/api/proxy/model?url=')) {
+    const urlObj = new URL(objUrl, window.location.origin);
+    actualUrl = urlObj.searchParams.get("url") || "";
+  }
 
   if (actualUrl.startsWith('/generated/models/')) {
     // 本地文件：在相同目录下查找 MTL 文件

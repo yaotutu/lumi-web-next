@@ -48,8 +48,17 @@ export function getProxiedModelUrl(
 ): string {
   if (!modelUrl) return "/demo.glb";
 
-  // 如果是本地文件（以/开头），直接返回
-  if (modelUrl.startsWith("/")) return modelUrl;
+  // 所有本地文件路径都通过代理处理
+  if (modelUrl.startsWith("/")) {
+    return `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
+  }
+
+  // 如果是纯文件名（如：cmix143j10018i0nm4i0fvc8g.obj），假设是本地文件
+  if (modelUrl.match(/^[a-z0-9]+\.(obj|glb|gltf|fbx)$/i)) {
+    // 这是迁移后的本地文件，需要添加本地路径前缀
+    const localPath = `/generated/models/${modelUrl}`;
+    return `/api/proxy/model?url=${encodeURIComponent(localPath)}`;
+  }
 
   // 检查是否是腾讯云 COS URL（格式：https://bucket.cos.region.myqcloud.com/...）
   // 或腾讯云混元 3D URL（xxx.tencentcos.cn）
@@ -59,6 +68,12 @@ export function getProxiedModelUrl(
 
   if (needsProxy) {
     return `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`;
+  }
+
+  // 其他情况，如果是相对路径但没有/开头，加上/
+  if (!modelUrl.startsWith("http://") && !modelUrl.startsWith("https://")) {
+    const normalizedUrl = modelUrl.startsWith("/") ? modelUrl : `/${modelUrl}`;
+    return `/api/proxy/model?url=${encodeURIComponent(normalizedUrl)}`;
   }
 
   // 其他 URL 直接返回（可能有 CORS 问题）
