@@ -10,7 +10,7 @@
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "biome check",
     "format": "biome format --write",
-      "generate:openapi": "tsx scripts/generate-openapi.ts",
+    "generate:openapi": "tsx scripts/generate-openapi.ts",
     "init:storage": "tsx scripts/init-storage.ts",
     "test:storage": "tsx scripts/test-storage.ts",
     "test:api": "tsx scripts/test-task-api.ts",
@@ -30,7 +30,7 @@
     "debug:list-api-detailed": "tsx scripts/debug-list-api-detailed.ts",
     "test:aliyun-api": "tsx scripts/test-aliyun-api.ts",
     "test:api-key": "tsx scripts/test-api-key.ts"
-    },
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
@@ -41,7 +41,7 @@
     "cos-nodejs-sdk-v5": "^2.15.4",
     "dotenv": "^17.2.3",
     "jszip": "^3.10.1",
-    "next": "15.5.4",
+    "next": "^15.5.7",
     "openai": "^6.3.0",
     "pino": "^10.0.0",
     "pino-pretty": "^13.1.1",
@@ -62,7 +62,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
-      "js-yaml": "^4.1.0",
+    "js-yaml": "^4.1.0",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"
