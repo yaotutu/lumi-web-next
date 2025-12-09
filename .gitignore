@@ -40,9 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# prisma
-prisma/*.db
+# prisma (排除 dev.db 以便演示数据同步)
 prisma/*.db-journal
+!prisma/dev.db
 
 # 生成的静态资源
 /public/generated/
