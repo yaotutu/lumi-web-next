@@ -1,4 +1,16 @@
 /**
+ * ⚠️ 重要提示 - 此文件仅供参考
+ *
+ * API 已迁移到独立的 lumi-server 后端项目（前后端分离架构）
+ * - 此文件保留用于后端开发参考，前端项目已不使用
+ * - 实际的认证工具函数在 lumi-server 中实现
+ * - 详见: /path/to/lumi-server/src/utils/request-auth.ts
+ * - 迁移文档: docs/API_MIGRATION.md
+ *
+ * 如需修改认证工具函数，请在 lumi-server 项目中修改。
+ */
+
+/**
  * 请求认证工具函数
  * 职责：从请求头中读取 middleware 传递的用户信息
  *

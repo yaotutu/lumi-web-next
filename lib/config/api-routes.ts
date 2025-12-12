@@ -1,4 +1,16 @@
 /**
+ * ⚠️ 重要提示 - 此文件仅供参考
+ *
+ * API 已迁移到独立的 lumi-server 后端项目（前后端分离架构）
+ * - 此文件保留用于后端开发参考，前端项目已不使用
+ * - 实际的认证逻辑和路由保护规则在 lumi-server 中实现
+ * - 详见: /path/to/lumi-server/src/config/api-routes.ts
+ * - 迁移文档: docs/API_MIGRATION.md
+ *
+ * 如需修改 API 认证规则，请在 lumi-server 项目中修改。
+ */
+
+/**
  * API 路由配置 - 统一管理所有 API 的认证规则
  *
  * 架构设计：
