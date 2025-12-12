@@ -6,7 +6,7 @@
  *
  * 前置条件：
  * 确保 .env 或 .env.local 中配置了以下环境变量：
- * - TENCENT_COS_SECRET_ID
+ * -
  * - TENCENT_COS_SECRET_KEY
  * - TENCENT_COS_BUCKET
  * - TENCENT_COS_REGION

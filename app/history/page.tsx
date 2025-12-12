@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
-import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import { apiDelete, apiGet } from "@/lib/api-client";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 // 认证状态管理
 import { useIsAuthenticated, useIsLoaded } from "@/stores/auth-store";
@@ -31,7 +31,7 @@ export default function HistoryPage() {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const response = await fetch("/api/tasks");
+        const response = await apiGet("/api/tasks");
         const rawData = await response.json();
         const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
@@ -58,9 +58,7 @@ export default function HistoryPage() {
     if (!confirm("确定要删除这个任务吗？")) return;
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-      });
+      const response = await apiDelete(`/api/tasks/${taskId}`);
 
       if (response.ok) {
         setTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -141,7 +139,7 @@ export default function HistoryPage() {
 
                       return imageUrl ? (
                         <Image
-                          src={getProxiedImageUrl(imageUrl)}
+                          src={imageUrl}
                           alt="Task thumbnail"
                           fill
                           className="object-cover transition-transform group-hover:scale-105"

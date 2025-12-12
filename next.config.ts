@@ -17,6 +17,19 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "ai3d-1375240212.cos.ap-guangzhou.myqcloud.com",
       },
+      // 本地代理服务器（用于解决 CORS 问题）
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "3000",
+        pathname: "/api/proxy/**",
+      },
+      {
+        protocol: "http",
+        hostname: "192.168.88.100",
+        port: "3000",
+        pathname: "/api/proxy/**",
+      },
     ],
   },
 };

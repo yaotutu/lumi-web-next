@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser } from "@/stores/auth-store";
 import { useModal } from "../hooks/useModal";
@@ -112,13 +113,10 @@ export default function ModelGallery() {
       try {
         if (!user) return;
 
-        const response = await fetch("/api/gallery/models/batch-interactions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ modelIds }),
-        });
+        const response = await apiPost(
+          "/api/gallery/models/batch-interactions",
+          { modelIds },
+        );
 
         if (response.ok) {
           const data = await response.json();
@@ -154,7 +152,7 @@ export default function ModelGallery() {
 
       try {
         const currentOffset = reset ? 0 : offset;
-        const response = await fetch(
+        const response = await apiGet(
           `/api/gallery/models?sortBy=${sortBy}&limit=${LIMIT}&offset=${currentOffset}`,
         );
 
@@ -166,11 +164,19 @@ export default function ModelGallery() {
 
         // JSend 格式判断（注意：后端返回 data.items，不是 data.models）
         if (isSuccess(data)) {
+          // 调试：检查实际返回的数据结构
+          console.log("🔍 API返回数据:", JSON.stringify(data, null, 2));
+
           const galleryData = data.data as {
             items: UserAsset[];
             hasMore: boolean;
           };
-          const newModels = galleryData.items;
+
+          // 调试：检查 galleryData 和 items
+          console.log("🔍 galleryData:", galleryData);
+          console.log("🔍 galleryData.items:", galleryData.items);
+
+          const newModels = galleryData.items || []; // 防御性：如果 items 不存在则使用空数组
 
           // 更新模型列表
           setModels((prev) => (reset ? newModels : [...prev, ...newModels]));

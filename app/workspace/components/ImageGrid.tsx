@@ -6,7 +6,6 @@ import Tooltip from "@/components/ui/Tooltip";
 import { apiPost } from "@/lib/api-client";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
 // 表单持久化 store
 import { useWorkspaceFormStore } from "@/stores/workspace-form-store";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
@@ -479,7 +478,7 @@ export default function ImageGrid({
                       <>
                         {/* 图片 - 使用object-cover等比拉伸填充正方形，通过代理加载解决CORS问题 */}
                         <img
-                          src={getProxiedImageUrl(slot.url)}
+                          src={slot.url}
                           alt={`生成的图片 ${idx + 1}`}
                           className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
                         />

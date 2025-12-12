@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { authActions } from "@/stores/auth-store";
 import { loginModalActions, useLoginModal } from "@/stores/login-modal-store";
@@ -72,13 +73,7 @@ function LoginModalContent() {
     setIsSendingCode(true);
 
     try {
-      const response = await fetch("/api/auth/send-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+      const response = await apiPost("/api/auth/send-code", { email });
 
       const data = await response.json();
 
@@ -124,13 +119,7 @@ function LoginModalContent() {
     setIsLoggingIn(true);
 
     try {
-      const response = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, code }),
-      });
+      const response = await apiPost("/api/auth/verify-code", { email, code });
 
       const data = await response.json();
 

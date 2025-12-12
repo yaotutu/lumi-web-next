@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
+import { apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
@@ -113,12 +113,7 @@ export default function ModelPreview({
     setIsPrinting(true);
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}/print`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await apiPost(`/api/tasks/${taskId}/print`, {});
 
       const data = await response.json();
 
@@ -366,22 +361,31 @@ export default function ModelPreview({
               </p>
             </div>
           ) : status === "completed" ? (
-            // 完成:渲染 3D 模型（使用代理URL绕过CORS）
+            // 完成:渲染 3D 模型（直接使用后端提供的字段，无需映射）
             (() => {
-              const originalUrl = latestModel?.modelUrl;
-              const proxiedUrl = getProxiedModelUrl(originalUrl);
+              const modelUrl = latestModel?.modelUrl;
+              const mtlUrl = latestModel?.mtlUrl;
+              const textureUrl = latestModel?.textureUrl;
+              const format = latestModel?.format;
+
               console.log("=== ModelPreview 渲染 3D 模型 ===", {
                 taskStatus: task?.status,
                 latestModelGenerationStatus: latestModel?.generationStatus,
-                originalUrl,
-                proxiedUrl,
-                latestModelFullData: latestModel,
-                model: task?.model || null,
+                format,
+                modelUrl,
+                mtlUrl,
+                textureUrl,
+                note: "直接使用后端提供的字段，无需任何映射",
               });
+
+              // ✅ 直接传递后端提供的所有字段，由 Model3DViewer 根据 format 自动选择加载器
               return (
                 <Model3DViewer
                   ref={model3DViewerRef}
-                  modelUrl={proxiedUrl}
+                  modelUrl={modelUrl}
+                  mtlUrl={mtlUrl}
+                  textureUrl={textureUrl}
+                  format={format}
                   showGrid={showGrid}
                 />
               );
@@ -811,11 +815,10 @@ export default function ModelPreview({
                   if (!taskId) return;
                   try {
                     // 调用重试API
-                    const response = await fetch(`/api/tasks/${taskId}/retry`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ type: "model" }),
-                    });
+                    const response = await apiPost(
+                      `/api/tasks/${taskId}/retry`,
+                      { type: "model" },
+                    );
 
                     const data = await response.json();
                     // JSend 格式判断

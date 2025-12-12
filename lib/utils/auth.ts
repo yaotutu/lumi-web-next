@@ -64,6 +64,7 @@ export async function setUserCookie(user: UserSession): Promise<void> {
     sameSite: "lax", // 防止 CSRF 攻击
     maxAge: COOKIE_MAX_AGE, // 7 天过期
     path: "/", // 全站可用
+    domain: "192.168.88.100", // ✅ 关键修复：跨端口共享 Cookie
   });
 }
 
@@ -144,6 +145,7 @@ export async function clearUserCookie(): Promise<void> {
     maxAge: 0, // 立即过期
     path: "/",
     expires: new Date(0), // 保障2: 显式设置过去的时间
+    domain: "192.168.88.100", // ✅ 关键修复：跨端口清除 Cookie
   });
 
   // 保障3: 再次尝试删除（兜底）

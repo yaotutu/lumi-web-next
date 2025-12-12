@@ -16,6 +16,7 @@
  * ```
  */
 
+import { apiGet, apiPost } from "@/lib/api-client";
 import { authActions } from "@/stores/auth-store";
 import type { User } from "@/types/auth";
 
@@ -46,10 +47,7 @@ export async function getCurrentUser(): Promise<User | null> {
   );
 
   try {
-    const response = await fetch("/api/auth/me", {
-      method: "GET",
-      credentials: "include", // 携带 Cookie
-    });
+    const response = await apiGet("/api/auth/me");
 
     if (!response.ok) {
       return null;
@@ -83,10 +81,7 @@ export async function getCurrentUser(): Promise<User | null> {
  */
 export async function logout(): Promise<boolean> {
   try {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include", // 携带 Cookie
-    });
+    const response = await apiPost("/api/auth/logout", {});
 
     // 清除前端状态
     if (response.ok) {

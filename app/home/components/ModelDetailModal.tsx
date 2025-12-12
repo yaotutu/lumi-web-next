@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-import { getProxiedModelUrl } from "@/lib/utils/proxy-url";
 import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
 
@@ -65,7 +65,7 @@ export default function ModelDetailModal({
 
       try {
         // 直接使用 fetch + JSend 格式
-        const response = await fetch(`/api/gallery/models/${id}`);
+        const response = await apiGet(`/api/gallery/models/${id}`);
         if (!response.ok) {
           throw new Error(`加载失败: ${response.status}`);
         }
@@ -83,7 +83,7 @@ export default function ModelDetailModal({
           // 如果用户已登录，获取交互状态
           if (user) {
             try {
-              const interactionResponse = await fetch(
+              const interactionResponse = await apiGet(
                 `/api/gallery/models/${id}/interactions`,
               );
               if (interactionResponse.ok) {
@@ -276,15 +276,9 @@ export default function ModelDetailModal({
       }
 
       try {
-        const response = await fetch(
+        const response = await apiPost(
           `/api/gallery/models/${model.id}/interactions`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ type }),
-          },
+          { type },
         );
 
         if (!response.ok) {
@@ -349,8 +343,8 @@ export default function ModelDetailModal({
   // 弹窗未打开时不渲染
   if (!isOpen) return null;
 
-  // 获取代理后的模型 URL
-  const proxiedModelUrl = model ? getProxiedModelUrl(model.modelUrl) : null;
+  // 直接使用后端返回的模型 URL（已经是 S3 URL）
+  const modelUrl = model?.modelUrl || null;
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: 背景点击关闭弹窗
@@ -435,7 +429,10 @@ export default function ModelDetailModal({
                 >
                   <Model3DViewer
                     ref={model3DViewerRef}
-                    modelUrl={proxiedModelUrl || ""}
+                    modelUrl={modelUrl || ""}
+                    mtlUrl={model.mtlUrl}
+                    textureUrl={model.textureUrl}
+                    format={model.format}
                     showGrid={showGrid}
                   />
                 </div>

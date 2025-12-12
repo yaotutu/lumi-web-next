@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
+import { apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
@@ -60,11 +61,7 @@ export default function HeroSearchBar({
 
     try {
       // 调用API创建任务
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmedPrompt }),
-      });
+      const response = await apiPost("/api/tasks", { prompt: trimmedPrompt });
 
       const data = await response.json();
 

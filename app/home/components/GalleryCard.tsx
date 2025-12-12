@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser } from "@/stores/auth-store";
 
@@ -45,33 +46,33 @@ export default function GalleryCard({
   // 如果没有预设状态，单独获取交互状态
   useEffect(() => {
     if (user && !initialInteractionStatus) {
-      try {
-        fetch(`/api/gallery/models/${modelId}/interactions`)
-          .then(async (response) => {
-            if (response.ok) {
-              const data = await response.json();
-              // JSend 格式判断
-              if (isSuccess(data)) {
-                const interactionInfo = data.data as {
-                  isAuthenticated: boolean;
-                  isLiked?: boolean;
-                  isFavorited?: boolean;
-                };
-                if (interactionInfo.isAuthenticated) {
-                  setInteractionStatus({
-                    isLiked: interactionInfo.isLiked || false,
-                    isFavorited: interactionInfo.isFavorited || false,
-                  });
-                }
+      (async () => {
+        try {
+          const response = await apiGet(
+            `/api/gallery/models/${modelId}/interactions`,
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            // JSend 格式判断
+            if (isSuccess(data)) {
+              const interactionInfo = data.data as {
+                isAuthenticated: boolean;
+                isLiked?: boolean;
+                isFavorited?: boolean;
+              };
+              if (interactionInfo.isAuthenticated) {
+                setInteractionStatus({
+                  isLiked: interactionInfo.isLiked || false,
+                  isFavorited: interactionInfo.isFavorited || false,
+                });
               }
             }
-          })
-          .catch((error) => {
-            console.error("Failed to fetch interaction status:", error);
-          });
-      } catch (error) {
-        console.error("Failed to fetch interaction status:", error);
-      }
+          }
+        } catch (error) {
+          console.error("Failed to fetch interaction status:", error);
+        }
+      })();
     }
   }, [user, modelId, initialInteractionStatus]);
 
@@ -105,15 +106,9 @@ export default function GalleryCard({
     }
 
     try {
-      const response = await fetch(
+      const response = await apiPost(
         `/api/gallery/models/${modelId}/interactions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ type }),
-        },
+        { type },
       );
 
       if (!response.ok) {

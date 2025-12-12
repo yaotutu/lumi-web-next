@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createLogger } from "../logger";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
 // 创建 Prisma 日志器
 const prismaLogger = createLogger("Prisma");
@@ -19,6 +20,7 @@ export const prisma =
       { emit: "stdout", level: "info" },
       { emit: "stdout", level: "warn" },
     ],
+    adapter: new PrismaBetterSqlite3({ url: "file:./prisma/dev.db" }),
   });
 
 // 监听 Prisma 查询日志事件并重定向到 Pino
