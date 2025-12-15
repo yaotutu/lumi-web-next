@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logout } from "@/lib/auth-client";
+import { apiPost } from "@/lib/api-client";
 import { authActions, useIsLoaded, useUser } from "@/stores/auth-store";
 
 type NavLink = {
@@ -95,8 +95,11 @@ export default function Navigation() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const success = await logout();
-      if (success) {
+      const response = await apiPost("/api/auth/logout", {});
+
+      if (response.ok) {
+        // 清除前端状态
+        authActions.resetAuth();
         setShowUserMenu(false);
         // 先跳转，再刷新
         router.push("/");
