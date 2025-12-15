@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// 全局认证状态初始化
+import AuthProvider from "@/components/providers/AuthProvider";
 // 全局登录弹窗组件
 import LoginModal from "@/components/auth/LoginModal";
 
@@ -17,11 +19,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {/* 页面内容 */}
-        {children}
+        {/* 全局认证状态初始化 */}
+        <AuthProvider>
+          {/* 页面内容 */}
+          {children}
 
-        {/* 全局登录弹窗（响应 API 401 错误） */}
-        <LoginModal />
+          {/* 全局登录弹窗（响应 API 401 错误） */}
+          <LoginModal />
+        </AuthProvider>
       </body>
     </html>
   );

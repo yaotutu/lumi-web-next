@@ -67,14 +67,6 @@ export default function Navigation() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // 组件挂载时刷新认证状态
-  useEffect(() => {
-    // 确保认证状态已加载
-    if (!isLoaded) {
-      authActions.refreshAuth();
-    }
-  }, [isLoaded]);
-
   // 点击外部关闭菜单
   useEffect(() => {
     if (!showUserMenu) return;
