@@ -9,9 +9,7 @@
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "biome check",
-    "format": "biome format --write",
-    "precommit": "npm run type-check",
-    "prepare": "husky"
+    "format": "biome format --write"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",
@@ -31,7 +29,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
-    "husky": "^9.1.7",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"
