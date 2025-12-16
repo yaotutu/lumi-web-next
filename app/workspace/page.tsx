@@ -468,10 +468,20 @@ function WorkspaceContent() {
 
     /**
      * 处理连接错误
+     * 区分正常关闭和真正的错误
      */
     eventSource.onerror = (error) => {
-      console.error("❌ SSE 连接错误", error);
-      // EventSource 会自动重连，无需手动处理
+      // 检查连接状态，区分不同的错误场景
+      if (eventSource.readyState === EventSource.CLOSED) {
+        // 连接已关闭（服务器主动关闭，通常是任务完成）
+        console.log("ℹ️ SSE 连接已关闭（任务已完成）");
+      } else if (eventSource.readyState === EventSource.CONNECTING) {
+        // 连接中断，正在重连
+        console.warn("⚠️ SSE 连接中断，正在重连...");
+      } else {
+        // 未知错误
+        console.error("❌ SSE 连接错误", error);
+      }
     };
 
     // ========================================
