@@ -311,7 +311,7 @@ function WorkspaceContent() {
                   ...img,
                   imageStatus: "FAILED",
                   errorMessage,
-                  failedAt: new Date(),
+                  failedAt: new Date().toISOString(),
                 }
               : img,
           ),

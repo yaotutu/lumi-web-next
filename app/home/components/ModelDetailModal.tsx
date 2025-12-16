@@ -430,8 +430,8 @@ export default function ModelDetailModal({
                   <Model3DViewer
                     ref={model3DViewerRef}
                     modelUrl={modelUrl || ""}
-                    mtlUrl={model.mtlUrl}
-                    textureUrl={model.textureUrl}
+                    mtlUrl={model.mtlUrl ?? undefined}
+                    textureUrl={model.textureUrl ?? undefined}
                     format={model.format}
                     showGrid={showGrid}
                   />

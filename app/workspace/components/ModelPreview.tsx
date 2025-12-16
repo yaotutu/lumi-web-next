@@ -382,9 +382,9 @@ export default function ModelPreview({
               return (
                 <Model3DViewer
                   ref={model3DViewerRef}
-                  modelUrl={modelUrl}
-                  mtlUrl={mtlUrl}
-                  textureUrl={textureUrl}
+                  modelUrl={modelUrl ?? undefined}
+                  mtlUrl={mtlUrl ?? undefined}
+                  textureUrl={textureUrl ?? undefined}
                   format={format}
                   showGrid={showGrid}
                 />

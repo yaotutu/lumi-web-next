@@ -120,9 +120,10 @@ export default function HistoryPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {tasks.map((task) => (
-                <div
+                <button
                   key={task.id}
-                  className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30"
+                  type="button"
+                  className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30 text-left"
                   onClick={() => router.push(`/workspace?taskId=${task.id}`)}
                 >
                   {/* 缩略图 */}
@@ -130,12 +131,9 @@ export default function HistoryPage() {
                     {(() => {
                       // 查找第一张有 URL 的图片
                       const firstImageWithUrl = task.images.find(
-                        (img) => img.imageUrl || (img as any).url,
+                        (img) => img.imageUrl,
                       );
-                      const imageUrl = firstImageWithUrl
-                        ? (firstImageWithUrl as any).url ||
-                          firstImageWithUrl.imageUrl
-                        : null;
+                      const imageUrl = firstImageWithUrl?.imageUrl ?? null;
 
                       return imageUrl ? (
                         <Image
@@ -188,7 +186,7 @@ export default function HistoryPage() {
                       删除
                     </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
