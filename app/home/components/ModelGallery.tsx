@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-import { useUser } from "@/stores/auth-store";
+import { useUser, useIsLoaded } from "@/stores/auth-store";
 import { useModal } from "../hooks/useModal";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
@@ -77,6 +78,7 @@ export default function ModelGallery() {
 
   // 认证状态
   const user = useUser();
+  const isLoaded = useIsLoaded();
 
   // 状态管理
   const [models, setModels] = useState<UserAsset[]>([]);
@@ -109,15 +111,32 @@ export default function ModelGallery() {
    */
   const loadInteractionStatuses = useCallback(
     async (modelIds: string[]) => {
-      try {
-        if (!user) return;
+      console.log('🔍 [批量加载交互状态] 开始', {
+        hasUser: !!user,
+        userId: user?.id,
+        modelIdsCount: modelIds.length,
+        modelIds: modelIds.slice(0, 3), // 只显示前3个
+      });
 
-        const response = await fetch("/api/gallery/models/batch-interactions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ modelIds }),
+      try {
+        if (!user) {
+          console.log('⚠️ [批量加载交互状态] 用户未登录，跳过');
+          return;
+        }
+
+        console.log('📤 [批量加载交互状态] 发送请求', {
+          url: '/api/gallery/models/batch-interactions',
+          modelIds,
+        });
+
+        const response = await apiPost(
+          "/api/gallery/models/batch-interactions",
+          { modelIds },
+        );
+
+        console.log('📥 [批量加载交互状态] 收到响应', {
+          ok: response.ok,
+          status: response.status,
         });
 
         if (response.ok) {
@@ -131,13 +150,17 @@ export default function ModelGallery() {
                 { isLiked: boolean; isFavorited: boolean }
               >;
             };
+            console.log('✅ [批量加载交互状态] 成功', {
+              isAuthenticated: batchResult.isAuthenticated,
+              interactionsCount: Object.keys(batchResult.interactions).length,
+            });
             if (batchResult.isAuthenticated) {
               setInteractionStatuses(batchResult.interactions);
             }
           }
         }
       } catch (error) {
-        console.error("批量加载交互状态失败:", error);
+        console.error("❌ [批量加载交互状态] 失败:", error);
       }
     },
     [user],
@@ -154,7 +177,7 @@ export default function ModelGallery() {
 
       try {
         const currentOffset = reset ? 0 : offset;
-        const response = await fetch(
+        const response = await apiGet(
           `/api/gallery/models?sortBy=${sortBy}&limit=${LIMIT}&offset=${currentOffset}`,
         );
 
@@ -166,11 +189,19 @@ export default function ModelGallery() {
 
         // JSend 格式判断（注意：后端返回 data.items，不是 data.models）
         if (isSuccess(data)) {
+          // 调试：检查实际返回的数据结构
+          console.log("🔍 API返回数据:", JSON.stringify(data, null, 2));
+
           const galleryData = data.data as {
             items: UserAsset[];
             hasMore: boolean;
           };
-          const newModels = galleryData.items;
+
+          // 调试：检查 galleryData 和 items
+          console.log("🔍 galleryData:", galleryData);
+          console.log("🔍 galleryData.items:", galleryData.items);
+
+          const newModels = galleryData.items || []; // 防御性：如果 items 不存在则使用空数组
 
           // 更新模型列表
           setModels((prev) => (reset ? newModels : [...prev, ...newModels]));
@@ -201,7 +232,36 @@ export default function ModelGallery() {
   useEffect(() => {
     loadModels(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadModels]); // 仅在首次渲染时执行
+  }, []); // 仅在首次渲染时执行
+
+  /**
+   * 当用户登录状态变化或模型列表变化时，重新加载交互状态
+   */
+  useEffect(() => {
+    console.log('👤 [用户状态监听] useEffect 触发', {
+      isLoaded,
+      hasUser: !!user,
+      userId: user?.id,
+      userName: user?.name,
+      modelsCount: models.length,
+    });
+
+    // 等待认证状态加载完成
+    if (!isLoaded) {
+      console.log('⏳ [用户状态监听] 等待认证状态加载');
+      return;
+    }
+
+    if (user && models.length > 0) {
+      console.log('✅ [用户状态监听] 条件满足，准备加载交互状态');
+      const modelIds = models.map((m) => m.id);
+      loadInteractionStatuses(modelIds);
+    } else {
+      console.log('⏭️ [用户状态监听] 条件不满足', {
+        reason: !user ? '用户未登录' : '模型列表为空',
+      });
+    }
+  }, [user, isLoaded, models.length, loadInteractionStatuses]); // 添加完整依赖
 
   /**
    * 切换排序方式

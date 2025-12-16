@@ -24,6 +24,7 @@ import Navigation from "@/components/layout/Navigation";
 // 加载中的骨架屏组件
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 // API 响应辅助函数（JSend 格式）
+import { apiGet, apiPatch, apiPost, createEventSource } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 // 后端数据适配器（将后端返回的数据转换为前端需要的格式）
 import {
@@ -109,7 +110,7 @@ function WorkspaceContent() {
           // 例如：/workspace?taskId=abc123
 
           // 1. 请求任务详情
-          const response = await fetch(`/api/tasks/${taskId}`);
+          const response = await apiGet(`/api/tasks/${taskId}`);
           const rawData = await response.json();
 
           // 2. 适配后端数据（将 Worker 架构的数据转换为前端需要的格式）
@@ -137,7 +138,7 @@ function WorkspaceContent() {
           // 适用于：用户直接访问 /workspace
 
           // 1. 请求最新的一个任务
-          const response = await fetch("/api/tasks?limit=1");
+          const response = await apiGet("/api/tasks?limit=1");
           const rawData = await response.json();
 
           // 2. 适配任务列表数据
@@ -209,8 +210,8 @@ function WorkspaceContent() {
 
     console.log("🔌 建立 SSE 连接", { taskId });
 
-    // 创建 EventSource 连接
-    const eventSource = new EventSource(`/api/tasks/${taskId}/events`);
+    // ✅ 修复：使用统一的 EventSource 封装函数
+    const eventSource = createEventSource(`/api/tasks/${taskId}/events`);
 
     // ========================================
     // 事件处理函数
@@ -310,7 +311,7 @@ function WorkspaceContent() {
                   ...img,
                   imageStatus: "FAILED",
                   errorMessage,
-                  failedAt: new Date(),
+                  failedAt: new Date().toISOString(),
                 }
               : img,
           ),
@@ -467,10 +468,20 @@ function WorkspaceContent() {
 
     /**
      * 处理连接错误
+     * 区分正常关闭和真正的错误
      */
     eventSource.onerror = (error) => {
-      console.error("❌ SSE 连接错误", error);
-      // EventSource 会自动重连，无需手动处理
+      // 检查连接状态，区分不同的错误场景
+      if (eventSource.readyState === EventSource.CLOSED) {
+        // 连接已关闭（服务器主动关闭，通常是任务完成）
+        console.log("ℹ️ SSE 连接已关闭（任务已完成）");
+      } else if (eventSource.readyState === EventSource.CONNECTING) {
+        // 连接中断，正在重连
+        console.warn("⚠️ SSE 连接中断，正在重连...");
+      } else {
+        // 未知错误
+        console.error("❌ SSE 连接错误", error);
+      }
     };
 
     // ========================================
@@ -562,10 +573,8 @@ function WorkspaceContent() {
 
         // 发送请求，更新后端的 selectedImageIndex
         // 后端会自动触发 3D 模型生成（通过 Worker 监听）
-        const response = await fetch(`/api/tasks/${task.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selectedImageIndex: imageIndex }),
+        const response = await apiPatch(`/api/tasks/${task.id}`, {
+          selectedImageIndex: imageIndex,
         });
 
         console.log(`🔵 收到响应: status=${response.status}`);

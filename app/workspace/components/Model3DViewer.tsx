@@ -39,78 +39,24 @@ function GLBModel({
   );
 }
 
-// OBJ 模型组件（参考官方示例，使用统一的文件命名）
-function OBJModel({
-  url,
+// OBJ 模型组件（带 MTL 材质）
+function OBJModelWithMTL({
+  objUrl,
+  mtlUrl,
   onSceneLoad,
 }: {
-  url: string;
+  objUrl: string;
+  mtlUrl: string;
   onSceneLoad?: (scene: THREE.Group) => void;
 }) {
-  // 从代理 URL 中提取实际的 COS URL 和目录
-  const urlObj = new URL(url, window.location.origin);
-  const actualUrl = urlObj.searchParams.get("url") || "";
-  const baseDir = actualUrl.substring(0, actualUrl.lastIndexOf("/"));
+  console.log("OBJ 模型加载（带 MTL）:", { objUrl, mtlUrl });
 
-  // 🔑 从 baseDir 中提取唯一标识（通常是任务 ID）
-  // 例如：https://xxx.cos.xxx.myqcloud.com/models/TASK_ID/model.obj
-  // 提取 TASK_ID 作为唯一标识，既保证缓存独立，又保持相对路径形式
-  const uniqueId = baseDir.split("/").pop() || Date.now().toString();
-  const mtlKey = `${uniqueId}/material.mtl`; // 唯一的缓存 key
-  const objKey = `${uniqueId}/model.obj`; // 唯一的缓存 key
-
-  console.log("OBJ 解析:", {
-    actualUrl,
-    baseDir,
-    uniqueId,
-    mtlKey,
-    objKey,
-    note: "使用任务ID作为缓存key前缀，确保不同任务的模型独立缓存，同时保持相对路径形式以正确加载纹理",
-  });
-
-  // 创建统一的 LoadingManager，将文件名转换为代理 URL
-  const manager = useMemo(() => {
-    const mgr = new THREE.LoadingManager();
-
-    mgr.setURLModifier((fileName) => {
-      console.log("LoadingManager 拦截文件名:", fileName);
-
-      // 如果已经是完整的代理 URL，直接返回
-      if (fileName.startsWith("/api/proxy/model")) {
-        return fileName;
-      }
-
-      // 移除唯一ID前缀，获取实际文件名
-      const actualFileName = fileName.includes("/")
-        ? fileName.split("/").pop() || fileName
-        : fileName;
-
-      // 构建完整的代理 URL
-      const fullUrl = `${baseDir}/${actualFileName}`;
-      const proxyUrl = `/api/proxy/model?url=${encodeURIComponent(fullUrl)}`;
-
-      console.log("文件名转代理 URL:", {
-        fileName,
-        actualFileName,
-        fullUrl,
-        proxyUrl,
-      });
-      return proxyUrl;
-    });
-
-    return mgr;
-  }, [baseDir]);
-
-  // 🔑 加载 MTL 材质：使用带唯一ID的相对路径作为 key
-  // 这样不同任务有不同的缓存，LoadingManager 还能正确转换路径
-  const materials = useLoader(MTLLoader, mtlKey, (loader) => {
-    loader.manager = manager;
-  });
+  // 加载 MTL 材质
+  const materials = useLoader(MTLLoader, mtlUrl);
   materials.preload();
 
-  // 🔑 加载 OBJ 模型：使用带唯一ID的相对路径作为 key
-  const obj = useLoader(OBJLoader, objKey, (loader) => {
-    loader.manager = manager;
+  // 加载 OBJ 模型并设置材质
+  const obj = useLoader(OBJLoader, objUrl, (loader) => {
     loader.setMaterials(materials);
   });
 
@@ -158,24 +104,86 @@ function OBJModel({
   return <primitive object={obj} />;
 }
 
-// 通用模型加载组件（根据文件扩展名选择加载器）
-function Model({
-  url,
+// OBJ 模型组件（不带 MTL 材质）
+function OBJModelWithoutMTL({
+  objUrl,
   onSceneLoad,
 }: {
-  url: string;
+  objUrl: string;
   onSceneLoad?: (scene: THREE.Group) => void;
 }) {
-  // 从 URL 提取文件扩展名
-  const extension = url.split(".").pop()?.toLowerCase() || "";
+  console.log("OBJ 模型加载（无 MTL）:", { objUrl });
 
-  // 根据扩展名选择合适的加载器
-  if (extension === "obj") {
-    return <OBJModel url={url} onSceneLoad={onSceneLoad} />;
+  // 直接加载 OBJ 模型，不设置材质
+  const obj = useLoader(OBJLoader, objUrl);
+
+  // 为没有材质的模型添加默认材质
+  obj.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+      // 如果没有材质，添加默认材质
+      if (!child.material) {
+        child.material = new THREE.MeshStandardMaterial({
+          color: 0xcccccc,
+          roughness: 0.7,
+          metalness: 0.3,
+        });
+      }
+    }
+  });
+
+  // 场景加载后通知父组件
+  useEffect(() => {
+    if (obj && onSceneLoad) {
+      onSceneLoad(obj as THREE.Group);
+    }
+  }, [obj, onSceneLoad]);
+
+  return <primitive object={obj} />;
+}
+
+// 通用模型加载组件（根据 format 选择加载器）
+function Model({
+  modelUrl,
+  mtlUrl,
+  format,
+  onSceneLoad,
+}: {
+  modelUrl?: string;
+  mtlUrl?: string;
+  format?: string;
+  onSceneLoad?: (scene: THREE.Group) => void;
+}) {
+  // 必须有 modelUrl
+  if (!modelUrl) {
+    console.error("Model: 没有提供 modelUrl", { modelUrl, mtlUrl, format });
+    return null;
   }
 
-  // 默认使用 GLB 加载器（支持 .glb 和 .gltf）
-  return <GLBModel url={url} onSceneLoad={onSceneLoad} />;
+  // ✅ 根据 format 字段选择加载器（清晰明确，无需猜测）
+  const normalizedFormat = format?.toUpperCase();
+
+  if (normalizedFormat === "OBJ") {
+    // OBJ 格式：根据是否有 MTL 选择加载器
+    if (mtlUrl) {
+      console.log("使用 OBJModelWithMTL", { modelUrl, mtlUrl, format });
+      return (
+        <OBJModelWithMTL
+          objUrl={modelUrl}
+          mtlUrl={mtlUrl}
+          onSceneLoad={onSceneLoad}
+        />
+      );
+    }
+    console.log("使用 OBJModelWithoutMTL", { modelUrl, format });
+    return <OBJModelWithoutMTL objUrl={modelUrl} onSceneLoad={onSceneLoad} />;
+  }
+
+  // 默认使用 GLB 加载器（包括 format === "GLB" 或未指定的情况）
+  console.log("使用 GLBModel", { modelUrl, format });
+  return <GLBModel url={modelUrl} onSceneLoad={onSceneLoad} />;
 }
 
 // 加载中占位组件
@@ -190,8 +198,14 @@ function LoadingFallback() {
 }
 
 interface Model3DViewerProps {
-  // 模型文件 URL,相对于 public 文件夹
+  // 主模型文件 URL（统一字段，OBJ 或 GLB）
   modelUrl?: string;
+  // MTL 材质文件 URL（OBJ 格式专用）
+  mtlUrl?: string;
+  // 纹理图片 URL（OBJ 格式专用，预留）
+  textureUrl?: string;
+  // 模型格式标识（"OBJ" 或 "GLB"）
+  format?: string;
   // 是否显示网格
   showGrid?: boolean;
 }
@@ -203,7 +217,7 @@ export interface Model3DViewerRef {
 }
 
 const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
-  ({ modelUrl, showGrid = false }, ref) => {
+  ({ modelUrl, mtlUrl, textureUrl, format, showGrid = false }, ref) => {
     // OrbitControls 的引用,用于控制相机
     const controlsRef = useRef<OrbitControlsType>(null);
     // 场景引用,用于材质切换
@@ -213,8 +227,14 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
       Map<string, THREE.Material | THREE.Material[]>
     >(new Map());
 
-    // 调试日志：查看传入的 modelUrl
-    console.log("Model3DViewer 接收到的 modelUrl:", modelUrl);
+    // ✅ 调试日志：查看传入的所有 URL 和 format
+    console.log("Model3DViewer 接收到的数据:", {
+      modelUrl,
+      mtlUrl,
+      textureUrl,
+      format,
+      note: "使用 format 字段决定加载器类型",
+    });
 
     // 应用材质颜色（单色或恢复原始贴图）
     const applyMaterial = (color: string | null) => {
@@ -259,7 +279,7 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
 
     // 如果没有 modelUrl，显示错误提示
     if (!modelUrl) {
-      console.error("Model3DViewer: modelUrl 为空，无法加载模型");
+      console.error("Model3DViewer: 没有提供 modelUrl");
       return (
         <div className="flex h-full w-full items-center justify-center">
           <div className="text-center">
@@ -289,9 +309,11 @@ const Model3DViewer = forwardRef<Model3DViewerRef, Model3DViewerProps>(
 
         {/* Suspense 用于异步加载模型 */}
         <Suspense fallback={<LoadingFallback />}>
-          {/* 加载 3D 模型（自动识别格式：OBJ/GLB/GLTF） */}
+          {/* ✅ 直接传递所有字段，由 Model 组件根据 format 自动选择加载器 */}
           <Model
-            url={modelUrl}
+            modelUrl={modelUrl}
+            mtlUrl={mtlUrl}
+            format={format}
             onSceneLoad={(scene) => {
               sceneRef.current = scene;
             }}

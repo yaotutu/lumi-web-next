@@ -38,11 +38,12 @@
       "Bash(npm run build:*)",
       "mcp__chrome-devtools__evaluate_script",
       "Bash(npx prisma:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(sqlite3:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "context7"
-  ]
+  "enabledMcpjsonServers": ["context7"]
 }

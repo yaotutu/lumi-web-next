@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { apiGet } from "@/lib/api-client";
 import { type AuthState, AuthStatus, type User } from "@/types/auth";
 
 // 导出类型供外部使用
@@ -65,13 +66,7 @@ export const useAuthStore = create<AuthStore>()(
        */
       refreshAuth: async () => {
         try {
-          const response = await fetch("/api/auth/me", {
-            method: "GET",
-            credentials: "include",
-            headers: {
-              "Cache-Control": "no-cache",
-            },
-          });
+          const response = await apiGet("/api/auth/me");
 
           if (!response.ok) {
             throw new Error(`认证检查失败: ${response.status}`);

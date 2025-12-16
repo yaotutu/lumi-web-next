@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser } from "@/stores/auth-store";
 
@@ -42,38 +43,15 @@ export default function GalleryCard({
   const [currentFavorites, setCurrentFavorites] = useState(favorites);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 如果没有预设状态，单独获取交互状态
+  // 监听父组件传入的交互状态更新
   useEffect(() => {
-    if (user && !initialInteractionStatus) {
-      try {
-        fetch(`/api/gallery/models/${modelId}/interactions`)
-          .then(async (response) => {
-            if (response.ok) {
-              const data = await response.json();
-              // JSend 格式判断
-              if (isSuccess(data)) {
-                const interactionInfo = data.data as {
-                  isAuthenticated: boolean;
-                  isLiked?: boolean;
-                  isFavorited?: boolean;
-                };
-                if (interactionInfo.isAuthenticated) {
-                  setInteractionStatus({
-                    isLiked: interactionInfo.isLiked || false,
-                    isFavorited: interactionInfo.isFavorited || false,
-                  });
-                }
-              }
-            }
-          })
-          .catch((error) => {
-            console.error("Failed to fetch interaction status:", error);
-          });
-      } catch (error) {
-        console.error("Failed to fetch interaction status:", error);
-      }
+    if (initialInteractionStatus) {
+      setInteractionStatus({
+        isLiked: initialInteractionStatus.isLiked,
+        isFavorited: initialInteractionStatus.isFavorited,
+      });
     }
-  }, [user, modelId, initialInteractionStatus]);
+  }, [initialInteractionStatus]);
 
   // 处理交互操作
   const handleInteraction = async (type: "LIKE" | "FAVORITE") => {
@@ -105,15 +83,9 @@ export default function GalleryCard({
     }
 
     try {
-      const response = await fetch(
+      const response = await apiPost(
         `/api/gallery/models/${modelId}/interactions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ type }),
-        },
+        { type },
       );
 
       if (!response.ok) {

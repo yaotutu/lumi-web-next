@@ -16,8 +16,8 @@ import type {
   ModelGenerationJob,
   RequestPhase,
   RequestStatus,
-} from "@prisma/client";
-import type { TaskWithDetails } from "@/types";
+  TaskWithDetails,
+} from "@/types";
 
 /**
  * 后端返回的完整 GenerationRequest 数据结构

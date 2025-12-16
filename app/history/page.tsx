@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
-import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
+import { apiDelete, apiGet } from "@/lib/api-client";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 // 认证状态管理
 import { useIsAuthenticated, useIsLoaded } from "@/stores/auth-store";
@@ -31,7 +31,7 @@ export default function HistoryPage() {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const response = await fetch("/api/tasks");
+        const response = await apiGet("/api/tasks");
         const rawData = await response.json();
         const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
@@ -58,9 +58,7 @@ export default function HistoryPage() {
     if (!confirm("确定要删除这个任务吗？")) return;
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-      });
+      const response = await apiDelete(`/api/tasks/${taskId}`);
 
       if (response.ok) {
         setTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -122,9 +120,10 @@ export default function HistoryPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {tasks.map((task) => (
-                <div
+                <button
                   key={task.id}
-                  className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30"
+                  type="button"
+                  className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30 text-left"
                   onClick={() => router.push(`/workspace?taskId=${task.id}`)}
                 >
                   {/* 缩略图 */}
@@ -132,16 +131,13 @@ export default function HistoryPage() {
                     {(() => {
                       // 查找第一张有 URL 的图片
                       const firstImageWithUrl = task.images.find(
-                        (img) => img.imageUrl || (img as any).url,
+                        (img) => img.imageUrl,
                       );
-                      const imageUrl = firstImageWithUrl
-                        ? (firstImageWithUrl as any).url ||
-                          firstImageWithUrl.imageUrl
-                        : null;
+                      const imageUrl = firstImageWithUrl?.imageUrl ?? null;
 
                       return imageUrl ? (
                         <Image
-                          src={getProxiedImageUrl(imageUrl)}
+                          src={imageUrl}
                           alt="Task thumbnail"
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
@@ -190,7 +186,7 @@ export default function HistoryPage() {
                       删除
                     </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

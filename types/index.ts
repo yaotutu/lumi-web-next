@@ -1,38 +1,181 @@
-// ============================================
-// Prisma 导出的类型
-// ============================================
-export type {
-  GeneratedImage,
-  GenerationRequest,
-  ImageGenerationJob,
-  Model,
-  ModelGenerationJob,
-  QueueConfig,
-  User,
-} from "@prisma/client";
-
-export {
-  ImageStatus, // ✅ 新架构：图片状态
-  JobStatus,
-  ModelSource,
-  ModelVisibility,
-} from "@prisma/client";
+/**
+ * 前端类型定义
+ *
+ * 重要：前端独立维护类型定义，不依赖后端 ORM
+ * - 类型定义基于后端 API 响应格式
+ * - 与后端数据库 schema 保持一致
+ */
 
 // ============================================
-// 从 task-adapter-client.ts 导出的类型
+// 枚举类型
 // ============================================
-export type { GenerationRequestResponse } from "@/lib/utils/task-adapter-client";
+
+/** 请求状态 */
+export type RequestStatus =
+  | 'IMAGE_PENDING'
+  | 'IMAGE_GENERATING'
+  | 'IMAGE_COMPLETED'
+  | 'IMAGE_FAILED'
+  | 'MODEL_PENDING'
+  | 'MODEL_GENERATING'
+  | 'MODEL_COMPLETED'
+  | 'MODEL_FAILED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+/** 请求阶段 */
+export type RequestPhase =
+  | 'IMAGE_GENERATION'
+  | 'AWAITING_SELECTION'
+  | 'MODEL_GENERATION'
+  | 'COMPLETED';
+
+/** 图片状态 */
+export type ImageStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+
+/** Job 状态 */
+export type JobStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'RETRYING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'TIMEOUT';
+
+/** 模型来源 */
+export type ModelSource = 'AI_GENERATED' | 'USER_UPLOADED';
+
+/** 模型可见性 */
+export type ModelVisibility = 'PRIVATE' | 'PUBLIC';
+
+/** 交互类型 */
+export type InteractionType = 'LIKE' | 'FAVORITE';
+
+/** 打印状态 */
+export type PrintStatus =
+  | 'NOT_STARTED'
+  | 'SLICING'
+  | 'SLICE_COMPLETE'
+  | 'PRINTING'
+  | 'PRINT_COMPLETE'
+  | 'FAILED';
+
+// ============================================
+// 基础数据类型（对应数据库表）
+// ============================================
+
+/** 用户 */
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+/** 生成请求（主任务） */
+export interface GenerationRequest {
+  id: string;
+  userId: string;
+  prompt: string;
+  status: RequestStatus;
+  phase: RequestPhase;
+  selectedImageIndex: number | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+/** 生成的图片 */
+export interface GeneratedImage {
+  id: string;
+  requestId: string;
+  index: number;
+  imageUrl: string | null;
+  imagePrompt: string | null;
+  imageStatus: ImageStatus;
+  createdAt: string;
+  completedAt: string | null;
+  failedAt: string | null;
+  errorMessage: string | null;
+}
+
+/** 图片生成 Job */
+export interface ImageGenerationJob {
+  id: string;
+  imageId: string;
+  provider: string;
+  providerTaskId: string | null;
+  status: JobStatus;
+  progress: number;
+  retryCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+}
+
+/** 模型 */
+export interface Model {
+  id: string;
+  userId: string;
+  source: ModelSource;
+  requestId: string | null;
+  sourceImageId: string | null;
+  name: string;
+  description: string | null;
+  modelUrl: string | null;
+  mtlUrl: string | null;
+  textureUrl: string | null;
+  previewImageUrl: string | null;
+  format: string;
+  fileSize: number | null;
+  visibility: ModelVisibility;
+  publishedAt: string | null;
+  viewCount: number;
+  likeCount: number;
+  favoriteCount: number;
+  downloadCount: number;
+  sliceTaskId: string | null;
+  printStatus: PrintStatus;
+  printProgress: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  failedAt: string | null;
+  errorMessage: string | null;
+}
+
+/** 模型生成 Job */
+export interface ModelGenerationJob {
+  id: string;
+  modelId: string;
+  provider: string;
+  providerTaskId: string | null;
+  status: JobStatus;
+  progress: number;
+  retryCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+}
+
+/** 队列配置 */
+export interface QueueConfig {
+  id: string;
+  queueName: string;
+  maxConcurrency: number;
+  isPaused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ============================================
 // 扩展类型: 包含关联数据的类型
 // ============================================
-import type {
-  GeneratedImage,
-  GenerationRequest,
-  ImageGenerationJob,
-  Model,
-  ModelGenerationJob,
-} from "@prisma/client";
 
 /**
  * 生成请求详情（包含关联数据）
@@ -110,3 +253,8 @@ export interface GenerationError {
   code: string;
   message: string;
 }
+
+// ============================================
+// 从 task-adapter-client.ts 导出的类型
+// ============================================
+export type { GenerationRequestResponse } from "@/lib/utils/task-adapter-client";

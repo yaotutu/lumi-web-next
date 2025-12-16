@@ -18,6 +18,7 @@
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { apiPost } from "@/lib/api-client";
 import { useEffect, useState } from "react";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { authActions } from "@/stores/auth-store";
@@ -71,13 +72,7 @@ export default function EmailLoginForm() {
     setIsSendingCode(true);
 
     try {
-      const response = await fetch("/api/auth/send-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+      const response = await apiPost("/api/auth/send-code", { email });
 
       const data = await response.json();
 
@@ -123,13 +118,7 @@ export default function EmailLoginForm() {
     setIsLoggingIn(true);
 
     try {
-      const response = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, code }),
-      });
+      const response = await apiPost("/api/auth/verify-code", { email, code });
 
       const data = await response.json();
 

@@ -6,9 +6,6 @@ import Tooltip from "@/components/ui/Tooltip";
 import { apiPost } from "@/lib/api-client";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-import { getProxiedImageUrl } from "@/lib/utils/proxy-url";
-// 表单持久化 store
-import { useWorkspaceFormStore } from "@/stores/workspace-form-store";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
@@ -34,16 +31,15 @@ export default function ImageGrid({
   task,
   taskId,
 }: ImageGridProps) {
-  // 使用 Zustand store 管理 prompt（持久化到 localStorage）
-  const prompt = useWorkspaceFormStore((state) => state.prompt);
-  const setPrompt = useWorkspaceFormStore((state) => state.setPrompt);
+  // 使用本地 state 管理用户编辑的 prompt（不需要持久化）
+  const [prompt, setPrompt] = useState("");
 
-  // 初始化 prompt（只在第一次加载或有 initialPrompt 时）
+  // 当 task 加载时，初始化 prompt 为服务端数据
   useEffect(() => {
-    if (initialPrompt && !prompt) {
-      setPrompt(initialPrompt);
+    if (task?.prompt) {
+      setPrompt(task.prompt);
     }
-  }, [initialPrompt, prompt, setPrompt]);
+  }, [task?.prompt]);
 
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
@@ -479,7 +475,7 @@ export default function ImageGrid({
                       <>
                         {/* 图片 - 使用object-cover等比拉伸填充正方形，通过代理加载解决CORS问题 */}
                         <img
-                          src={getProxiedImageUrl(slot.url)}
+                          src={slot.url}
                           alt={`生成的图片 ${idx + 1}`}
                           className="h-full w-full object-cover animate-[fade-in-up_0.4s_ease-out]"
                         />

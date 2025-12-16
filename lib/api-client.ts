@@ -9,6 +9,7 @@
  * - 支持 JSend 响应格式
  */
 
+import { buildApiUrl } from "@/lib/config/api";
 import type { LoginModalContext } from "@/stores/login-modal-store";
 import { loginModalActions } from "@/stores/login-modal-store";
 
@@ -53,8 +54,11 @@ export async function apiClient(
     ...fetchOptions
   } = options;
 
+  // 构建完整的 API URL
+  const fullUrl = buildApiUrl(url);
+
   // 发送请求
-  const response = await fetch(url, {
+  const response = await fetch(fullUrl, {
     ...fetchOptions,
     credentials: "include", // 自动携带 Cookie
   });
@@ -129,6 +133,25 @@ export async function apiPost(
 }
 
 /**
+ * API 客户端便捷方法 - PATCH 请求
+ */
+export async function apiPatch(
+  url: string,
+  body: unknown,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<Response> {
+  return apiClient(url, {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
  * API 客户端便捷方法 - PUT 请求
  */
 export async function apiPut(
@@ -157,5 +180,22 @@ export async function apiDelete(
   return apiClient(url, {
     ...options,
     method: "DELETE",
+  });
+}
+
+/**
+ * 创建 SSE 连接（使用统一的 API 配置）
+ *
+ * 支持跨域携带 cookies，确保与 fetch 请求的认证机制一致
+ *
+ * @param url SSE 端点
+ * @returns EventSource 实例
+ */
+export function createEventSource(url: string): EventSource {
+  const fullUrl = buildApiUrl(url);
+
+  // ✅ 关键修复：添加 withCredentials: true 确保跨域携带 cookies
+  return new EventSource(fullUrl, {
+    withCredentials: true,
   });
 }

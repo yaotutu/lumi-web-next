@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logout } from "@/lib/auth-client";
+import { apiPost } from "@/lib/api-client";
 import { authActions, useIsLoaded, useUser } from "@/stores/auth-store";
 
 type NavLink = {
@@ -67,14 +67,6 @@ export default function Navigation() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // 组件挂载时刷新认证状态
-  useEffect(() => {
-    // 确保认证状态已加载
-    if (!isLoaded) {
-      authActions.refreshAuth();
-    }
-  }, [isLoaded]);
-
   // 点击外部关闭菜单
   useEffect(() => {
     if (!showUserMenu) return;
@@ -95,8 +87,11 @@ export default function Navigation() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const success = await logout();
-      if (success) {
+      const response = await apiPost("/api/auth/logout", {});
+
+      if (response.ok) {
+        // 清除前端状态
+        authActions.resetAuth();
         setShowUserMenu(false);
         // 先跳转，再刷新
         router.push("/");
