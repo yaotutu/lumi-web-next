@@ -96,10 +96,18 @@ export default function HeroSearchBar({
       {...props}
     >
       <div className="relative flex h-[72px] items-center gap-5 rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/4 px-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-[20px] transition-all duration-200 focus-within:border-yellow-1/60 focus-within:shadow-[0_8px_32px_rgba(249,207,0,0.2)]">
+        {/* TODO: 图生3D功能 - 暂时隐藏，后期实现
+            功能说明：用户上传参考图像，AI 根据图像生成 3D 模型
+            实现要点：
+            1. 图片上传功能（支持拖拽、点击上传）
+            2. 图片预览和编辑
+            3. 调用图生3D的API接口
+            4. 显示生成进度和结果
+        */}
         <button
           type="button"
           aria-label="上传参考图像"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/8 text-white/70 transition-all duration-200 hover:border-yellow-1/50 hover:bg-yellow-1/10 hover:text-yellow-1"
+          className="hidden flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/8 text-white/70 transition-all duration-200 hover:border-yellow-1/50 hover:bg-yellow-1/10 hover:text-yellow-1"
         >
           <svg
             aria-hidden="true"

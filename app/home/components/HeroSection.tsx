@@ -49,8 +49,17 @@ export default function HeroSection() {
         {/* 搜索输入框 */}
         <HeroSearchBar />
 
+        {/* TODO: 快速提示词标签功能 - 暂时隐藏，后期实现
+            功能说明：提供预设的提示词标签，帮助用户快速开始生成
+            实现要点：
+            1. 设计更丰富的标签分类（风格、场景、用途等）
+            2. 标签点击后自动填充到输入框
+            3. 支持多标签组合
+            4. 可以从后端动态加载热门标签
+            5. 用户可以收藏常用标签
+        */}
         {/* 快速提示词标签 - 帮助用户快速开始 */}
-        <div className="mt-6 overflow-x-auto scrollbar-hide">
+        <div className="hidden mt-6 overflow-x-auto scrollbar-hide">
           <div className="flex justify-center gap-1.5 min-w-max px-4">
             {PROMPT_TAGS.map((tag) => (
               <button
