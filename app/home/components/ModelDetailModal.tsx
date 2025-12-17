@@ -565,7 +565,7 @@ export default function ModelDetailModal({
                       >
                         <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
                       </svg>
-                      <span>{model.user.name || "匿名用户"}</span>
+                      <span>{model.user?.name || "匿名用户"}</span>
                     </div>
                     <span className="text-text-subtle/20">•</span>
                     <span>{formatDate(model.createdAt)}</span>
