@@ -127,7 +127,7 @@ export default function Navigation() {
                 AI3D
               </span>
             </Link>
-            <nav className="hidden items-center gap-7 text-[13px] text-foreground-subtle lg:flex">
+            <nav className="flex items-center gap-7 text-[13px] text-foreground-subtle">
               {NAV_LINKS.map(({ label, href }) => {
                 const isActive = pathname === href;
                 return (
