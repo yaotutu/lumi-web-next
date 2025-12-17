@@ -8,7 +8,7 @@
  * - 类型安全的 API 调用
  *
  * 优势：
- * - 未来拆分后端时只需修改 API_CONFIG.baseURL
+ * - 通过 buildApiUrl 自动拼接后端地址
  * - 所有 API 调用集中管理，易于维护
  * - 完整的 TypeScript 类型提示
  */
@@ -36,7 +36,7 @@ class ApiClient {
    * 通用请求方法
    *
    * @template T 响应数据类型
-   * @param endpoint API 端点
+   * @param endpoint API 端点（相对路径，如 '/api/tasks'）
    * @param options 请求选项
    * @returns API 响应
    */

@@ -2,32 +2,27 @@
  * API 配置
  *
  * 功能：
- * - 支持动态配置 API Base URL
- * - 开发环境使用相对路径（Monorepo）
- * - 生产环境可配置为独立后端地址
+ * - 统一 API 配置
+ * - 前端直接请求后端 API 地址
+ * - 通过环境变量配置后端地址
  *
  * 使用示例：
  * ```typescript
- * import { API_CONFIG } from '@/lib/config/api';
+ * import { buildApiUrl } from '@/lib/config/api';
  *
- * // 当前（Monorepo）：
- * // NEXT_PUBLIC_API_BASE_URL 未设置
- * // 实际请求：/api/tasks
+ * // 自动拼接后端地址：
+ * buildApiUrl('/api/tasks')
+ * // 返回：http://192.168.88.100:3000/api/tasks
  *
- * // 未来（后端独立部署）：
- * // NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com
- * // 实际请求：https://api.yourdomain.com/api/tasks
+ * buildApiUrl('/api/auth/login')
+ * // 返回：http://192.168.88.100:3000/api/auth/login
  * ```
  */
 
 export const API_CONFIG = {
   /**
-   * API Base URL
-   *
-   * - 开发环境：留空（使用相对路径）
-   * - 生产环境（拆分后）：配置为后端服务地址
-   *
-   * 环境变量：NEXT_PUBLIC_API_BASE_URL
+   * 后端 API 基础地址（lumi-server）
+   * 前端直接请求该地址
    */
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "",
 
@@ -35,7 +30,6 @@ export const API_CONFIG = {
    * 默认请求配置
    */
   defaultOptions: {
-    credentials: "include" as RequestCredentials, // 携带 Cookie
     headers: {
       "Content-Type": "application/json",
     },
@@ -63,8 +57,10 @@ export const API_CONFIG = {
  *
  * @example
  * buildApiUrl('/api/tasks')
- * // 当前：/api/tasks
- * // 未来：https://api.yourdomain.com/api/tasks
+ * // 返回：http://192.168.88.100:3000/api/tasks
+ *
+ * buildApiUrl('/api/auth/login')
+ * // 返回：http://192.168.88.100:3000/api/auth/login
  */
 export function buildApiUrl(endpoint: string): string {
   // 确保 endpoint 以 / 开头
@@ -72,15 +68,19 @@ export function buildApiUrl(endpoint: string): string {
     ? endpoint
     : `/${endpoint}`;
 
+  // 获取 baseURL
+  const baseURL = API_CONFIG.baseURL;
+
   // 如果 baseURL 为空，直接返回 endpoint（相对路径）
-  if (!API_CONFIG.baseURL) {
+  if (!baseURL) {
     return normalizedEndpoint;
   }
 
   // 移除 baseURL 末尾的斜杠（如果有）
-  const normalizedBaseURL = API_CONFIG.baseURL.endsWith("/")
-    ? API_CONFIG.baseURL.slice(0, -1)
-    : API_CONFIG.baseURL;
+  const normalizedBaseURL = baseURL.endsWith("/")
+    ? baseURL.slice(0, -1)
+    : baseURL;
 
   return `${normalizedBaseURL}${normalizedEndpoint}`;
 }
+
