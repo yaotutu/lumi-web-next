@@ -201,14 +201,10 @@ function WorkspaceContent() {
    * - 自动重连：网络断开后浏览器自动恢复连接
    * - 实时性：Worker 完成操作立即推送，延迟 < 100ms
    *
-   * 架构优势：
-   * - 实时性：Worker 完成操作立即推送，延迟 < 100ms
-   * - 安全性：使用 fetch + ReadableStream 实现，支持携带 Bearer Token
-   *
-   * 为什么不用 EventSource？
-   * - EventSource 不支持自定义 HTTP Headers
-   * - 无法携带 Authorization Token 进行认证
-   * - 本实现使用 SSEClient 类解决了这个问题
+   * 为什么用 SSE 而不是轮询？
+   * 1. 实时性更好：Worker 完成立即推送，无延迟
+   * 2. 减少服务器压力：不再每秒轮询数据库
+   * 3. 用户体验更好：进度更新更流畅
    */
   useEffect(() => {
     // 如果没有任务 ID，不建立连接
@@ -216,21 +212,8 @@ function WorkspaceContent() {
 
     console.log("🔌 建立 SSE 连接", { taskId });
 
-    // ✅ 使用新的 SSEClient（支持 Bearer Token）
-    const sseClient = new SSEClient(`/api/tasks/${taskId}/events`, {
-      autoReconnect: true,
-      reconnectDelay: 2000,
-      maxReconnectAttempts: 5,
-      onOpen: () => {
-        console.log("✅ SSE 连接已建立");
-      },
-      onClose: () => {
-        console.log("ℹ️ SSE 连接已关闭");
-      },
-      onError: (error) => {
-        console.error("❌ SSE 连接错误", error);
-      },
-    });
+    // ✅ 修复：使用统一的 EventSource 封装函数
+    const eventSource = createEventSource(`/api/tasks/${taskId}/events`);
 
     // ========================================
     // 事件处理函数
@@ -241,8 +224,8 @@ function WorkspaceContent() {
      * 注意：不直接 setTask，避免触发 useEffect 重新运行导致连接被关闭
      * 如果需要同步最新状态，可以选择性更新字段
      */
-    sseClient.on("task:init", (event) => {
-      const initialTask = event.data;
+    eventSource.addEventListener("task:init", (event) => {
+      const initialTask = JSON.parse(event.data);
       console.log("📥 收到初始状态", initialTask);
 
       // 只更新可能变化的字段，避免触发 useEffect 重新运行
@@ -264,8 +247,8 @@ function WorkspaceContent() {
     /**
      * 处理 image:generating 事件
      */
-    sseClient.on("image:generating", (event) => {
-      const { imageId, index } = event.data;
+    eventSource.addEventListener("image:generating", (event) => {
+      const { imageId, index } = JSON.parse(event.data);
       console.log(`🖼️ 图片 ${index} 开始生成`, { imageId });
 
       setTask((prev) => {
@@ -282,8 +265,8 @@ function WorkspaceContent() {
     /**
      * 处理 image:completed 事件
      */
-    sseClient.on("image:completed", (event) => {
-      const { imageId, index, imageUrl } = event.data;
+    eventSource.addEventListener("image:completed", (event) => {
+      const { imageId, index, imageUrl } = JSON.parse(event.data);
       console.log(`✅ 图片 ${index} 生成完成`, { imageId, imageUrl });
 
       setTask((prev) => {
@@ -316,8 +299,8 @@ function WorkspaceContent() {
     /**
      * 处理 image:failed 事件
      */
-    sseClient.on("image:failed", (event) => {
-      const { imageId, index, errorMessage } = event.data;
+    eventSource.addEventListener("image:failed", (event) => {
+      const { imageId, index, errorMessage } = JSON.parse(event.data);
       console.error(`❌ 图片 ${index} 生成失败`, { imageId, errorMessage });
 
       setTask((prev) => {
@@ -341,8 +324,8 @@ function WorkspaceContent() {
     /**
      * 处理 model:generating 事件
      */
-    sseClient.on("model:generating", (event) => {
-      const { modelId, providerJobId } = event.data;
+    eventSource.addEventListener("model:generating", (event) => {
+      const { modelId, providerJobId } = JSON.parse(event.data);
       console.log(`🎨 模型开始生成`, { modelId, providerJobId });
 
       setTask((prev) => {
@@ -376,8 +359,8 @@ function WorkspaceContent() {
     /**
      * 处理 model:progress 事件
      */
-    sseClient.on("model:progress", (event) => {
-      const { modelId, progress, status } = event.data;
+    eventSource.addEventListener("model:progress", (event) => {
+      const { modelId, progress, status } = JSON.parse(event.data);
       console.log(`⏳ 模型生成进度更新: ${progress}%`, { modelId, status });
 
       setTask((prev) => {
@@ -417,9 +400,11 @@ function WorkspaceContent() {
     /**
      * 处理 model:completed 事件
      */
-    sseClient.on("model:completed", (event) => {
-      const { modelId, modelUrl, mtlUrl, textureUrl, previewImageUrl, format } = event.data;
-      console.log(`✅ 模型生成完成`, { modelId, modelUrl, mtlUrl, textureUrl });
+    eventSource.addEventListener("model:completed", (event) => {
+      const { modelId, modelUrl, previewImageUrl, format } = JSON.parse(
+        event.data,
+      );
+      console.log(`✅ 模型生成完成`, { modelId, modelUrl });
 
       setTask((prev) => {
         if (!prev) return prev;
@@ -432,8 +417,6 @@ function WorkspaceContent() {
                 generationStatus: "COMPLETED",
                 progress: 100,
                 modelUrl,
-                mtlUrl,
-                textureUrl,
                 previewImageUrl,
                 format,
                 completedAt: new Date(),
@@ -453,8 +436,8 @@ function WorkspaceContent() {
     /**
      * 处理 model:failed 事件
      */
-    sseClient.on("model:failed", (event) => {
-      const { modelId, errorMessage } = event.data;
+    eventSource.addEventListener("model:failed", (event) => {
+      const { modelId, errorMessage } = JSON.parse(event.data);
       console.error(`❌ 模型生成失败`, { modelId, errorMessage });
 
       setTask((prev) => {
@@ -478,19 +461,37 @@ function WorkspaceContent() {
       });
     });
 
-    // 建立连接
-    sseClient.connect();
+    /**
+     * 处理连接打开
+     */
+    eventSource.onopen = () => {
+      console.log("✅ SSE 连接已建立");
+    };
 
-    
-
-    
+    /**
+     * 处理连接错误
+     * 区分正常关闭和真正的错误
+     */
+    eventSource.onerror = (error) => {
+      // 检查连接状态，区分不同的错误场景
+      if (eventSource.readyState === EventSource.CLOSED) {
+        // 连接已关闭（服务器主动关闭，通常是任务完成）
+        console.log("ℹ️ SSE 连接已关闭（任务已完成）");
+      } else if (eventSource.readyState === EventSource.CONNECTING) {
+        // 连接中断，正在重连
+        console.warn("⚠️ SSE 连接中断，正在重连...");
+      } else {
+        // 未知错误
+        console.error("❌ SSE 连接错误", error);
+      }
+    };
 
     // ========================================
     // 清理函数：组件卸载时关闭连接
     // ========================================
     return () => {
       console.log("🔌 关闭 SSE 连接", { taskId });
-      sseClient.disconnect();
+      eventSource.close();
     };
   }, [taskId]); // 依赖项：URL 中的 taskId 变化时重新建立连接
 
