@@ -478,6 +478,24 @@ function WorkspaceContent() {
       });
     });
 
+    /**
+     * 处理 connection:timeout 事件
+     * 服务器通知连接超时，前端主动关闭连接
+     */
+    sseClient.on("connection:timeout", (event) => {
+      const { message, ageMs, gracefulCloseWaitMs } = event.data;
+      console.warn(`⚠️ 服务器通知连接超时`, {
+        message,
+        ageMs,
+        ageHours: (ageMs / (60 * 60 * 1000)).toFixed(2),
+        gracefulCloseWaitMs,
+      });
+
+      // 主动关闭连接，避免被强制关闭导致重连错误
+      console.log("🔌 主动关闭 SSE 连接（响应服务器超时通知）");
+      sseClient.disconnect();
+    });
+
     // 建立连接
     sseClient.connect();
 
