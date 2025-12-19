@@ -120,11 +120,18 @@ export default function HistoryPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {tasks.map((task) => (
-                <button
+                <div
                   key={task.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30 text-left"
                   onClick={() => router.push(`/workspace?taskId=${task.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/workspace?taskId=${task.id}`);
+                    }
+                  }}
                 >
                   {/* 缩略图 */}
                   <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-white/5 to-[#0d0d0d]">
@@ -186,7 +193,7 @@ export default function HistoryPage() {
                       删除
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

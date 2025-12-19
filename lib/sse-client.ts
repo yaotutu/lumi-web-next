@@ -362,21 +362,18 @@ export class SSEClient {
         this.reconnectTimer = null;
       }
 
-      // 中止请求（添加原因以便调试）
-      if (this.abortController) {
-        try {
-          this.abortController.abort('SSE client manually disconnected');
-        } catch (e) {
-          // 忽略 abort 可能抛出的错误
-        }
-      }
-
-      // 取消读取器
+      // 优先关闭读取器，这会自动中止底层的 fetch 请求
+      // 这样可以避免浏览器在控制台打印 AbortError
       if (this.reader) {
         this.reader.cancel().catch(() => {
           // 忽略取消错误
         });
       }
+
+      // 清理 AbortController
+      // 注意：不调用 abort()，因为 reader.cancel() 已经处理了请求中止
+      // 直接清空引用即可
+      this.abortController = null;
 
       this.cleanup();
       this.options.onClose();
