@@ -17,6 +17,53 @@ import { loginModalActions } from "@/stores/login-modal-store";
 import { tokenActions } from "@/stores/token-store";
 
 /**
+ * URL 字段名称列表（需要自动转换的字段）
+ */
+const URL_FIELDS = [
+  "url",
+  "imageUrl",
+  "modelUrl",
+  "mtlUrl",
+  "textureUrl",
+  "previewImageUrl",
+] as const;
+
+/**
+ * 递归转换对象中的所有 URL 字段（相对路径 → 完整 URL）
+ */
+function transformUrls<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item) => transformUrls(item)) as T;
+  }
+
+  if (typeof data === "object") {
+    const result: any = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      if (
+        URL_FIELDS.includes(key as any) &&
+        typeof value === "string" &&
+        value.startsWith("/")
+      ) {
+        result[key] = buildApiUrl(value);
+      } else if (typeof value === "object") {
+        result[key] = transformUrls(value);
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result as T;
+  }
+
+  return data;
+}
+
+/**
  * API 客户端选项
  */
 export interface ApiClientOptions extends RequestInit {
@@ -27,6 +74,22 @@ export interface ApiClientOptions extends RequestInit {
 }
 
 /**
+ * 包装 Response 对象，让 json() 方法自动转换 URL
+ */
+function wrapResponse(response: Response): Response {
+  const originalJson = response.json.bind(response);
+
+  // 重写 json 方法
+  response.json = async function () {
+    const data = await originalJson();
+    // ✅ 自动转换响应中的所有 URL 字段（相对路径 → 完整 URL）
+    return transformUrls(data);
+  };
+
+  return response;
+}
+
+/**
  * 全局 API 客户端
  *
  * **功能**：
@@ -34,6 +97,7 @@ export interface ApiClientOptions extends RequestInit {
  * - 弹出登录弹窗
  * - 登录成功后自动重试请求
  * - 自动添加 Bearer Token
+ * - 自动转换响应中的 URL（相对路径 → 完整 URL）
  * - 所有请求通过 lumi-server 统一网关
  *
  * **使用方式**：
@@ -54,7 +118,7 @@ export interface ApiClientOptions extends RequestInit {
  *
  * @param url - 请求 URL（相对路径，如 '/api/tasks'）
  * @param options - 请求选项
- * @returns Response 对象
+ * @returns Response 对象（json() 方法已被包装，会自动转换 URL）
  */
 export async function apiClient(
   url: string,
@@ -120,13 +184,13 @@ export async function apiClient(
         });
       }
     } catch (_error) {
-      // JSON 解析失败，返回原始响应
-      return response;
+      // JSON 解析失败，返回原始响应（包装后）
+      return wrapResponse(response);
     }
   }
 
-  // 非 401 或已禁用重试，直接返回
-  return response;
+  // 非 401 或已禁用重试，返回包装后的响应（自动转换 URL）
+  return wrapResponse(response);
 }
 
 /**

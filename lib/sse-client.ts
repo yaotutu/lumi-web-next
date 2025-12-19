@@ -19,6 +19,53 @@ const logger = {
 };
 
 /**
+ * URL 字段名称列表（需要自动转换的字段）
+ */
+const URL_FIELDS = [
+  "url",
+  "imageUrl",
+  "modelUrl",
+  "mtlUrl",
+  "textureUrl",
+  "previewImageUrl",
+] as const;
+
+/**
+ * 转换 SSE 事件数据中的 URL 字段（相对路径 → 完整 URL）
+ */
+function transformEventUrls<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item) => transformEventUrls(item)) as T;
+  }
+
+  if (typeof data === "object") {
+    const result: any = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      if (
+        URL_FIELDS.includes(key as any) &&
+        typeof value === "string" &&
+        value.startsWith("/")
+      ) {
+        result[key] = buildApiUrl(value);
+      } else if (typeof value === "object") {
+        result[key] = transformEventUrls(value);
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result as T;
+  }
+
+  return data;
+}
+
+/**
  * SSE 事件类型
  */
 export interface SSEEvent {
@@ -141,13 +188,19 @@ export class SSEClient {
    * 触发事件处理器
    */
   private emit(event: SSEEvent): void {
-    const handlers = this.eventHandlers.get(event.type);
+    // ✅ 自动转换事件数据中的 URL 字段（相对路径 → 完整 URL）
+    const transformedEvent = {
+      ...event,
+      data: transformEventUrls(event.data),
+    };
+
+    const handlers = this.eventHandlers.get(transformedEvent.type);
     if (handlers) {
       handlers.forEach((handler) => {
         try {
-          handler(event);
+          handler(transformedEvent);
         } catch (error) {
-          logger.error(`SSE event handler error for ${event.type}:`, error);
+          logger.error(`SSE event handler error for ${transformedEvent.type}:`, error);
         }
       });
     }
