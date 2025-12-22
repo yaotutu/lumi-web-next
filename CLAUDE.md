@@ -111,41 +111,117 @@ public/
 
 ### API 调用规范
 
-```typescript
-import { apiClient } from '@/lib/api/client';
+**🚀 推荐使用高级 API**（`apiRequest` 系列）：
 
-// GET 请求
-const response = await apiClient.get('/api/models');
-if (response.status === 'success') {
-  const models = response.data.items;
+```typescript
+import { apiRequestGet, apiRequestPost, apiRequestPatch, ApiError } from '@/lib/api-client';
+import type { Task } from '@/types';
+
+// ✅ GET 请求（推荐）
+const result = await apiRequestGet<Task>('/api/tasks/123');
+
+if (result.success) {
+  // 成功：直接使用 data
+  console.log(result.data.prompt);
+  setTask(result.data);
+} else {
+  // 失败：使用 error
+  console.error(result.error.message);
+
+  // 判断特定错误
+  if (result.error.hasStatus(404)) {
+    alert('任务不存在');
+  } else if (result.error.hasCode('INSUFFICIENT_CREDITS')) {
+    alert('积分不足');
+  } else if (result.error.isServerError()) {
+    alert('服务器错误，请稍后重试');
+  }
 }
 
-// POST 请求
-const response = await apiClient.post('/api/generation-requests', {
-  prompt: '生成一个机器人',
+// ✅ POST 请求（推荐）
+const result = await apiRequestPost<Task>('/api/tasks', {
+  prompt: '一只可爱的猫咪',
   imageCount: 4,
 });
 
-// 错误处理
-if (response.status === 'error') {
-  console.error(response.message);
-}
+// ✅ PATCH 请求（推荐）
+const result = await apiRequestPatch(`/api/tasks/${taskId}`, {
+  selectedImageIndex: 2,
+});
 ```
 
-**响应格式**（JSend 规范）：
+**⚠️ 底层 API**（需要手动处理响应，不推荐日常使用）：
+
 ```typescript
-// 成功响应
-{
-  status: 'success',
-  data: { items: [...], total: 100 }
-}
+import { apiGet, apiPost } from '@/lib/api-client';
 
-// 错误响应
-{
-  status: 'error',
-  message: '错误信息'
+// 需要 try-catch 和手动解析 JSON
+try {
+  const response = await apiGet('/api/tasks/123');
+  const json = await response.json();
+  console.log(json.data);
+} catch (error) {
+  if (error instanceof ApiError) {
+    console.error(error.message);
+  }
 }
 ```
+
+**📋 API 封装说明**：
+
+| 层级 | API | 返回值 | 使用场景 |
+|------|-----|--------|---------|
+| **高级 API** | `apiRequest`, `apiRequestGet`, `apiRequestPost` 等 | `{ success, data, error }` | ✅ **推荐** - 业务代码使用 |
+| **底层 API** | `apiClient`, `apiGet`, `apiPost` 等 | `Response` 对象（或抛出 `ApiError`） | ⚠️ 只在需要访问原始 Response 时使用 |
+
+**封装特性**：
+- ✅ 自动添加 Bearer Token
+- ✅ 自动处理 401（弹出登录弹窗 + 重试）
+- ✅ 自动处理 4xx/5xx 错误（封装为 `ApiError`）
+- ✅ 自动解析 JSON 并提取 JSend 的 `data` 字段
+- ✅ 自动转换相对路径 URL 为完整 URL
+- ✅ 支持 304 Not Modified（轮询优化）
+- ✅ 类型安全（支持泛型）
+
+**HTTP 状态码**（语义化）：
+
+| 状态码 | 含义 | 处理方式 |
+|--------|------|---------|
+| 200 | 成功（GET/PATCH/DELETE） | `result.success = true` |
+| 201 | 资源已创建（POST） | `result.success = true` |
+| 304 | 未修改（轮询优化） | 自动返回，不抛错 |
+| 400 | 请求参数错误 | `result.success = false` |
+| 401 | 未认证 | 自动弹出登录弹窗 + 重试 |
+| 403 | 无权限 | `result.success = false` |
+| 404 | 资源不存在 | `result.success = false` |
+| 500 | 服务器错误 | `result.success = false` |
+
+**后端响应格式**（JSend 规范）：
+
+```typescript
+// 成功响应（HTTP 200/201）
+{
+  status: "success",
+  data: { id: "123", prompt: "猫" }
+}
+
+// 客户端错误（HTTP 400/404）
+{
+  status: "fail",
+  data: { message: "任务不存在", code: "NOT_FOUND" }
+}
+
+// 服务端错误（HTTP 500）
+{
+  status: "error",
+  message: "内部错误",
+  code: "INTERNAL_ERROR"
+}
+```
+
+**📚 详细文档**：
+- [lib/API_CLIENT_GUIDE.md](lib/API_CLIENT_GUIDE.md) - 完整使用指南
+- [lib/API_CLIENT_MIGRATION.md](lib/API_CLIENT_MIGRATION.md) - 从旧 API 迁移指南
 
 ### 状态管理
 
@@ -263,10 +339,25 @@ await logout();
 
 ## 重要提示
 
-1. **所有 API 请求使用 `apiClient`**，自动处理 401 和错误
-2. **使用代理服务访问外部资源**，避免 CORS 问题
-3. **优先使用全局样式类**，保持设计系统一致性
-4. **代码注释必须使用中文**，解释代码作用和目的
-5. **优先使用函数式编程**，统一使用 ESM 语法
-6. **状态持久化使用 Zustand persist 中间件**
-7. **未经允许，不允许提交代码到仓库**
+1. **优先使用高级 API**（`apiRequest` 系列），让业务代码更简洁
+   - ✅ 推荐：`const result = await apiRequestGet<Task>('/api/tasks/123')`
+   - ❌ 不推荐：`const response = await apiGet('/api/tasks/123')`（需要手动处理响应）
+
+2. **使用泛型提供类型提示**
+   - ✅ 推荐：`apiRequestGet<Task>('/api/tasks/123')`（有类型提示）
+   - ❌ 不推荐：`apiRequestGet('/api/tasks/123')`（data 类型为 any）
+
+3. **使用代理服务访问外部资源**，避免 CORS 问题
+   - 图片代理：`/api/proxy/image?url=...`
+   - 模型代理：`/api/proxy/model?url=...`
+
+4. **优先使用全局样式类**，保持设计系统一致性
+   - `.glass-panel`、`.btn-primary`、`.btn-secondary`、`.fade-in-up`
+
+5. **代码注释必须使用中文**，解释代码作用和目的
+
+6. **优先使用函数式编程**，统一使用 ESM 语法
+
+7. **状态持久化使用 Zustand persist 中间件**
+
+8. **未经允许，不允许提交代码到仓库**

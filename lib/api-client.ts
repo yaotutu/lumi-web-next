@@ -64,6 +64,47 @@ function transformUrls<T>(data: T): T {
 }
 
 /**
+ * API 错误类
+ * 用于封装所有 API 请求错误（4xx, 5xx）
+ */
+export class ApiError extends Error {
+  /** HTTP 状态码 */
+  public readonly status: number;
+  /** 错误代码（来自 JSend 响应） */
+  public readonly code?: string;
+  /** 原始响应数据 */
+  public readonly data?: any;
+
+  constructor(status: number, message: string, code?: string, data?: any) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
+
+  /** 判断是否为客户端错误（4xx） */
+  isClientError(): boolean {
+    return this.status >= 400 && this.status < 500;
+  }
+
+  /** 判断是否为服务端错误（5xx） */
+  isServerError(): boolean {
+    return this.status >= 500;
+  }
+
+  /** 判断是否为特定状态码 */
+  hasStatus(status: number): boolean {
+    return this.status === status;
+  }
+
+  /** 判断是否为特定错误代码 */
+  hasCode(code: string): boolean {
+    return this.code === code;
+  }
+}
+
+/**
  * API 客户端选项
  */
 export interface ApiClientOptions extends RequestInit {
@@ -71,6 +112,8 @@ export interface ApiClientOptions extends RequestInit {
   context?: LoginModalContext;
   /** 是否禁用自动重试（默认 false） */
   disableRetry?: boolean;
+  /** 是否禁用自动错误处理（默认 false，即自动抛出 ApiError） */
+  disableErrorHandling?: boolean;
 }
 
 /**
@@ -93,32 +136,41 @@ function wrapResponse(response: Response): Response {
  * 全局 API 客户端
  *
  * **功能**：
- * - 自动拦截 401 响应
- * - 弹出登录弹窗
+ * - 自动拦截 401 响应并弹出登录弹窗
+ * - 自动处理 4xx/5xx 错误并抛出 ApiError
  * - 登录成功后自动重试请求
  * - 自动添加 Bearer Token
  * - 自动转换响应中的 URL（相对路径 → 完整 URL）
+ * - 支持 304 Not Modified 优化
  * - 所有请求通过 lumi-server 统一网关
  *
  * **使用方式**：
  * ```typescript
- * // 业务 API（自动添加 Token）
- * const response = await apiClient('/api/tasks', {
- *   method: 'POST',
- *   body: JSON.stringify({ prompt: 'test' }),
- *   context: 'workspace',
- * });
- *
- * // 认证 API（同样通过 lumi-server）
- * const response = await apiClient('/api/auth/login', {
- *   method: 'POST',
- *   body: JSON.stringify({ email, code }),
- * });
+ * try {
+ *   // 业务 API（自动添加 Token，自动处理错误）
+ *   const response = await apiClient('/api/tasks', {
+ *     method: 'POST',
+ *     body: JSON.stringify({ prompt: 'test' }),
+ *     context: 'workspace',
+ *   });
+ *   const data = await response.json();
+ *   // 只有成功响应（2xx）才会执行到这里
+ * } catch (error) {
+ *   if (error instanceof ApiError) {
+ *     // 处理 API 错误（4xx, 5xx）
+ *     if (error.hasStatus(404)) {
+ *       console.log('资源不存在');
+ *     } else if (error.isServerError()) {
+ *       console.log('服务器错误');
+ *     }
+ *   }
+ * }
  * ```
  *
  * @param url - 请求 URL（相对路径，如 '/api/tasks'）
  * @param options - 请求选项
  * @returns Response 对象（json() 方法已被包装，会自动转换 URL）
+ * @throws {ApiError} 当响应状态码为 4xx 或 5xx 时（除非 disableErrorHandling=true）
  */
 export async function apiClient(
   url: string,
@@ -127,6 +179,7 @@ export async function apiClient(
   const {
     context = "general",
     disableRetry = false,
+    disableErrorHandling = false,
     headers = {},
     ...fetchOptions
   } = options;
@@ -151,7 +204,12 @@ export async function apiClient(
     headers: finalHeaders,
   });
 
-  // 检查是否是 401 未认证
+  // ✅ 特殊处理：304 Not Modified（直接返回，不需要解析 body）
+  if (response.status === 304) {
+    return wrapResponse(response);
+  }
+
+  // ✅ 特殊处理：401 Unauthorized（弹出登录弹窗，自动重试）
   if (response.status === 401 && !disableRetry) {
     try {
       const data = await response.json();
@@ -189,7 +247,40 @@ export async function apiClient(
     }
   }
 
-  // 非 401 或已禁用重试，返回包装后的响应（自动转换 URL）
+  // ✅ 自动错误处理：4xx/5xx 状态码自动抛出 ApiError
+  if (!disableErrorHandling && !response.ok) {
+    let errorMessage = `请求失败 (HTTP ${response.status})`;
+    let errorCode: string | undefined;
+    let errorData: any;
+
+    try {
+      const data = await response.json();
+      errorData = data;
+
+      // 从 JSend 响应中提取错误信息
+      if (data.status === "fail" && data.data) {
+        // 客户端错误（4xx）
+        errorMessage = data.data.message || errorMessage;
+        errorCode = data.data.code;
+      } else if (data.status === "error") {
+        // 服务端错误（5xx）
+        errorMessage = data.message || errorMessage;
+        errorCode = data.code;
+      } else if (data.message) {
+        // 兼容其他格式
+        errorMessage = data.message;
+        errorCode = data.code;
+      }
+    } catch (_error) {
+      // JSON 解析失败，使用默认错误消息
+      errorMessage = `${errorMessage}: ${response.statusText}`;
+    }
+
+    // 抛出 ApiError
+    throw new ApiError(response.status, errorMessage, errorCode, errorData);
+  }
+
+  // ✅ 成功响应（2xx）或已禁用错误处理，返回包装后的响应（自动转换 URL）
   return wrapResponse(response);
 }
 
@@ -290,4 +381,183 @@ export function createEventSource(url: string): EventSource {
   // 注意：EventSource 不支持自定义 Header
   // 如果需要 Token，建议在 URL 中传递或使用其他方案
   return new EventSource(fullUrl);
+}
+
+/**
+ * API 请求结果（成功）
+ */
+export interface ApiSuccess<T = any> {
+  success: true;
+  data: T;
+}
+
+/**
+ * API 请求结果（失败）
+ */
+export interface ApiFailure {
+  success: false;
+  error: ApiError;
+}
+
+/**
+ * API 请求结果（联合类型）
+ */
+export type ApiResult<T = any> = ApiSuccess<T> | ApiFailure;
+
+/**
+ * 🚀 高级 API 请求方法（推荐使用）
+ *
+ * **特点**：
+ * - 返回 `{ success, data, error }` 结构，无需 try-catch
+ * - 自动解析 JSON 响应
+ * - 自动提取 JSend 格式中的 data 字段
+ * - 类型安全（支持泛型）
+ *
+ * **使用示例**：
+ * ```typescript
+ * // 1. 基础用法
+ * const result = await apiRequest<Task>('/api/tasks/123');
+ * if (result.success) {
+ *   console.log(result.data.prompt); // TypeScript 自动推导类型
+ * } else {
+ *   console.error(result.error.message);
+ * }
+ *
+ * // 2. POST 请求
+ * const result = await apiRequest<Task>('/api/tasks', {
+ *   method: 'POST',
+ *   body: JSON.stringify({ prompt: 'test' }),
+ * });
+ *
+ * // 3. 解构使用
+ * const { success, data, error } = await apiRequest('/api/tasks');
+ * if (!success) {
+ *   if (error.hasStatus(404)) {
+ *     // 处理 404
+ *   }
+ *   return;
+ * }
+ * // 使用 data
+ * ```
+ *
+ * @param url - 请求 URL（相对路径）
+ * @param options - 请求选项
+ * @returns Promise<ApiResult<T>> - 统一的结果对象
+ */
+export async function apiRequest<T = any>(
+  url: string,
+  options: ApiClientOptions = {},
+): Promise<ApiResult<T>> {
+  try {
+    // 调用底层 apiClient（自动处理错误）
+    const response = await apiClient(url, options);
+
+    // 解析 JSON
+    const json = await response.json();
+
+    // 提取 JSend 格式中的 data 字段
+    const data = json.status === "success" ? json.data : json;
+
+    return {
+      success: true,
+      data: data as T,
+    };
+  } catch (error) {
+    // 捕获 ApiError 或其他错误
+    if (error instanceof ApiError) {
+      return {
+        success: false,
+        error,
+      };
+    }
+
+    // 网络错误或其他未知错误
+    return {
+      success: false,
+      error: new ApiError(0, error instanceof Error ? error.message : "未知错误"),
+    };
+  }
+}
+
+/**
+ * 🚀 高级 GET 请求（推荐使用）
+ */
+export async function apiRequestGet<T = any>(
+  url: string,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: "GET",
+  });
+}
+
+/**
+ * 🚀 高级 POST 请求（推荐使用）
+ */
+export async function apiRequestPost<T = any>(
+  url: string,
+  body: unknown,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * 🚀 高级 PATCH 请求（推荐使用）
+ */
+export async function apiRequestPatch<T = any>(
+  url: string,
+  body: unknown,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * 🚀 高级 PUT 请求（推荐使用）
+ */
+export async function apiRequestPut<T = any>(
+  url: string,
+  body: unknown,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * 🚀 高级 DELETE 请求（推荐使用）
+ */
+export async function apiRequestDelete<T = any>(
+  url: string,
+  options: Omit<ApiClientOptions, "method" | "body"> = {},
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: "DELETE",
+  });
 }

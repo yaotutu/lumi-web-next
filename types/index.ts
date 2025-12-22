@@ -79,7 +79,8 @@ export interface User {
 export interface GenerationRequest {
   id: string;
   userId: string;
-  prompt: string;
+  prompt: string; // ✅ 优化后的提示词（用于实际生成图片）
+  originalPrompt?: string | null; // ✅ 用户原始输入的提示词（用于前端显示）
   status: RequestStatus;
   phase: RequestPhase;
   selectedImageIndex: number | null;

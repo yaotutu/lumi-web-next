@@ -267,14 +267,14 @@ export default function ImageGrid({
     <div className="flex h-full w-full flex-col gap-4 overflow-hidden lg:w-[600px]">
       {/* 输入与生成区域 - 模型完成后折叠为只读卡片 */}
       {isModelCompleted ? (
-        // 只读卡片：显示原始 prompt
+        // 只读卡片：显示原始 prompt（优先使用 originalPrompt，回退到 prompt 或 prop）
         <div className="glass-panel shrink-0 p-4 border border-white/5">
           <div className="flex items-start gap-3">
             <div className="text-text-subtle text-sm font-medium shrink-0">
               原始描述
             </div>
             <div className="flex-1 text-text-muted text-sm leading-relaxed">
-              {task?.prompt || prompt}
+              {task?.originalPrompt || task?.prompt || prompt}
             </div>
           </div>
         </div>
