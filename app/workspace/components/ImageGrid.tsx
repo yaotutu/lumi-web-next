@@ -60,38 +60,53 @@ export default function ImageGrid({
   // 如果任务已有图片数据，初始化图片槽位
   useEffect(() => {
     if (task?.images && task.images.length > 0) {
-      const slots: ImageSlot[] = Array.from(
-        { length: IMAGE_GENERATION.COUNT },
-        (_, index) => {
-          const image = task.images.find((img) => img.index === index);
-          if (!image) {
-            return { url: null, status: "pending" };
-          }
+      // ✅ 使用函数式更新，避免完全替换 imageSlots
+      setImageSlots((prevSlots) => {
+        // 创建新的槽位数组（保持 4 个槽位）
+        const newSlots: ImageSlot[] = Array.from(
+          { length: IMAGE_GENERATION.COUNT },
+          (_, index) => {
+            const image = task.images.find((img) => img.index === index);
 
-          // ✅ 根据 imageStatus 映射到组件状态
-          let slotStatus: ImageSlotStatus = "pending";
-          switch (image.imageStatus) {
-            case "COMPLETED":
-              slotStatus = "completed";
-              break;
-            case "GENERATING":
-              slotStatus = "loading";
-              break;
-            case "FAILED":
-              slotStatus = "failed";
-              break;
-            default:
-              slotStatus = "pending";
-              break;
-          }
+            // 如果后端没有该图片数据，保留之前的槽位状态（如果有）
+            if (!image) {
+              return prevSlots[index] || { url: null, status: "pending" };
+            }
 
-          return {
-            url: (image as any).url || image.imageUrl, // 兼容适配器的 url 字段
-            status: slotStatus,
-          };
-        },
-      );
-      setImageSlots(slots);
+            // ✅ 根据 imageStatus 映射到组件状态
+            let slotStatus: ImageSlotStatus = "pending";
+            switch (image.imageStatus) {
+              case "COMPLETED":
+                slotStatus = "completed";
+                break;
+              case "GENERATING":
+                slotStatus = "loading";
+                break;
+              case "FAILED":
+                slotStatus = "failed";
+                break;
+              default:
+                slotStatus = "pending";
+                break;
+            }
+
+            const imageUrl = (image as any).url || image.imageUrl;
+
+            // ✅ 关键优化：如果图片已经是 completed 状态，保持不变（避免闪烁）
+            const prevSlot = prevSlots[index];
+            if (prevSlot?.status === "completed" && prevSlot.url === imageUrl) {
+              return prevSlot;
+            }
+
+            return {
+              url: imageUrl,
+              status: slotStatus,
+            };
+          },
+        );
+
+        return newSlots;
+      });
 
       // 根据任务状态设置组件状态
       if (task.status === "IMAGE_COMPLETED") {
