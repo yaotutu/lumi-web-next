@@ -271,13 +271,20 @@ function WorkspaceContent() {
             lastUpdatedAtRef.current = new Date(updatedTask.updatedAt).toISOString();
           }
 
-          // 智能停止：如果任务已完成或失败，停止轮询
+          // 智能停止轮询的条件：
+          // 1. 图片生成完成（status: IMAGE_COMPLETED, phase: AWAITING_SELECTION）
+          // 2. 模型生成完成（status: COMPLETED, phase: COMPLETED）
+          // 3. 任务失败（status: FAILED）
           if (
+            updatedTask.status === "IMAGE_COMPLETED" ||  // ✅ 新增：图片全部完成
             updatedTask.status === "COMPLETED" ||
             updatedTask.status === "FAILED" ||
             updatedTask.phase === "COMPLETED"
           ) {
-            console.log("✅ 任务已完成，停止轮询");
+            console.log("✅ 任务已完成，停止轮询", {
+              status: updatedTask.status,
+              phase: updatedTask.phase,
+            });
             if (pollingIntervalRef.current) {
               clearInterval(pollingIntervalRef.current);
               pollingIntervalRef.current = null;
@@ -450,6 +457,58 @@ function WorkspaceContent() {
             });
 
             console.log("✅ 新模型已合并，轮询将继续更新进度");
+
+            // ✅ 重新启动轮询（如果之前已停止）
+            if (!pollingIntervalRef.current) {
+              console.log("🔄 重新启动轮询以监听模型生成进度");
+              const pollTaskStatus = async () => {
+                try {
+                  const queryParams = lastUpdatedAtRef.current
+                    ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
+                    : "";
+                  const url = `/api/tasks/${task.id}/status${queryParams}`;
+                  const response = await apiGet(url);
+
+                  if (response.status === 304) {
+                    return;
+                  }
+
+                  const rawData = await response.json();
+                  const data = adaptTaskResponse(rawData);
+
+                  if (data.status === "success") {
+                    const updatedTask = data.data;
+                    setTask(updatedTask);
+
+                    if (updatedTask.updatedAt) {
+                      lastUpdatedAtRef.current = new Date(
+                        updatedTask.updatedAt
+                      ).toISOString();
+                    }
+
+                    // 检查是否需要停止轮询
+                    if (
+                      updatedTask.status === "COMPLETED" ||
+                      updatedTask.status === "FAILED" ||
+                      updatedTask.phase === "COMPLETED"
+                    ) {
+                      console.log("✅ 模型生成完成，停止轮询");
+                      if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current);
+                        pollingIntervalRef.current = null;
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error("轮询请求失败:", error);
+                }
+              };
+
+              // 立即执行一次
+              pollTaskStatus();
+              // 启动定时轮询
+              pollingIntervalRef.current = setInterval(pollTaskStatus, 2000);
+            }
           } else {
             console.warn("⚠️ API 响应中没有 model 字段");
           }
