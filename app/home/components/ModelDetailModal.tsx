@@ -217,9 +217,16 @@ export default function ModelDetailModal({
     setDownloading(true);
 
     try {
-      // 使用统一的 API 客户端
-      const { apiClient } = await import("@/lib/api/client");
-      await apiClient.gallery.download(model.id);
+      // 调用下载 API 增加下载计数
+      const response = await apiPost(
+        `/api/gallery/models/${model.id}/download`,
+        {}
+      );
+
+      // 检查响应是否成功
+      if (!isSuccess(response)) {
+        throw new Error(getErrorMessage(response));
+      }
 
       // 打开下载链接（检查 modelUrl 是否存在）
       if (model.modelUrl) {

@@ -52,3 +52,4 @@ prisma/*.db-journal
 
 
 .claude/*
+.env.remote

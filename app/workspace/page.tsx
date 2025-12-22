@@ -5,12 +5,12 @@
  * 1. 图片生成：输入文本描述 → 生成 4 张图片
  * 2. 图片选择：从 4 张图片中选择一张
  * 3. 3D 模型生成：将选中的图片转换为 3D 模型
- * 4. 实时更新：通过 SSE (Server-Sent Events) 实时获取任务状态
+ * 4. 实时更新：通过轮询 (Polling) 定期获取任务状态
  *
  * 架构特点：
  * - 左右分栏布局：左侧图片生成，右侧模型预览
  * - 状态驱动：task 对象包含所有任务信息
- * - SSE 机制：服务器主动推送状态更新，实时性 < 100ms
+ * - 轮询机制：每 2 秒查询一次状态，使用 HTTP 304 优化网络流量
  * - 乐观更新：用户操作后立即反馈，无需等待服务器响应
  */
 "use client";
@@ -18,7 +18,7 @@
 // Next.js 路由和参数钩子
 import { useRouter, useSearchParams } from "next/navigation";
 // React 核心钩子
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 // 全局导航组件
 import Navigation from "@/components/layout/Navigation";
 // 加载中的骨架屏组件
@@ -26,8 +26,6 @@ import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 // API 响应辅助函数（JSend 格式）
 import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-// SSE 客户端（支持 Bearer Token）
-import { SSEClient } from "@/lib/sse-client";
 // 后端数据适配器（将后端返回的数据转换为前端需要的格式）
 import {
   adaptTaskResponse,
@@ -44,7 +42,7 @@ import ModelPreview from "./components/ModelPreview";
  * 工作台核心内容组件
  *
  * 职责：
- * - 管理任务状态（加载、SSE 监听、更新）
+ * - 管理任务状态（加载、轮询监听、更新）
  * - 协调左右两侧组件的交互
  * - 处理图片选择和 3D 模型生成
  */
@@ -86,6 +84,14 @@ function WorkspaceContent() {
     null,
   );
 
+  /**
+   * 轮询相关状态
+   * lastUpdatedAt：上次更新时间，用于 HTTP 304 优化
+   * pollingIntervalRef：轮询定时器引用
+   */
+  const lastUpdatedAtRef = useRef<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // ============================================
   // Effect 1: 任务初始化
   // ============================================
@@ -123,7 +129,12 @@ function WorkspaceContent() {
             // 3. 更新任务状态
             setTask(data.data);
 
-            // 4. 恢复用户之前选中的图片（如果有）
+            // 4. 保存 updatedAt 用于轮询优化
+            if (data.data.updatedAt) {
+              lastUpdatedAtRef.current = new Date(data.data.updatedAt).toISOString();
+            }
+
+            // 5. 恢复用户之前选中的图片（如果有）
             if (
               data.data.selectedImageIndex !== null &&
               data.data.selectedImageIndex !== undefined
@@ -156,7 +167,12 @@ function WorkspaceContent() {
             // 4. 更新任务状态
             setTask(latestTask);
 
-            // 5. 恢复选中的图片
+            // 5. 保存 updatedAt 用于轮询优化
+            if (latestTask.updatedAt) {
+              lastUpdatedAtRef.current = new Date(latestTask.updatedAt).toISOString();
+            }
+
+            // 6. 恢复选中的图片
             if (
               latestTask.selectedImageIndex !== null &&
               latestTask.selectedImageIndex !== undefined
@@ -186,331 +202,113 @@ function WorkspaceContent() {
   ]); // 依赖项：taskId 变化时重新执行
 
   // ============================================
-  // Effect 2: SSE 实时状态推送
+  // Effect 2: 轮询任务状态
   // ============================================
   /**
-   * SSE 实时推送：实时接收任务状态更新
+   * 轮询机制：定期查询任务状态
    *
    * 作用：实时更新任务状态
-   * - 图片生成进度（image:generating, image:completed）
-   * - 模型生成进度（model:generating, model:progress, model:completed）
-   * - 任务失败（image:failed, model:failed）
+   * - 图片生成进度（imageStatus: GENERATING, COMPLETED）
+   * - 模型生成进度（generationStatus: GENERATING, COMPLETED）
+   * - 任务失败（status: FAILED）
    *
-   * SSE 机制：
-   * - 建立持久连接，服务器主动推送
-   * - 自动重连：网络断开后浏览器自动恢复连接
-   * - 实时性：Worker 完成操作立即推送，延迟 < 100ms
+   * 轮询策略：
+   * - 轮询间隔：2 秒
+   * - HTTP 304 优化：使用 since 参数，只在数据更新时返回完整数据
+   * - 智能停止：任务完成或失败后停止轮询
    *
    * 架构优势：
-   * - 实时性：Worker 完成操作立即推送，延迟 < 100ms
-   * - 安全性：使用 fetch + ReadableStream 实现，支持携带 Bearer Token
-   *
-   * 为什么不用 EventSource？
-   * - EventSource 不支持自定义 HTTP Headers
-   * - 无法携带 Authorization Token 进行认证
-   * - 本实现使用 SSEClient 类解决了这个问题
+   * - 简单：无需维护 WebSocket/SSE 连接
+   * - 可靠：HTTP 请求失败后自动重试
+   * - 高效：使用 HTTP 304 减少网络流量
    */
   useEffect(() => {
-    // 如果没有任务 ID，不建立连接
+    // 如果没有任务 ID，不启动轮询
     if (!taskId) return;
 
-    console.log("🔌 建立 SSE 连接", { taskId });
-
-    // ✅ 使用新的 SSEClient（支持 Bearer Token）
-    const sseClient = new SSEClient(`/api/tasks/${taskId}/events`, {
-      autoReconnect: true,
-      reconnectDelay: 2000,
-      maxReconnectAttempts: 5,
-      onOpen: () => {
-        console.log("✅ SSE 连接已建立");
-      },
-      onClose: () => {
-        console.log("ℹ️ SSE 连接已关闭");
-      },
-      onError: (error) => {
-        console.error("❌ SSE 连接错误", error);
-      },
-    });
-
-    // ========================================
-    // 事件处理函数
-    // ========================================
+    console.log("🔄 启动轮询", { taskId });
 
     /**
-     * 处理 task:init 事件（连接建立后的初始状态）
-     * 注意：不直接 setTask，避免触发 useEffect 重新运行导致连接被关闭
-     * 如果需要同步最新状态，可以选择性更新字段
+     * 执行一次轮询查询
      */
-    sseClient.on("task:init", (event) => {
-      const initialTask = event.data;
-      console.log("📥 收到初始状态", initialTask);
+    const pollTaskStatus = async () => {
+      try {
+        // 构建查询 URL，带上 since 参数用于 HTTP 304 优化
+        const queryParams = lastUpdatedAtRef.current
+          ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
+          : "";
+        const url = `/api/tasks/${taskId}/status${queryParams}`;
 
-      // 只更新可能变化的字段，避免触发 useEffect 重新运行
-      setTask((prev) => {
-        if (!prev || prev.id !== initialTask.id) {
-          // 如果是新任务，完全替换
-          return initialTask;
+        // 发送请求
+        const response = await apiGet(url);
+
+        // 处理 HTTP 304 Not Modified（数据未更新）
+        if (response.status === 304) {
+          console.log("📭 任务状态未更新（HTTP 304）");
+          return;
         }
-        // 如果是同一个任务，只更新需要同步的字段（如图片状态和模型状态）
-        return {
-          ...prev,
-          images: initialTask.images || prev.images,
-          model: initialTask.model || prev.model, // 同步模型状态
-          status: initialTask.status || prev.status,
-        };
-      });
-    });
 
-    /**
-     * 处理 image:generating 事件
-     */
-    sseClient.on("image:generating", (event) => {
-      const { imageId, index } = event.data;
-      console.log(`🖼️ 图片 ${index} 开始生成`, { imageId });
+        // 解析响应
+        const rawData = await response.json();
+        const data = adaptTaskResponse(rawData);
 
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          images: prev.images?.map((img) =>
-            img.index === index ? { ...img, imageStatus: "GENERATING" } : img,
-          ),
-        };
-      });
-    });
+        // JSend 格式判断
+        if (data.status === "success") {
+          const updatedTask = data.data;
 
-    /**
-     * 处理 image:completed 事件
-     */
-    sseClient.on("image:completed", (event) => {
-      const { imageId, index, imageUrl } = event.data;
-      console.log(`✅ 图片 ${index} 生成完成`, { imageId, imageUrl });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        const updatedImages = prev.images?.map((img) =>
-          img.index === index
-            ? {
-                ...img,
-                imageStatus: "COMPLETED" as const,
-                imageUrl,
-                completedAt: new Date(),
-              }
-            : img,
-        );
-
-        // 检查是否所有图片都已完成
-        const allImagesCompleted = updatedImages?.every(
-          (img) => img.imageStatus === "COMPLETED",
-        );
-
-        return {
-          ...prev,
-          images: updatedImages,
-          status: allImagesCompleted ? "IMAGE_COMPLETED" : prev.status,
-        } as any;
-      });
-    });
-
-    /**
-     * 处理 image:failed 事件
-     */
-    sseClient.on("image:failed", (event) => {
-      const { imageId, index, errorMessage } = event.data;
-      console.error(`❌ 图片 ${index} 生成失败`, { imageId, errorMessage });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          images: prev.images?.map((img) =>
-            img.index === index
-              ? {
-                  ...img,
-                  imageStatus: "FAILED",
-                  errorMessage,
-                  failedAt: new Date().toISOString(),
-                }
-              : img,
-          ),
-        };
-      });
-    });
-
-    /**
-     * 处理 model:generating 事件
-     */
-    sseClient.on("model:generating", (event) => {
-      const { modelId, providerJobId } = event.data;
-      console.log(`🎨 模型开始生成`, { modelId, providerJobId });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        // 新架构：检查 task.model（1:1 关系）
-        if (!prev.model || prev.model.id !== modelId) {
-          console.warn("⚠️ 收到 model:generating 事件，但模型不匹配", {
-            modelId,
-            currentModelId: prev.model?.id,
+          console.log("📥 收到任务状态更新", {
+            status: updatedTask.status,
+            phase: updatedTask.phase,
+            imagesCount: updatedTask.images?.length,
+            hasModel: !!updatedTask.model,
           });
-          return prev;
+
+          // 更新任务状态
+          setTask(updatedTask);
+
+          // 更新 lastUpdatedAt 用于下次轮询
+          if (updatedTask.updatedAt) {
+            lastUpdatedAtRef.current = new Date(updatedTask.updatedAt).toISOString();
+          }
+
+          // 智能停止：如果任务已完成或失败，停止轮询
+          if (
+            updatedTask.status === "COMPLETED" ||
+            updatedTask.status === "FAILED" ||
+            updatedTask.phase === "COMPLETED"
+          ) {
+            console.log("✅ 任务已完成，停止轮询");
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        } else {
+          console.error("轮询失败:", getErrorMessage(rawData));
         }
+      } catch (error) {
+        console.error("轮询请求失败:", error);
+        // 注意：不停止轮询，让定时器继续运行以便自动重试
+      }
+    };
 
-        // 新架构：更新 task.model（1:1 关系）
-        const updatedModel = {
-          ...prev.model,
-          generationStatus: "GENERATING",
-          progress: 0,
-        };
+    // 立即执行一次轮询
+    pollTaskStatus();
 
-        return {
-          ...prev,
-          status: "MODEL_GENERATING",
-          phase: "MODEL_GENERATION",
-          model: updatedModel as any,
-        } as any;
-      });
-    });
-
-    /**
-     * 处理 model:progress 事件
-     */
-    sseClient.on("model:progress", (event) => {
-      const { modelId, progress, status } = event.data;
-      console.log(`⏳ 模型生成进度更新: ${progress}%`, { modelId, status });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        // 新架构：优先检查 task.model（1:1 关系）
-        if (!prev.model || prev.model.id !== modelId) {
-          console.warn("⚠️ 收到 model:progress 事件，但模型不匹配", {
-            modelId,
-            currentModelId: prev.model?.id,
-          });
-          return prev;
-        }
-
-        // 修复：正确设置状态，优先使用服务器返回的 status
-        const generationStatus =
-          status || (progress >= 100 ? "COMPLETED" : "GENERATING");
-
-        const updatedModel = {
-          ...prev.model,
-          generationStatus,
-          progress,
-          // 如果进度达到100%，标记为完成
-          ...(progress >= 100 && { completedAt: new Date() }),
-        };
-
-        return {
-          ...prev,
-          status: progress >= 100 ? "COMPLETED" : "MODEL_GENERATING",
-          phase: progress >= 100 ? "COMPLETED" : "MODEL_GENERATION",
-          model: updatedModel as any,
-          ...(progress >= 100 && { completedAt: new Date() }),
-        } as any;
-      });
-    });
-
-    /**
-     * 处理 model:completed 事件
-     */
-    sseClient.on("model:completed", (event) => {
-      const { modelId, modelUrl, mtlUrl, textureUrl, previewImageUrl, format } = event.data;
-      console.log(`✅ 模型生成完成`, { modelId, modelUrl, mtlUrl, textureUrl });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        // 新架构：直接更新 task.model（1:1 关系）
-        const updatedModel =
-          prev.model?.id === modelId
-            ? {
-                ...prev.model,
-                generationStatus: "COMPLETED",
-                progress: 100,
-                modelUrl,
-                mtlUrl,
-                textureUrl,
-                previewImageUrl,
-                format,
-                completedAt: new Date(),
-              }
-            : prev.model;
-
-        return {
-          ...prev,
-          status: "COMPLETED", // 新架构：COMPLETED（不是 MODEL_COMPLETED）
-          phase: "COMPLETED",
-          model: updatedModel as any,
-          completedAt: new Date(),
-        } as any;
-      });
-    });
-
-    /**
-     * 处理 model:failed 事件
-     */
-    sseClient.on("model:failed", (event) => {
-      const { modelId, errorMessage } = event.data;
-      console.error(`❌ 模型生成失败`, { modelId, errorMessage });
-
-      setTask((prev) => {
-        if (!prev) return prev;
-
-        const updatedModel =
-          prev.model?.id === modelId
-            ? {
-                ...prev.model,
-                generationStatus: "FAILED",
-                errorMessage,
-                failedAt: new Date(),
-              }
-            : prev.model;
-
-        return {
-          ...prev,
-          status: "FAILED",
-          model: updatedModel as any,
-        };
-      });
-    });
-
-    /**
-     * 处理 connection:timeout 事件
-     * 服务器通知连接超时，前端主动关闭连接
-     */
-    sseClient.on("connection:timeout", (event) => {
-      const { message, ageMs, gracefulCloseWaitMs } = event.data;
-      console.warn(`⚠️ 服务器通知连接超时`, {
-        message,
-        ageMs,
-        ageHours: (ageMs / (60 * 60 * 1000)).toFixed(2),
-        gracefulCloseWaitMs,
-      });
-
-      // 主动关闭连接，避免被强制关闭导致重连错误
-      console.log("🔌 主动关闭 SSE 连接（响应服务器超时通知）");
-      sseClient.disconnect();
-    });
-
-    // 建立连接
-    sseClient.connect();
-
-    
-
-    
+    // 启动定时轮询（每 2 秒一次）
+    pollingIntervalRef.current = setInterval(pollTaskStatus, 2000);
 
     // ========================================
-    // 清理函数：组件卸载时关闭连接
+    // 清理函数：组件卸载或 taskId 变化时停止轮询
     // ========================================
     return () => {
-      console.log("🔌 关闭 SSE 连接", { taskId });
-      sseClient.disconnect();
+      console.log("🛑 停止轮询", { taskId });
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     };
-  }, [taskId]); // 依赖项：URL 中的 taskId 变化时重新建立连接
+  }, [taskId]); // 依赖项：URL 中的 taskId 变化时重新启动轮询
 
   // ============================================
   // 事件处理函数
@@ -568,7 +366,7 @@ function WorkspaceContent() {
       // 第 1 步：乐观更新（立即反馈）
       // ========================================
       // 立即更新本地状态为"模型生成中"，让用户看到进度条
-      // 实际状态会通过 SSE 事件自动更新
+      // 实际状态会通过轮询自动更新
       console.log("🚀 乐观更新: 设置 MODEL_PENDING 状态", {
         imageIndex,
         previousStatus: task.status,
@@ -610,7 +408,7 @@ function WorkspaceContent() {
           // 成功：立即合并新模型到 task 状态
           // ========================================
           // 后台 Worker 会自动生成 3D 模型
-          // 前端通过 SSE 事件自动更新进度
+          // 前端通过轮询自动更新进度
           console.log("✅ 图片选择成功，3D 模型生成已加入队列");
 
           // 从响应中提取新创建的模型
@@ -651,7 +449,7 @@ function WorkspaceContent() {
               };
             });
 
-            console.log("✅ 新模型已合并，SSE 将继续推送进度更新");
+            console.log("✅ 新模型已合并，轮询将继续更新进度");
           } else {
             console.warn("⚠️ API 响应中没有 model 字段");
           }
