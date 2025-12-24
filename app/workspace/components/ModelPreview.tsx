@@ -5,6 +5,7 @@ import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
 import { apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { downloadModel } from "@/lib/utils/download";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
@@ -730,9 +731,22 @@ export default function ModelPreview({
                   <button
                     type="button"
                     className="btn-primary flex items-center justify-center gap-2 h-12 px-6"
-                    onClick={() => {
+                    onClick={async () => {
                       if (latestModel?.modelUrl) {
-                        window.open(latestModel.modelUrl, "_blank");
+                        try {
+                          // 使用封装的下载函数下载文件
+                          await downloadModel(
+                            latestModel.modelUrl,
+                            latestModel.id,
+                            latestModel.format || 'glb'
+                          );
+                        } catch (error) {
+                          console.error('下载失败:', error);
+                          setToast({
+                            type: 'error',
+                            message: `下载失败: ${error instanceof Error ? error.message : '未知错误'}`
+                          });
+                        }
                       }
                     }}
                     disabled={!latestModel?.modelUrl}

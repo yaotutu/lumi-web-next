@@ -6,6 +6,7 @@ import Model3DViewer, {
 } from "@/app/workspace/components/Model3DViewer";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { downloadModel } from "@/lib/utils/download";
 import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
 
@@ -212,28 +213,30 @@ export default function ModelDetailModal({
    * 下载模型（增加下载计数）
    */
   const handleDownload = useCallback(async () => {
-    if (!model) return;
+    if (!model || !model.modelUrl) return;
 
     setDownloading(true);
 
     try {
-      // 调用下载 API 增加下载计数
+      // 1. 调用下载 API 增加下载计数
       const response = await apiPost(
         `/api/gallery/models/${model.id}/download`,
         {}
       );
 
+      // 解析 JSend 格式的响应
+      const data = await response.json();
+
       // 检查响应是否成功
-      if (!isSuccess(response)) {
-        throw new Error(getErrorMessage(response));
+      if (!isSuccess(data)) {
+        throw new Error(getErrorMessage(data));
       }
 
-      // 打开下载链接（检查 modelUrl 是否存在）
-      if (model.modelUrl) {
-        window.open(model.modelUrl, "_blank");
-      }
+      // 2. 使用封装的下载函数下载文件
+      await downloadModel(model.modelUrl, model.id, model.format);
     } catch (error) {
       console.error("下载失败:", error);
+      alert(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setDownloading(false);
     }
