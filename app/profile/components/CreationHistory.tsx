@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiDelete, apiGet } from "@/lib/api-client";
+import { apiRequestDelete, apiRequestGet } from "@/lib/api-client";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 import type { TaskWithDetails } from "@/types";
 
@@ -20,31 +20,28 @@ export default function CreationHistory() {
 	// 加载创作历史数据
 	useEffect(() => {
 		const fetchTasks = async () => {
-			try {
-				setLoading(true);
-				setError(null);
+			setLoading(true);
+			setError(null);
 
-				const response = await apiGet("/api/tasks");
-				const rawData = await response.json();
-				const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
+			// ✅ 使用 apiRequestGet,自动处理错误和 Toast
+			const result = await apiRequestGet<TaskWithDetails[]>("/api/tasks", {
+				autoToast: false,  // 禁用自动 Toast,使用自定义错误 UI
+			});
 
-				// JSend 格式判断
-				if (data.status === "success") {
-					// 确保 data.data 是数组
-					const tasksArray = Array.isArray(data.data) ? data.data : [];
-					setTasks(tasksArray);
-				} else {
-					// API 返回失败状态
-					setError("加载任务失败");
-				}
-			} catch (err) {
-				// 捕获所有错误(包括 403、404、500 等)
-				console.error("加载任务历史失败:", err);
-				const errorMessage = err instanceof Error ? err.message : "加载任务失败,请稍后重试";
-				setError(errorMessage);
-			} finally {
-				setLoading(false);
+			if (result.success) {
+				// ✅ 适配后端数据格式(与原历史记录页面保持一致)
+				const rawData = { data: result.data, status: "success" };
+				const data = adaptTasksResponse(rawData);
+
+				// 确保 data 是数组
+				const tasksArray = Array.isArray(data.data) ? data.data : [];
+				setTasks(tasksArray);
+			} else {
+				// 失败时设置错误状态(用于显示错误 UI)
+				setError(result.error.message);
 			}
+
+			setLoading(false);
 		};
 
 		fetchTasks();
@@ -52,17 +49,19 @@ export default function CreationHistory() {
 
 	// 删除任务
 	const handleDeleteTask = async (taskId: string) => {
-		if (!confirm("确定要删除这个任务吗?")) return;
+		const confirmed = window.confirm("确定要删除这个任务吗?");
+		if (!confirmed) return;
 
-		try {
-			const response = await apiDelete(`/api/tasks/${taskId}`);
+		// ✅ 使用 apiRequestDelete,自动处理错误和 Toast
+		const result = await apiRequestDelete(`/api/tasks/${taskId}`, {}, {
+			toastType: "success",
+			toastContext: "删除任务",
+		});
 
-			if (response.ok) {
-				setTasks((prev) => prev.filter((t) => t.id !== taskId));
-			}
-		} catch (error) {
-			console.error("删除任务失败:", error);
+		if (result.success) {
+			setTasks((prev) => prev.filter((t) => t.id !== taskId));
 		}
+		// 失败时已自动显示 Toast,无需额外处理
 	};
 
 	// 获取状态文本

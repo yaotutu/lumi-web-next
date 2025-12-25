@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { authActions } from "@/stores/auth-store";
 import { tokenActions } from "@/stores/token-store";
 import { loginModalActions, useLoginModal } from "@/stores/login-modal-store";
-import { apiPost } from "@/lib/api-client";
+import { apiRequestPost } from "@/lib/api-client";
 
 /**
  * 倒计时秒数
@@ -89,26 +89,21 @@ function LoginModalContent() {
 
     setIsSendingCode(true);
 
-    try {
-      // 调用后端代理接口
-      const response = await apiPost('/api/auth/send-code', {
-        email,
-        type: activeTab === 'login' ? 'login' : 'register'
-      });
+    // 调用后端代理接口
+    const result = await apiRequestPost('/api/auth/send-code', {
+      email,
+      type: activeTab === 'login' ? 'login' : 'register'
+    });
 
-      if (response.ok) {
-        setCodeSent(true);
-        setCountdown(COUNTDOWN_SECONDS);
-        setError("");
-      } else {
-        const error = await response.json();
-        setError(error.data?.message || "发送验证码失败");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "发送验证码失败");
-    } finally {
-      setIsSendingCode(false);
+    if (result.success) {
+      setCodeSent(true);
+      setCountdown(COUNTDOWN_SECONDS);
+      setError("");
+    } else {
+      setError(result.error.message || "发送验证码失败");
     }
+
+    setIsSendingCode(false);
   };
 
   /**
@@ -136,34 +131,28 @@ function LoginModalContent() {
 
     setIsSubmitting(true);
 
-    try {
-      // 调用后端代理接口
-      const response = await apiPost('/api/auth/login', { email, code });
+    // 调用后端代理接口
+    const result = await apiRequestPost('/api/auth/login', { email, code });
 
-      if (response.ok) {
-        const data = await response.json();
-        // 登录成功，保存 Token
-        tokenActions.setToken(data.data.token);
+    if (result.success) {
+      // 登录成功，保存 Token
+      tokenActions.setToken(result.data.token);
 
-        // 刷新认证状态（从外部用户服务获取用户信息）
-        await authActions.refreshAuth();
+      // 刷新认证状态（从外部用户服务获取用户信息）
+      await authActions.refreshAuth();
 
-        // 执行成功回调（如重试失败的请求）
-        if (onSuccess) {
-          await onSuccess();
-        }
-
-        // 关闭弹窗
-        loginModalActions.close();
-      } else {
-        const error = await response.json();
-        setError(error.data?.message || "登录失败");
+      // 执行成功回调（如重试失败的请求）
+      if (onSuccess) {
+        await onSuccess();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
-    } finally {
-      setIsSubmitting(false);
+
+      // 关闭弹窗
+      loginModalActions.close();
+    } else {
+      setError(result.error.message || "登录失败");
     }
+
+    setIsSubmitting(false);
   };
 
   /**
@@ -191,27 +180,22 @@ function LoginModalContent() {
 
     setIsSubmitting(true);
 
-    try {
-      // 调用后端代理接口
-      const response = await apiPost('/api/auth/register', { email, code });
+    // 调用后端代理接口
+    const result = await apiRequestPost('/api/auth/register', { email, code });
 
-      if (response.ok) {
-        // 注册成功，切换到登录 Tab，保留邮箱
-        setActiveTab('login');
-        setCode("");
-        setCodeSent(false);
-        setCountdown(0);
-        setError("");
-        // email 保持不变，自动填充
-      } else {
-        const error = await response.json();
-        setError(error.data?.message || "注册失败");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "注册失败");
-    } finally {
-      setIsSubmitting(false);
+    if (result.success) {
+      // 注册成功，切换到登录 Tab，保留邮箱
+      setActiveTab('login');
+      setCode("");
+      setCodeSent(false);
+      setCountdown(0);
+      setError("");
+      // email 保持不变，自动填充
+    } else {
+      setError(result.error.message || "注册失败");
     }
+
+    setIsSubmitting(false);
   };
 
   return (

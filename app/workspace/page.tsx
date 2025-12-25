@@ -24,13 +24,11 @@ import Navigation from "@/components/layout/Navigation";
 // 加载中的骨架屏组件
 import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 // API 响应辅助函数（JSend 格式）
-import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
-// 后端数据适配器（将后端返回的数据转换为前端需要的格式）
-import {
-  adaptTaskResponse,
-  adaptTasksResponse,
-} from "@/lib/utils/task-adapter-client";
+import { apiRequestGet, apiRequestPatch } from "@/lib/api-client";
+// 数据适配器
+import { adaptTaskResponse, adaptTasksResponse } from "@/lib/utils/task-adapter-client";
+// Toast 提示
+import { toast } from "@/lib/toast";
 // 任务数据类型定义（包含图片、模型等完整信息）
 import type { TaskWithDetails } from "@/types";
 // 左侧图片生成和选择组件
@@ -110,86 +108,100 @@ function WorkspaceContent() {
    */
   useEffect(() => {
     const initializeTask = async () => {
-      try {
-        if (taskId) {
-          // ========================================
-          // 场景 1: URL 有 taskId，加载指定任务
-          // ========================================
-          // 例如：/workspace?taskId=abc123
+      if (taskId) {
+        // ========================================
+        // 场景 1: URL 有 taskId，加载指定任务
+        // ========================================
+        // 例如：/workspace?taskId=abc123
 
-          // 1. 请求任务详情
-          const response = await apiGet(`/api/tasks/${taskId}`);
-          const rawData = await response.json();
+        // 1. 请求任务详情（使用新 API）
+        const result = await apiRequestGet(`/api/tasks/${taskId}`);
 
-          // 2. 适配后端数据（将 Worker 架构的数据转换为前端需要的格式）
+        // 2. 判断请求是否成功
+        if (result.success) {
+          // 3. ✅ 适配后端数据格式
+          const rawData = { data: result.data, status: "success" };
           const data = adaptTaskResponse(rawData);
+          const adaptedTask = data.data;
 
-          // JSend 格式判断
-          if (data.status === "success") {
-            // 3. 更新任务状态
-            setTask(data.data);
+          // 4. 更新任务状态
+          setTask(adaptedTask);
 
-            // 4. 保存 updatedAt 用于轮询优化
-            if (data.data.updatedAt) {
-              lastUpdatedAtRef.current = new Date(data.data.updatedAt).toISOString();
-            }
+          // 5. 保存 updatedAt 用于轮询优化
+          if (adaptedTask.updatedAt) {
+            lastUpdatedAtRef.current = new Date(
+              adaptedTask.updatedAt,
+            ).toISOString();
+          }
 
-            // 5. 恢复用户之前选中的图片（如果有）
-            if (
-              data.data.selectedImageIndex !== null &&
-              data.data.selectedImageIndex !== undefined
-            ) {
-              setSelectedImageIndex(data.data.selectedImageIndex);
-            }
-          } else {
-            console.error("Failed to load task:", getErrorMessage(rawData));
+          // 6. 恢复用户之前选中的图片（如果有）
+          if (
+            adaptedTask.selectedImageIndex !== null &&
+            adaptedTask.selectedImageIndex !== undefined
+          ) {
+            setSelectedImageIndex(adaptedTask.selectedImageIndex);
           }
         } else {
-          // ========================================
-          // 场景 2: URL 无 taskId，加载最新任务
-          // ========================================
-          // 适用于：用户直接访问 /workspace
-
-          // 1. 请求最新的一个任务
-          const response = await apiGet("/api/tasks?limit=1");
-          const rawData = await response.json();
-
-          // 2. 适配任务列表数据
-          const data = adaptTasksResponse(rawData);
-
-          // JSend 格式判断
-          if (data.status === "success" && data.data.length > 0) {
-            const latestTask = data.data[0];
-
-            // 3. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
-            router.replace(`/workspace?taskId=${latestTask.id}`);
-
-            // 4. 更新任务状态
-            setTask(latestTask);
-
-            // 5. 保存 updatedAt 用于轮询优化
-            if (latestTask.updatedAt) {
-              lastUpdatedAtRef.current = new Date(latestTask.updatedAt).toISOString();
-            }
-
-            // 6. 恢复选中的图片
-            if (
-              latestTask.selectedImageIndex !== null &&
-              latestTask.selectedImageIndex !== undefined
-            ) {
-              setSelectedImageIndex(latestTask.selectedImageIndex);
-            }
-          } else {
-            // 没有任何任务时，保持空状态（后续会显示"暂无任务"提示）
-            console.log("No tasks found");
-          }
+          // 请求失败，记录错误
+          console.error("Failed to load task:", result.error.message);
         }
-      } catch (error) {
-        console.error("Failed to initialize task:", error);
-      } finally {
-        // 无论成功或失败，都结束加载状态
-        setLoading(false);
+      } else {
+        // ========================================
+        // 场景 2: URL 无 taskId，加载最新任务
+        // ========================================
+        // 适用于：用户直接访问 /workspace
+
+        // 1. 请求最新的一个任务（使用新 API）
+        const result = await apiRequestGet("/api/tasks?limit=1");
+
+        // 2. 判断请求是否成功
+        // 注意：后端返回 { items: [...], total: 1 }，需要检查 items 数组
+        if (result.success && result.data.items && result.data.items.length > 0) {
+          // 3. ✅ 适配后端数据格式
+          const rawData = { data: result.data, status: "success" };
+          const data = adaptTasksResponse(rawData);
+          const adaptedTasks = data.data;
+          const latestTask = adaptedTasks[0];
+
+          // 4. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
+          router.replace(`/workspace?taskId=${latestTask.id}`);
+
+          // 5. 更新任务状态
+          setTask(latestTask);
+
+          // 6. 保存 updatedAt 用于轮询优化
+          if (latestTask.updatedAt) {
+            lastUpdatedAtRef.current = new Date(
+              latestTask.updatedAt,
+            ).toISOString();
+          }
+
+          // 7. 恢复选中的图片
+          if (
+            latestTask.selectedImageIndex !== null &&
+            latestTask.selectedImageIndex !== undefined
+          ) {
+            setSelectedImageIndex(latestTask.selectedImageIndex);
+          }
+        } else {
+          // 没有任何任务时，保持空状态（后续会显示"暂无任务"提示）
+          console.log("No tasks found");
+        }
       }
+
+      // 结束加载状态
+      setLoading(false);
+
+      // 🔍 调试日志
+      console.log("📊 任务初始化完成:", {
+        taskId,
+        hasTask: !!task,
+        taskStatus: task?.status,
+        taskPhase: task?.phase,
+        imagesCount: task?.images?.length,
+        hasModel: !!task?.model,
+        loading: false,
+      });
     };
 
     initializeTask();
@@ -232,70 +244,68 @@ function WorkspaceContent() {
      * 执行一次轮询查询
      */
     const pollTaskStatus = async () => {
-      try {
-        // 构建查询 URL，带上 since 参数用于 HTTP 304 优化
-        const queryParams = lastUpdatedAtRef.current
-          ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
-          : "";
-        const url = `/api/tasks/${taskId}/status${queryParams}`;
+      // 构建查询 URL，带上 since 参数用于 HTTP 304 优化
+      const queryParams = lastUpdatedAtRef.current
+        ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
+        : "";
+      const url = `/api/tasks/${taskId}/status${queryParams}`;
 
-        // 发送请求
-        const response = await apiGet(url);
+      // 发送请求（使用新 API）
+      const result = await apiRequestGet(url);
 
-        // 处理 HTTP 304 Not Modified（数据未更新）
-        if (response.status === 304) {
-          console.log("📭 任务状态未更新（HTTP 304）");
-          return;
+      // 处理 HTTP 304 Not Modified（数据未更新）
+      // 注意：新 API 自动处理 304，result.error.code 为 'NOT_MODIFIED'
+      if (!result.success && result.error.code === "NOT_MODIFIED") {
+        console.log("📭 任务状态未更新（HTTP 304）");
+        return;
+      }
+
+      // 判断请求是否成功
+      if (result.success) {
+        // ✅ 适配后端数据格式
+        const rawData = { data: result.data, status: "success" };
+        const data = adaptTaskResponse(rawData);
+        const updatedTask = data.data;
+
+        console.log("📥 收到任务状态更新", {
+          status: updatedTask.status,
+          phase: updatedTask.phase,
+          imagesCount: updatedTask.images?.length,
+          hasModel: !!updatedTask.model,
+        });
+
+        // 更新任务状态
+        setTask(updatedTask);
+
+        // 更新 lastUpdatedAt 用于下次轮询
+        if (updatedTask.updatedAt) {
+          lastUpdatedAtRef.current = new Date(
+            updatedTask.updatedAt,
+          ).toISOString();
         }
 
-        // 解析响应
-        const rawData = await response.json();
-        const data = adaptTaskResponse(rawData);
-
-        // JSend 格式判断
-        if (data.status === "success") {
-          const updatedTask = data.data;
-
-          console.log("📥 收到任务状态更新", {
+        // 智能停止轮询的条件：
+        // 1. 图片生成完成（status: IMAGE_COMPLETED, phase: AWAITING_SELECTION）
+        // 2. 模型生成完成（status: COMPLETED, phase: COMPLETED）
+        // 3. 任务失败（status: FAILED）
+        if (
+          updatedTask.status === "IMAGE_COMPLETED" || // ✅ 新增：图片全部完成
+          updatedTask.status === "COMPLETED" ||
+          updatedTask.status === "FAILED" ||
+          updatedTask.phase === "COMPLETED"
+        ) {
+          console.log("✅ 任务已完成，停止轮询", {
             status: updatedTask.status,
             phase: updatedTask.phase,
-            imagesCount: updatedTask.images?.length,
-            hasModel: !!updatedTask.model,
           });
-
-          // 更新任务状态
-          setTask(updatedTask);
-
-          // 更新 lastUpdatedAt 用于下次轮询
-          if (updatedTask.updatedAt) {
-            lastUpdatedAtRef.current = new Date(updatedTask.updatedAt).toISOString();
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
           }
-
-          // 智能停止轮询的条件：
-          // 1. 图片生成完成（status: IMAGE_COMPLETED, phase: AWAITING_SELECTION）
-          // 2. 模型生成完成（status: COMPLETED, phase: COMPLETED）
-          // 3. 任务失败（status: FAILED）
-          if (
-            updatedTask.status === "IMAGE_COMPLETED" ||  // ✅ 新增：图片全部完成
-            updatedTask.status === "COMPLETED" ||
-            updatedTask.status === "FAILED" ||
-            updatedTask.phase === "COMPLETED"
-          ) {
-            console.log("✅ 任务已完成，停止轮询", {
-              status: updatedTask.status,
-              phase: updatedTask.phase,
-            });
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-          }
-        } else {
-          console.error("轮询失败:", getErrorMessage(rawData));
         }
-      } catch (error) {
-        console.error("轮询请求失败:", error);
-        // 注意：不停止轮询，让定时器继续运行以便自动重试
+      } else {
+        // 请求失败，记录错误（不停止轮询，让定时器继续运行以便自动重试）
+        console.error("轮询失败:", result.error.message);
       }
     };
 
@@ -387,164 +397,146 @@ function WorkspaceContent() {
         modelGenerationStartedAt: new Date(), // 记录开始时间
       });
 
-      try {
+      // ========================================
+      // 第 2 步：发送 API 请求
+      // ========================================
+      console.log(
+        `🔵 发送 PATCH 请求: taskId=${task.id}, imageIndex=${imageIndex}`,
+      );
+
+      // 发送请求，更新后端的 selectedImageIndex（使用新 API）
+      // 后端会自动触发 3D 模型生成（通过 Worker 监听）
+      const result = await apiRequestPatch(`/api/tasks/${task.id}`, {
+        selectedImageIndex: imageIndex,
+      });
+
+      console.log(`🔵 收到响应: success=${result.success}`);
+
+      // ⚠️ 注意：这里不需要 adaptTaskResponse
+      // 因为 PATCH /api/tasks/[id] 返回的是简化格式（只有 model 和 selectedImageIndex）
+      // 不是完整的 GenerationRequest 对象
+
+      // 判断请求是否成功
+      if (result.success) {
         // ========================================
-        // 第 2 步：发送 API 请求
+        // 成功：立即合并新模型到 task 状态
         // ========================================
-        console.log(
-          `🔵 发送 PATCH 请求: taskId=${task.id}, imageIndex=${imageIndex}`,
-        );
+        // 后台 Worker 会自动生成 3D 模型
+        // 前端通过轮询自动更新进度
+        console.log("✅ 图片选择成功，3D 模型生成已加入队列");
 
-        // 发送请求，更新后端的 selectedImageIndex
-        // 后端会自动触发 3D 模型生成（通过 Worker 监听）
-        const response = await apiPatch(`/api/tasks/${task.id}`, {
-          selectedImageIndex: imageIndex,
-        });
+        // 从响应中提取新创建的模型
+        const resultData = result.data as { model: any };
+        const newModel = resultData.model;
 
-        console.log(`🔵 收到响应: status=${response.status}`);
-        const rawData = await response.json();
-        console.log(`🔵 响应数据:`, rawData);
+        if (newModel) {
+          console.log("🔥 立即合并新模型到 task 状态", {
+            modelId: newModel.id,
+            sourceImageId: newModel.sourceImageId,
+            imageIndex,
+          });
 
-        // ⚠️ 注意：这里不需要 adaptTaskResponse
-        // 因为 PATCH /api/tasks/[id] 返回的是简化格式（只有 model 和 selectedImageIndex）
-        // 不是完整的 GenerationRequest 对象
+          // 更新 task 状态，添加新模型
+          setTask((prev) => {
+            // 安全检查：确保 prev 和 prev.images 存在
+            if (!prev || !prev.images) {
+              console.error("❌ task 状态异常，无法合并新模型");
+              return prev;
+            }
 
-        // JSend 格式判断
-        if (isSuccess(rawData)) {
-          // ========================================
-          // 成功：立即合并新模型到 task 状态
-          // ========================================
-          // 后台 Worker 会自动生成 3D 模型
-          // 前端通过轮询自动更新进度
-          console.log("✅ 图片选择成功，3D 模型生成已加入队列");
+            return {
+              ...prev,
+              selectedImageIndex: imageIndex,
+              status: "MODEL_GENERATING", // 明确设置为生成中
+              phase: "MODEL_GENERATION",
+              model: {
+                ...newModel,
+                generationStatus: "PENDING", // 新创建的模型初始状态为 PENDING
+                progress: 0,
+              },
+              images: prev.images.map((img) =>
+                img.index === imageIndex
+                  ? { ...img, generatedModel: newModel } // 关联到对应图片
+                  : img,
+              ),
+              modelGenerationStartedAt: new Date(),
+            };
+          });
 
-          // 从响应中提取新创建的模型
-          const resultData = rawData.data as { model: any };
-          const newModel = resultData.model;
+          console.log("✅ 新模型已合并，轮询将继续更新进度");
 
-          if (newModel) {
-            console.log("🔥 立即合并新模型到 task 状态", {
-              modelId: newModel.id,
-              sourceImageId: newModel.sourceImageId,
-              imageIndex,
-            });
+          // ✅ 重新启动轮询（如果之前已停止）
+          if (!pollingIntervalRef.current) {
+            console.log("🔄 重新启动轮询以监听模型生成进度");
+            const pollTaskStatus = async () => {
+              // 构建查询 URL，带上 since 参数用于 HTTP 304 优化
+              const queryParams = lastUpdatedAtRef.current
+                ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
+                : "";
+              const url = `/api/tasks/${task.id}/status${queryParams}`;
 
-            // 更新 task 状态，添加新模型
-            setTask((prev) => {
-              // 安全检查：确保 prev 和 prev.images 存在
-              if (!prev || !prev.images) {
-                console.error("❌ task 状态异常，无法合并新模型");
-                return prev;
+              // 发送请求（使用新 API）
+              const pollResult = await apiRequestGet(url);
+
+              // 处理 HTTP 304 Not Modified（数据未更新）
+              if (
+                !pollResult.success &&
+                pollResult.error.code === "NOT_MODIFIED"
+              ) {
+                return;
               }
 
-              return {
-                ...prev,
-                selectedImageIndex: imageIndex,
-                status: "MODEL_GENERATING", // 明确设置为生成中
-                phase: "MODEL_GENERATION",
-                model: {
-                  ...newModel,
-                  generationStatus: "PENDING", // 新创建的模型初始状态为 PENDING
-                  progress: 0,
-                },
-                images: prev.images.map((img) =>
-                  img.index === imageIndex
-                    ? { ...img, generatedModel: newModel } // 关联到对应图片
-                    : img,
-                ),
-                modelGenerationStartedAt: new Date(),
-              };
-            });
+              // 判断请求是否成功
+              if (pollResult.success) {
+                // ✅ 适配后端数据格式
+                const rawPollData = { data: pollResult.data, status: "success" };
+                const pollData = adaptTaskResponse(rawPollData);
+                const updatedTask = pollData.data;
+                setTask(updatedTask);
 
-            console.log("✅ 新模型已合并，轮询将继续更新进度");
-
-            // ✅ 重新启动轮询（如果之前已停止）
-            if (!pollingIntervalRef.current) {
-              console.log("🔄 重新启动轮询以监听模型生成进度");
-              const pollTaskStatus = async () => {
-                try {
-                  const queryParams = lastUpdatedAtRef.current
-                    ? `?since=${encodeURIComponent(lastUpdatedAtRef.current)}`
-                    : "";
-                  const url = `/api/tasks/${task.id}/status${queryParams}`;
-                  const response = await apiGet(url);
-
-                  if (response.status === 304) {
-                    return;
-                  }
-
-                  const rawData = await response.json();
-                  const data = adaptTaskResponse(rawData);
-
-                  if (data.status === "success") {
-                    const updatedTask = data.data;
-                    setTask(updatedTask);
-
-                    if (updatedTask.updatedAt) {
-                      lastUpdatedAtRef.current = new Date(
-                        updatedTask.updatedAt
-                      ).toISOString();
-                    }
-
-                    // 检查是否需要停止轮询
-                    if (
-                      updatedTask.status === "COMPLETED" ||
-                      updatedTask.status === "FAILED" ||
-                      updatedTask.phase === "COMPLETED"
-                    ) {
-                      console.log("✅ 模型生成完成，停止轮询");
-                      if (pollingIntervalRef.current) {
-                        clearInterval(pollingIntervalRef.current);
-                        pollingIntervalRef.current = null;
-                      }
-                    }
-                  }
-                } catch (error) {
-                  console.error("轮询请求失败:", error);
+                if (updatedTask.updatedAt) {
+                  lastUpdatedAtRef.current = new Date(
+                    updatedTask.updatedAt,
+                  ).toISOString();
                 }
-              };
 
-              // 立即执行一次
-              pollTaskStatus();
-              // 启动定时轮询
-              pollingIntervalRef.current = setInterval(pollTaskStatus, 2000);
-            }
-          } else {
-            console.warn("⚠️ API 响应中没有 model 字段");
+                // 检查是否需要停止轮询
+                if (
+                  updatedTask.status === "COMPLETED" ||
+                  updatedTask.status === "FAILED" ||
+                  updatedTask.phase === "COMPLETED"
+                ) {
+                  console.log("✅ 模型生成完成，停止轮询");
+                  if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current);
+                    pollingIntervalRef.current = null;
+                  }
+                }
+              } else {
+                // 请求失败，记录错误（不停止轮询）
+                console.error("轮询请求失败:", pollResult.error.message);
+              }
+            };
+
+            // 立即执行一次
+            pollTaskStatus();
+            // 启动定时轮询
+            pollingIntervalRef.current = setInterval(pollTaskStatus, 2000);
           }
         } else {
-          // ========================================
-          // 失败：回滚乐观更新
-          // ========================================
-          const errorMessage = getErrorMessage(rawData);
-          console.error("❌ 图片选择失败:", errorMessage);
-
-          // 显示错误提示
-          alert(`选择图片失败: ${errorMessage}`);
-
-          // 回滚到之前的状态
-          console.log("⏪ 回滚乐观更新（请求失败）", previousTaskState);
-          setTask({
-            ...task,
-            status: previousTaskState.status,
-            selectedImageIndex: imageIndex, // 保留用户选择
-            modelGenerationStartedAt:
-              previousTaskState.modelGenerationStartedAt,
-          });
+          console.warn("⚠️ API 响应中没有 model 字段");
         }
-      } catch (error) {
+      } else {
         // ========================================
-        // 异常：回滚乐观更新并提示用户
+        // 失败：回滚乐观更新
         // ========================================
-        console.error("❌ 请求异常:", error);
+        console.error("❌ 图片选择失败:", result.error.message);
 
         // 显示错误提示
-        alert(
-          `请求失败: ${error instanceof Error ? error.message : "网络错误"}`,
-        );
+        toast.error(`选择图片失败: ${result.error.message}`);
 
         // 回滚到之前的状态
-        console.log("⏪ 回滚乐观更新（请求异常）", previousTaskState);
+        console.log("⏪ 回滚乐观更新（请求失败）", previousTaskState);
         setTask({
           ...task,
           status: previousTaskState.status,
@@ -619,7 +611,7 @@ function WorkspaceContent() {
       */}
       <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
-          initialPrompt={task.originalPrompt || ''} // 传入任务的提示词（用于显示）
+          initialPrompt={task.originalPrompt || ""} // 传入任务的提示词（用于显示）
           onImageSelect={handleImageSelect} // 图片选择回调（预览用）
           onGenerate3D={handleGenerate3D} // 3D 生成回调（确认生成）
           task={task} // 完整的任务数据
@@ -636,7 +628,7 @@ function WorkspaceContent() {
       <div className="flex w-full flex-1 flex-col overflow-hidden">
         <ModelPreview
           imageIndex={selectedImageIndex} // 当前选中的图片索引
-          prompt={task.originalPrompt || ''} // 任务提示词
+          prompt={task.originalPrompt || ""} // 任务提示词
           task={task} // 完整的任务数据
           taskId={task.id} // 任务 ID
           onGenerate3D={handleGenerate3D} // 3D 生成回调

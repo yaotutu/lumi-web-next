@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useUser } from "@/stores/auth-store";
 import { authActions } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
+import { toast } from "@/lib/toast";
 
 /**
  * 账户设置模块
@@ -35,7 +36,7 @@ export default function AccountSettings() {
 	// 修改用户名
 	const handleUpdateName = async () => {
 		if (!name.trim()) {
-			alert("用户名不能为空");
+			toast.error("用户名不能为空");
 			return;
 		}
 
@@ -43,24 +44,24 @@ export default function AccountSettings() {
 		// TODO: 调用 API 更新用户名
 		setTimeout(() => {
 			setIsLoading(false);
-			alert("用户名修改成功");
+			toast.success("用户名修改成功");
 		}, 1000);
 	};
 
 	// 修改密码
 	const handleUpdatePassword = async () => {
 		if (!currentPassword || !newPassword || !confirmPassword) {
-			alert("请填写完整的密码信息");
+			toast.error("请填写完整的密码信息");
 			return;
 		}
 
 		if (newPassword !== confirmPassword) {
-			alert("两次输入的密码不一致");
+			toast.error("两次输入的密码不一致");
 			return;
 		}
 
 		if (newPassword.length < 6) {
-			alert("新密码长度至少为 6 位");
+			toast.error("新密码长度至少为 6 位");
 			return;
 		}
 
@@ -68,7 +69,7 @@ export default function AccountSettings() {
 		// TODO: 调用 API 修改密码
 		setTimeout(() => {
 			setIsLoading(false);
-			alert("密码修改成功");
+			toast.success("密码修改成功");
 			setCurrentPassword("");
 			setNewPassword("");
 			setConfirmPassword("");
@@ -82,7 +83,7 @@ export default function AccountSettings() {
 		setTimeout(() => {
 			setTwoFactorEnabled(!twoFactorEnabled);
 			setIsLoading(false);
-			alert(!twoFactorEnabled ? "两步验证已开启" : "两步验证已关闭");
+			toast.success(!twoFactorEnabled ? "两步验证已开启" : "两步验证已关闭");
 		}, 1000);
 	};
 
@@ -104,7 +105,7 @@ export default function AccountSettings() {
 		// TODO: 调用 API 注销账号
 		setTimeout(() => {
 			setIsLoading(false);
-			alert("账号已注销");
+			toast.success("账号已注销");
 			authActions.resetAuth();
 			router.push("/");
 		}, 1000);
@@ -229,7 +230,7 @@ export default function AccountSettings() {
 						<button
 							type="button"
 							className="btn-secondary px-4 py-2 text-sm"
-							onClick={() => alert("功能开发中...")}
+							onClick={() => toast.info("功能开发中...")}
 						>
 							管理
 						</button>

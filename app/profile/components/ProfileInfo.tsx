@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useUser } from "@/stores/auth-store";
+import { toast } from "@/lib/toast";
 
 /**
  * 个人资料模块
@@ -53,7 +54,7 @@ export default function ProfileInfo() {
 	// 处理头像上传
 	const handleAvatarUpload = () => {
 		// TODO: 实现头像上传功能
-		alert("头像上传功能开发中...");
+		toast.info("头像上传功能开发中...");
 	};
 
 	return (

@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
-import { apiGet, apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestGet, apiRequestPost } from "@/lib/api-client";
 import { downloadModel } from "@/lib/utils/download";
 import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
+import { toast } from "@/lib/toast";
 
 // 材质颜色选项（从详情页复制）
 const MATERIAL_COLORS = [
@@ -64,59 +64,40 @@ export default function ModelDetailModal({
       setLoading(true);
       setError(null);
 
-      try {
-        // 直接使用 fetch + JSend 格式
-        const response = await apiGet(`/api/gallery/models/${id}`);
-        if (!response.ok) {
-          throw new Error(`加载失败: ${response.status}`);
-        }
+      // 加载模型详情
+      const result = await apiRequestGet<UserAssetWithUser>(
+        `/api/gallery/models/${id}`,
+      );
 
-        const data = await response.json();
-        // JSend 格式判断
-        if (isSuccess(data)) {
-          const modelData = data.data as UserAssetWithUser;
-          setModel(modelData);
+      if (result.success) {
+        const modelData = result.data;
+        setModel(modelData);
 
-          // 初始化交互状态
-          setCurrentLikes(modelData.likeCount);
-          setCurrentFavorites(modelData.favoriteCount || 0);
+        // 初始化交互状态
+        setCurrentLikes(modelData.likeCount);
+        setCurrentFavorites(modelData.favoriteCount || 0);
 
-          // 如果用户已登录，获取交互状态
-          if (user) {
-            try {
-              const interactionResponse = await apiGet(
-                `/api/gallery/models/${id}/interactions`,
-              );
-              if (interactionResponse.ok) {
-                const interactionData = await interactionResponse.json();
-                // JSend 格式判断
-                if (isSuccess(interactionData)) {
-                  const interactionInfo = interactionData.data as {
-                    isAuthenticated: boolean;
-                    isLiked?: boolean;
-                    isFavorited?: boolean;
-                  };
-                  if (interactionInfo.isAuthenticated) {
-                    setInteractionStatus({
-                      isLiked: interactionInfo.isLiked || false,
-                      isFavorited: interactionInfo.isFavorited || false,
-                    });
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("获取交互状态失败:", error);
-            }
+        // 如果用户已登录，获取交互状态
+        if (user) {
+          const interactionResult = await apiRequestGet<{
+            isAuthenticated: boolean;
+            isLiked?: boolean;
+            isFavorited?: boolean;
+          }>(`/api/gallery/models/${id}/interactions`);
+
+          if (interactionResult.success && interactionResult.data.isAuthenticated) {
+            setInteractionStatus({
+              isLiked: interactionResult.data.isLiked || false,
+              isFavorited: interactionResult.data.isFavorited || false,
+            });
           }
-        } else {
-          throw new Error(getErrorMessage(data));
         }
-      } catch (err) {
-        console.error("加载模型详情失败:", err);
-        setError(err instanceof Error ? err.message : "加载失败");
-      } finally {
-        setLoading(false);
+      } else {
+        console.error("加载模型详情失败:", result.error.message);
+        setError(result.error.message);
       }
+
+      setLoading(false);
     },
     [user],
   );
@@ -217,29 +198,21 @@ export default function ModelDetailModal({
 
     setDownloading(true);
 
-    try {
-      // 1. 调用下载 API 增加下载计数
-      const response = await apiPost(
-        `/api/gallery/models/${model.id}/download`,
-        {}
-      );
+    // 调用下载 API 增加下载计数
+    const result = await apiRequestPost(
+      `/api/gallery/models/${model.id}/download`,
+      {},
+    );
 
-      // 解析 JSend 格式的响应
-      const data = await response.json();
-
-      // 检查响应是否成功
-      if (!isSuccess(data)) {
-        throw new Error(getErrorMessage(data));
-      }
-
-      // 2. 使用封装的下载函数下载文件
+    if (result.success) {
+      // 使用封装的下载函数下载文件
       await downloadModel(model.modelUrl, model.id, model.format);
-    } catch (error) {
-      console.error("下载失败:", error);
-      alert(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    } finally {
-      setDownloading(false);
+    } else {
+      console.error("下载失败:", result.error.message);
+      toast.error(`下载失败: ${result.error.message}`);
     }
+
+    setDownloading(false);
   }, [model]);
 
   /**
@@ -256,7 +229,7 @@ export default function ModelDetailModal({
   const handleInteraction = useCallback(
     async (type: "LIKE" | "FAVORITE") => {
       if (!model || !user) {
-        alert("请先登录后再进行操作");
+        toast.error("请先登录后再进行操作");
         return;
       }
 
@@ -285,48 +258,39 @@ export default function ModelDetailModal({
         );
       }
 
-      try {
-        const response = await apiPost(
-          `/api/gallery/models/${model.id}/interactions`,
-          { type },
-        );
+      // 调用 API
+      const result = await apiRequestPost(
+        `/api/gallery/models/${model.id}/interactions`,
+        { type },
+      );
 
-        if (!response.ok) {
-          throw new Error("操作失败");
-        }
-
-        const data = await response.json();
-        // JSend 格式判断
-        if (isSuccess(data)) {
-          // 使用服务器返回的权威数据（确保前后端同步）
-          const interactionResult = data.data as {
-            isInteracted: boolean;
-            likeCount: number;
-            favoriteCount: number;
-          };
-          setCurrentLikes(interactionResult.likeCount);
-          setCurrentFavorites(interactionResult.favoriteCount);
-          setInteractionStatus((prev) => ({
-            ...prev,
-            isLiked:
-              type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
-            isFavorited:
-              type === "FAVORITE"
-                ? interactionResult.isInteracted
-                : prev.isFavorited,
-          }));
-        } else {
-          throw new Error(getErrorMessage(data));
-        }
-      } catch (error) {
-        console.error("Interaction failed:", error);
+      if (result.success) {
+        // 使用服务器返回的权威数据（确保前后端同步）
+        const interactionResult = result.data as {
+          isInteracted: boolean;
+          likeCount: number;
+          favoriteCount: number;
+        };
+        setCurrentLikes(interactionResult.likeCount);
+        setCurrentFavorites(interactionResult.favoriteCount);
+        setInteractionStatus((prev) => ({
+          ...prev,
+          isLiked:
+            type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
+          isFavorited:
+            type === "FAVORITE"
+              ? interactionResult.isInteracted
+              : prev.isFavorited,
+        }));
+      } else {
         // 回滚到原始状态
+        console.error("Interaction failed:", result.error.message);
         setInteractionStatus(originalStatus);
         setCurrentLikes(originalLikes);
         setCurrentFavorites(originalFavorites);
-      } finally {
-        setIsInteractionLoading(false);
       }
+
+      setIsInteractionLoading(false);
     },
     [
       model,

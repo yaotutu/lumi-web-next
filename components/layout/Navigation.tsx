@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authActions, useIsLoaded, useUser } from "@/stores/auth-store";
-import { apiPost } from "@/lib/api-client";
+import { apiRequestPost } from "@/lib/api-client";
 
 type NavLink = {
   label: string;
@@ -86,33 +86,22 @@ export default function Navigation() {
 
   // 退出登录
   const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
+    setIsLoggingOut(true);
 
-      // 调用后端代理接口退出登录
-      await apiPost('/api/auth/logout', {});
+    // 调用后端代理接口退出登录
+    await apiRequestPost('/api/auth/logout', {});
 
-      // 清除前端状态（无论登出接口成功与否）
-      authActions.resetAuth();
-      setShowUserMenu(false);
-      // 先跳转，再刷新
-      router.push("/");
-      // 延迟一点时间，确保跳转完成后再刷新
-      setTimeout(() => {
-        router.refresh();
-      }, 100);
-    } catch (error) {
-      console.error("退出登录失败：", error);
-      // 即使登出接口失败，也清除前端状态
-      authActions.resetAuth();
-      setShowUserMenu(false);
-      router.push("/");
-      setTimeout(() => {
-        router.refresh();
-      }, 100);
-    } finally {
-      setIsLoggingOut(false);
-    }
+    // 清除前端状态（无论登出接口成功与否）
+    authActions.resetAuth();
+    setShowUserMenu(false);
+    // 先跳转，再刷新
+    router.push("/");
+    // 延迟一点时间，确保跳转完成后再刷新
+    setTimeout(() => {
+      router.refresh();
+    }, 100);
+
+    setIsLoggingOut(false);
   };
 
   return (

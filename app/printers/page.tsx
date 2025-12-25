@@ -25,6 +25,7 @@ import PrintHistory from "./components/PrintHistory";
 import AddPrinterModal from "./components/AddPrinterModal";
 import type { Printer, AddPrinterFormData } from "@/types/printer";
 import type { PrintTask } from "./components/PrintHistory";
+import { toast } from "@/lib/toast";
 
 /**
  * 打印机管理页面组件
@@ -277,7 +278,7 @@ export default function PrintersPage() {
   const handleSettings = () => {
     // TODO: 实现设置页面或弹窗
     console.log("打开设置");
-    alert("打印机设置功能即将上线...");
+    toast.info("打印机设置功能即将上线...");
   };
 
   /**
@@ -286,7 +287,7 @@ export default function PrintersPage() {
   const handleTaskClick = (task: PrintTask) => {
     // TODO: 实现任务详情页面或弹窗
     console.log("查看任务详情:", task);
-    alert(`查看任务详情: ${task.name}\n\n此功能即将上线...`);
+    toast.info(`查看任务详情: ${task.name}\n\n此功能即将上线...`);
   };
 
   return (

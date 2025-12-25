@@ -114,6 +114,12 @@ export interface ApiClientOptions extends RequestInit {
   disableRetry?: boolean;
   /** 是否禁用自动错误处理（默认 false，即自动抛出 ApiError） */
   disableErrorHandling?: boolean;
+  /** 是否自动显示 Toast 提示（默认 true） */
+  autoToast?: boolean;
+  /** Toast 消息前缀（可选） */
+  toastContext?: string;
+  /** 自定义 Toast 类型（可选） */
+  toastType?: "success" | "error" | "warning" | "info";
 }
 
 /**
@@ -133,7 +139,7 @@ function wrapResponse(response: Response): Response {
 }
 
 /**
- * 全局 API 客户端
+ * 核心 API 客户端（内部函数）
  *
  * **功能**：
  * - 自动拦截 401 响应并弹出登录弹窗
@@ -144,35 +150,15 @@ function wrapResponse(response: Response): Response {
  * - 支持 304 Not Modified 优化
  * - 所有请求通过 lumi-server 统一网关
  *
- * **使用方式**：
- * ```typescript
- * try {
- *   // 业务 API（自动添加 Token，自动处理错误）
- *   const response = await apiClient('/api/tasks', {
- *     method: 'POST',
- *     body: JSON.stringify({ prompt: 'test' }),
- *     context: 'workspace',
- *   });
- *   const data = await response.json();
- *   // 只有成功响应（2xx）才会执行到这里
- * } catch (error) {
- *   if (error instanceof ApiError) {
- *     // 处理 API 错误（4xx, 5xx）
- *     if (error.hasStatus(404)) {
- *       console.log('资源不存在');
- *     } else if (error.isServerError()) {
- *       console.log('服务器错误');
- *     }
- *   }
- * }
- * ```
+ * **注意**：这是内部函数,不对外导出。请使用 apiRequest 系列函数。
  *
  * @param url - 请求 URL（相对路径，如 '/api/tasks'）
  * @param options - 请求选项
  * @returns Response 对象（json() 方法已被包装，会自动转换 URL）
  * @throws {ApiError} 当响应状态码为 4xx 或 5xx 时（除非 disableErrorHandling=true）
  */
-export async function apiClient(
+// 核心 API 客户端（内部函数，不导出）
+async function apiClient(
   url: string,
   options: ApiClientOptions = {},
 ): Promise<Response> {
@@ -285,89 +271,6 @@ export async function apiClient(
 }
 
 /**
- * API 客户端便捷方法 - GET 请求
- */
-export async function apiGet(
-  url: string,
-  options: Omit<ApiClientOptions, "method" | "body"> = {},
-): Promise<Response> {
-  return apiClient(url, {
-    ...options,
-    method: "GET",
-  });
-}
-
-/**
- * API 客户端便捷方法 - POST 请求
- */
-export async function apiPost(
-  url: string,
-  body: unknown,
-  options: Omit<ApiClientOptions, "method" | "body"> = {},
-): Promise<Response> {
-  return apiClient(url, {
-    ...options,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-/**
- * API 客户端便捷方法 - PATCH 请求
- */
-export async function apiPatch(
-  url: string,
-  body: unknown,
-  options: Omit<ApiClientOptions, "method" | "body"> = {},
-): Promise<Response> {
-  return apiClient(url, {
-    ...options,
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-/**
- * API 客户端便捷方法 - PUT 请求
- */
-export async function apiPut(
-  url: string,
-  body: unknown,
-  options: Omit<ApiClientOptions, "method" | "body"> = {},
-): Promise<Response> {
-  return apiClient(url, {
-    ...options,
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-/**
- * API 客户端便捷方法 - DELETE 请求
- */
-export async function apiDelete(
-  url: string,
-  options: Omit<ApiClientOptions, "method" | "body"> = {},
-): Promise<Response> {
-  return apiClient(url, {
-    ...options,
-    method: "DELETE",
-  });
-}
-
-/**
  * 创建 SSE 连接（使用统一的 API 配置）
  *
  * 支持跨域携带 Token，确保与 fetch 请求的认证机制一致
@@ -452,11 +355,35 @@ export async function apiRequest<T = any>(
     // 调用底层 apiClient（自动处理错误）
     const response = await apiClient(url, options);
 
+    // ✅ 特殊处理：304 Not Modified（响应体为空，不解析 JSON）
+    if (response.status === 304) {
+      // 返回一个特殊的 NOT_MODIFIED 错误
+      const notModifiedError = new ApiError(
+        304,
+        "数据未修改",
+        "NOT_MODIFIED",
+        null
+      );
+
+      return {
+        success: false,
+        error: notModifiedError,
+      };
+    }
+
     // 解析 JSON
     const json = await response.json();
 
     // 提取 JSend 格式中的 data 字段
     const data = json.status === "success" ? json.data : json;
+
+    // ✅ 自动显示成功 Toast（如果配置了 toastType）
+    if (options.toastType === "success") {
+      // 动态导入避免循环依赖
+      const { toast } = await import("@/lib/toast");
+      const message = options.toastContext || "操作成功";
+      toast.success(message);
+    }
 
     return {
       success: true,
@@ -465,6 +392,16 @@ export async function apiRequest<T = any>(
   } catch (error) {
     // 捕获 ApiError 或其他错误
     if (error instanceof ApiError) {
+      // ✅ 自动显示错误 Toast（默认启用，可通过 autoToast=false 关闭）
+      if (options.autoToast !== false) {
+        // 动态导入避免循环依赖
+        const { toast } = await import("@/lib/toast");
+        const message = options.toastContext
+          ? `${options.toastContext}: ${error.message}`
+          : error.message;
+        toast.error(message);
+      }
+
       return {
         success: false,
         error,
@@ -472,9 +409,20 @@ export async function apiRequest<T = any>(
     }
 
     // 网络错误或其他未知错误
+    const networkError = new ApiError(
+      0,
+      error instanceof Error ? error.message : "未知错误",
+    );
+
+    // ✅ 自动显示网络错误 Toast
+    if (options.autoToast !== false) {
+      const { toast } = await import("@/lib/toast");
+      toast.error(networkError.message);
+    }
+
     return {
       success: false,
-      error: new ApiError(0, error instanceof Error ? error.message : "未知错误"),
+      error: networkError,
     };
   }
 }

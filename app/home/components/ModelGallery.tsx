@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestGet, apiRequestPost } from "@/lib/api-client";
 import { useUser, useIsLoaded } from "@/stores/auth-store";
 import { useModal } from "../hooks/useModal";
 import { useScrollReveal } from "../hooks/useScrollReveal";
@@ -123,49 +122,35 @@ export default function ModelGallery() {
         modelIds: modelIds.slice(0, 3), // 只显示前3个
       });
 
-      try {
-        if (!user) {
-          console.log('⚠️ [批量加载交互状态] 用户未登录，跳过');
-          return;
-        }
+      if (!user) {
+        console.log('⚠️ [批量加载交互状态] 用户未登录，跳过');
+        return;
+      }
 
-        console.log('📤 [批量加载交互状态] 发送请求', {
-          url: '/api/gallery/models/batch-interactions',
-          modelIds,
+      console.log('📤 [批量加载交互状态] 发送请求', {
+        url: '/api/gallery/models/batch-interactions',
+        modelIds,
+      });
+
+      const result = await apiRequestPost<{
+        isAuthenticated: boolean;
+        interactions: Record<string, { isLiked: boolean; isFavorited: boolean }>;
+      }>("/api/gallery/models/batch-interactions", { modelIds });
+
+      console.log('📥 [批量加载交互状态] 收到响应', {
+        success: result.success,
+      });
+
+      if (result.success) {
+        console.log('✅ [批量加载交互状态] 成功', {
+          isAuthenticated: result.data.isAuthenticated,
+          interactionsCount: Object.keys(result.data.interactions).length,
         });
-
-        const response = await apiPost(
-          "/api/gallery/models/batch-interactions",
-          { modelIds },
-        );
-
-        console.log('📥 [批量加载交互状态] 收到响应', {
-          ok: response.ok,
-          status: response.status,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // JSend 格式判断
-          if (isSuccess(data)) {
-            const batchResult = data.data as {
-              isAuthenticated: boolean;
-              interactions: Record<
-                string,
-                { isLiked: boolean; isFavorited: boolean }
-              >;
-            };
-            console.log('✅ [批量加载交互状态] 成功', {
-              isAuthenticated: batchResult.isAuthenticated,
-              interactionsCount: Object.keys(batchResult.interactions).length,
-            });
-            if (batchResult.isAuthenticated) {
-              setInteractionStatuses(batchResult.interactions);
-            }
-          }
+        if (result.data.isAuthenticated) {
+          setInteractionStatuses(result.data.interactions);
         }
-      } catch (error) {
-        console.error("❌ [批量加载交互状态] 失败:", error);
+      } else {
+        console.error("❌ [批量加载交互状态] 失败:", result.error.message);
       }
     },
     [user],
@@ -180,53 +165,39 @@ export default function ModelGallery() {
       setLoading(true);
       setError(null);
 
-      try {
-        const currentOffset = reset ? 0 : offset;
-        const response = await apiGet(
-          `/api/gallery/models?sortBy=${sortBy}&limit=${LIMIT}&offset=${currentOffset}`,
-        );
+      const currentOffset = reset ? 0 : offset;
+      const result = await apiRequestGet<{
+        items: UserAsset[];
+        hasMore: boolean;
+      }>(
+        `/api/gallery/models?sortBy=${sortBy}&limit=${LIMIT}&offset=${currentOffset}`,
+      );
 
-        if (!response.ok) {
-          throw new Error(`API 请求失败: ${response.status}`);
+      if (result.success) {
+        const galleryData = result.data;
+
+        // 调试：检查 galleryData 和 items
+        console.log("🔍 galleryData:", galleryData);
+        console.log("🔍 galleryData.items:", galleryData.items);
+
+        const newModels = galleryData.items || []; // 防御性：如果 items 不存在则使用空数组
+
+        // 更新模型列表
+        setModels((prev) => (reset ? newModels : [...prev, ...newModels]));
+        setHasMore(galleryData.hasMore);
+        setOffset(reset ? LIMIT : currentOffset + LIMIT);
+
+        // 批量加载交互状态
+        if (newModels.length > 0) {
+          const modelIds = newModels.map((model: UserAsset) => model.id);
+          await loadInteractionStatuses(modelIds);
         }
-
-        const data = await response.json();
-
-        // JSend 格式判断（注意：后端返回 data.items，不是 data.models）
-        if (isSuccess(data)) {
-          // 调试：检查实际返回的数据结构
-          console.log("🔍 API返回数据:", JSON.stringify(data, null, 2));
-
-          const galleryData = data.data as {
-            items: UserAsset[];
-            hasMore: boolean;
-          };
-
-          // 调试：检查 galleryData 和 items
-          console.log("🔍 galleryData:", galleryData);
-          console.log("🔍 galleryData.items:", galleryData.items);
-
-          const newModels = galleryData.items || []; // 防御性：如果 items 不存在则使用空数组
-
-          // 更新模型列表
-          setModels((prev) => (reset ? newModels : [...prev, ...newModels]));
-          setHasMore(galleryData.hasMore);
-          setOffset(reset ? LIMIT : currentOffset + LIMIT);
-
-          // 批量加载交互状态
-          if (newModels.length > 0) {
-            const modelIds = newModels.map((model: UserAsset) => model.id);
-            await loadInteractionStatuses(modelIds);
-          }
-        } else {
-          throw new Error(getErrorMessage(data));
-        }
-      } catch (err) {
-        console.error("加载模型失败:", err);
-        setError(err instanceof Error ? err.message : "加载失败");
-      } finally {
-        setLoading(false);
+      } else {
+        console.error("加载模型失败:", result.error.message);
+        setError(result.error.message);
       }
+
+      setLoading(false);
     },
     [sortBy, offset, loadInteractionStatuses],
   );

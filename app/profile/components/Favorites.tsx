@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { apiGet } from "@/lib/api-client";
+import { apiRequestGet } from "@/lib/api-client";
 import SkeletonCard from "@/components/ui/SkeletonCard";
 import type { Model } from "@/types";
 
@@ -21,41 +21,33 @@ export default function Favorites() {
 	// 加载收藏数据
 	useEffect(() => {
 		const fetchFavorites = async () => {
-			try {
-				setLoading(true);
-				setError(null);
+			setLoading(true);
+			setError(null);
 
-				const response = await apiGet("/api/users/favorites");
-				const data = await response.json();
+			// ✅ 使用 apiRequestGet,自动处理错误和 Toast
+			const result = await apiRequestGet<Model[]>("/api/users/favorites", {
+				autoToast: false,  // 禁用自动 Toast,使用自定义错误 UI
+			});
 
-				// biome-ignore lint/suspicious/noExplicitAny: API 返回类型不确定
-				if (data.status === "success") {
-					// 确保 data.data 是数组
-					const favoritesArray = Array.isArray(data.data) ? data.data : [];
-					setFavorites(favoritesArray);
-				} else {
-					setError("加载收藏失败");
-				}
-			} catch (err) {
-				console.error("加载收藏夹失败:", err);
-				const errorMessage = err instanceof Error ? err.message : "加载收藏失败,请稍后重试";
-				setError(errorMessage);
-			} finally {
-				setLoading(false);
+			if (result.success) {
+				// 确保 data 是数组
+				const favoritesArray = Array.isArray(result.data) ? result.data : [];
+				setFavorites(favoritesArray);
+			} else {
+				// 失败时设置错误状态(用于显示错误 UI)
+				setError(result.error.message);
 			}
+
+			setLoading(false);
 		};
 
 		fetchFavorites();
 	}, []);
 
 	// 取消收藏
-	const handleUnfavorite = async (modelId: string) => {
-		try {
-			// TODO: 调用取消收藏 API
-			setFavorites((prev) => prev.filter((m) => m.id !== modelId));
-		} catch (error) {
-			console.error("取消收藏失败:", error);
-		}
+	const handleUnfavorite = (modelId: string) => {
+		// TODO: 调用取消收藏 API
+		setFavorites((prev) => prev.filter((m) => m.id !== modelId));
 	};
 
 	// 查看模型详情

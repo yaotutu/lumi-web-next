@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
-import { apiDelete, apiGet } from "@/lib/api-client";
+import { apiRequestDelete, apiRequestGet } from "@/lib/api-client";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 // 认证状态管理
 import { useIsAuthenticated, useIsLoaded } from "@/stores/auth-store";
@@ -30,20 +30,17 @@ export default function HistoryPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
-      try {
-        const response = await apiGet("/api/tasks");
-        const rawData = await response.json();
-        const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
+      // 获取任务列表
+      const result = await apiRequestGet("/api/tasks");
+      const rawData = { data: result.data, status: result.success ? "success" : "fail" };
+      const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
-        // JSend 格式判断
-        if (data.status === "success") {
-          setTasks(data.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch tasks:", error);
-      } finally {
-        setLoading(false);
+      // JSend 格式判断
+      if (data.status === "success") {
+        setTasks(data.data);
       }
+
+      setLoading(false);
     };
 
     // 只在已登录时获取任务列表
@@ -57,14 +54,11 @@ export default function HistoryPage() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("确定要删除这个任务吗？")) return;
 
-    try {
-      const response = await apiDelete(`/api/tasks/${taskId}`);
+    // 调用删除 API
+    const result = await apiRequestDelete(`/api/tasks/${taskId}`);
 
-      if (response.ok) {
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      }
-    } catch (error) {
-      console.error("Failed to delete task:", error);
+    if (result.success) {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
     }
   };
 

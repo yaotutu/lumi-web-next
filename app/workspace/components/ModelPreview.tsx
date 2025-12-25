@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
-import { apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestPost } from "@/lib/api-client";
 import { downloadModel } from "@/lib/utils/download";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
+import { toast } from "@/lib/toast";
 
 // 材质颜色选项
 const MATERIAL_COLORS = [
@@ -113,32 +113,22 @@ export default function ModelPreview({
 
     setIsPrinting(true);
 
-    try {
-      const response = await apiPost(`/api/tasks/${taskId}/print`, {});
+    // 调用打印 API
+    const result = await apiRequestPost(`/api/tasks/${taskId}/print`, {});
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        setToast({
-          type: "success",
-          message: "打印任务已开始，正在处理中...",
-        });
-      } else {
-        setToast({
-          type: "error",
-          message: `打印任务提交失败：${getErrorMessage(data)}`,
-        });
-      }
-    } catch (error) {
-      console.error("提交打印任务失败:", error);
+    if (result.success) {
+      setToast({
+        type: "success",
+        message: "打印任务已开始，正在处理中...",
+      });
+    } else {
       setToast({
         type: "error",
-        message: `提交打印任务失败：${error instanceof Error ? error.message : "网络错误"}`,
+        message: `打印任务提交失败：${result.error.message}`,
       });
-    } finally {
-      setIsPrinting(false);
     }
+
+    setIsPrinting(false);
   }, [taskId]);
 
   // 切换全屏
@@ -827,25 +817,19 @@ export default function ModelPreview({
                 className="btn-primary w-full"
                 onClick={async () => {
                   if (!taskId) return;
-                  try {
-                    // 调用重试API
-                    const response = await apiPost(
-                      `/api/tasks/${taskId}/retry`,
-                      { type: "model" },
-                    );
 
-                    const data = await response.json();
-                    // JSend 格式判断
-                    if (isSuccess(data)) {
-                      // 重试成功,刷新页面以获取最新任务状态
-                      window.location.reload();
-                    } else {
-                      console.error("重试失败:", getErrorMessage(data));
-                      alert(`重试失败: ${getErrorMessage(data)}`);
-                    }
-                  } catch (error) {
-                    console.error("重试请求失败:", error);
-                    alert("重试请求失败,请检查网络连接");
+                  // 调用重试 API
+                  const result = await apiRequestPost(
+                    `/api/tasks/${taskId}/retry`,
+                    { type: "model" },
+                  );
+
+                  if (result.success) {
+                    // 重试成功,刷新页面以获取最新任务状态
+                    window.location.reload();
+                  } else {
+                    console.error("重试失败:", result.error.message);
+                    toast.error(`重试失败: ${result.error.message}`);
                   }
                 }}
               >

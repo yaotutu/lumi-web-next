@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Tooltip from "@/components/ui/Tooltip";
 // 全局 API 客户端（自动处理 401 登录）
-import { apiPost } from "@/lib/api-client";
+import { apiRequestPost } from "@/lib/api-client";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
@@ -172,28 +171,21 @@ export default function ImageGrid({
     );
     setImageSlots(slots);
 
-    try {
-      // 使用 apiPost 创建新任务（自动处理 401 登录）
-      // 登录成功后会自动重试请求，prompt 保留在 store 中
-      const response = await apiPost(
-        "/api/tasks",
-        { prompt: trimmedText },
-        { context: "workspace" }, // 指定上下文为 workspace
-      );
+    // 使用新 API 创建新任务（自动处理 401 登录）
+    // 登录成功后会自动重试请求，prompt 保留在 store 中
+    const result = await apiRequestPost(
+      "/api/tasks",
+      { prompt: trimmedText },
+      { context: "workspace" }, // 指定上下文为 workspace
+    );
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (!isSuccess(data)) {
-        throw new Error(getErrorMessage(data));
-      }
-
-      const taskData = data.data as { id: string };
+    if (result.success) {
       // 任务创建成功，导航到新任务页面(轮询逻辑会自动更新任务状态)
+      const taskData = result.data as { id: string };
       window.location.href = `/workspace?taskId=${taskData.id}`;
-    } catch (err) {
-      console.error("创建任务失败:", err);
-      setError(err instanceof Error ? err.message : "创建任务失败,请重试");
+    } else {
+      console.error("创建任务失败:", result.error.message);
+      setError(result.error.message);
       setStatus("failed");
     }
   }, [prompt]);

@@ -51,6 +51,8 @@ NEXT_PUBLIC_MOCK_MODE=false
 | **[API_USAGE.md](docs/API_USAGE.md)** | API 快速上手指南 |
 | **[design-tokens.md](docs/design-tokens.md)** | 设计令牌：颜色、圆角、阴影、排版等 |
 | **[ui-optimization-suggestions.md](docs/ui-optimization-suggestions.md)** | UI 优化建议 |
+| **[TOAST_USAGE.md](docs/TOAST_USAGE.md)** | Toast 通知系统使用指南 |
+| **[API_ERROR_HANDLING.md](docs/API_ERROR_HANDLING.md)** | API 错误处理完整指南 |
 
 **💡 提示**：后端架构和 API 实现细节请查看 `lumi-server` 项目文档。
 
@@ -111,6 +113,8 @@ public/
 
 ### API 调用规范
 
+**🔥 核心规则：全局统一使用 `apiRequest` 系列函数，禁止使用原生 `fetch` 或其他网络请求方式。**
+
 **🚀 推荐使用高级 API**（`apiRequest` 系列）：
 
 ```typescript
@@ -150,40 +154,31 @@ const result = await apiRequestPatch(`/api/tasks/${taskId}`, {
 });
 ```
 
-**⚠️ 底层 API**（需要手动处理响应，不推荐日常使用）：
+**🎯 API 架构**：
 
-```typescript
-import { apiGet, apiPost } from '@/lib/api-client';
+本项目采用 **统一的 API 架构**，只对外暴露 6 个高级 API 函数：
 
-// 需要 try-catch 和手动解析 JSON
-try {
-  const response = await apiGet('/api/tasks/123');
-  const json = await response.json();
-  console.log(json.data);
-} catch (error) {
-  if (error instanceof ApiError) {
-    console.error(error.message);
-  }
-}
-```
+| 函数 | 用途 |
+|------|------|
+| `apiRequest<T>(url, options)` | 通用请求（自定义 method） |
+| `apiRequestGet<T>(url, options)` | GET 请求 |
+| `apiRequestPost<T>(url, body, options)` | POST 请求 |
+| `apiRequestPatch<T>(url, body, options)` | PATCH 请求 |
+| `apiRequestPut<T>(url, body, options)` | PUT 请求 |
+| `apiRequestDelete<T>(url, options)` | DELETE 请求 |
 
-**📋 API 封装说明**：
-
-| 层级 | API | 返回值 | 使用场景 |
-|------|-----|--------|---------|
-| **高级 API** | `apiRequest`, `apiRequestGet`, `apiRequestPost` 等 | `{ success, data, error }` | ✅ **推荐** - 业务代码使用 |
-| **底层 API** | `apiClient`, `apiGet`, `apiPost` 等 | `Response` 对象（或抛出 `ApiError`） | ⚠️ 只在需要访问原始 Response 时使用 |
-
-**封装特性**：
+**所有 API 函数**：
+- ✅ 返回统一格式：`{ success, data, error }`
+- ✅ 自动处理错误，无需 try-catch
+- ✅ 自动显示 Toast（可配置）
+- ✅ 类型安全（支持泛型）
+- ✅ 自动解析 JSON
 - ✅ 自动添加 Bearer Token
 - ✅ 自动处理 401（弹出登录弹窗 + 重试）
-- ✅ 自动处理 4xx/5xx 错误（封装为 `ApiError`）
-- ✅ 自动解析 JSON 并提取 JSend 的 `data` 字段
 - ✅ 自动转换相对路径 URL 为完整 URL
 - ✅ 支持 304 Not Modified（轮询优化）
-- ✅ 类型安全（支持泛型）
 
-**HTTP 状态码**（语义化）：
+**📚 完整文档**：
 
 | 状态码 | 含义 | 处理方式 |
 |--------|------|---------|
@@ -222,6 +217,53 @@ try {
 **📚 详细文档**：
 - [lib/API_CLIENT_GUIDE.md](lib/API_CLIENT_GUIDE.md) - 完整使用指南
 - [lib/API_CLIENT_MIGRATION.md](lib/API_CLIENT_MIGRATION.md) - 从旧 API 迁移指南
+- [docs/TOAST_USAGE.md](docs/TOAST_USAGE.md) - Toast 使用指南
+- [docs/API_ERROR_HANDLING.md](docs/API_ERROR_HANDLING.md) - API 错误处理指南
+
+### Toast 通知系统
+
+全局 Toast 通知用于显示用户反馈,替代传统的 `alert()`:
+
+```typescript
+import { toast } from "@/lib/toast";
+
+// 成功提示
+toast.success("操作成功");
+
+// 错误提示
+toast.error("操作失败");
+
+// 警告提示
+toast.warning("请注意...");
+
+// 信息提示
+toast.info("功能开发中...");
+
+// 自定义显示时长(毫秒)
+toast.success("保存成功", 5000);
+```
+
+**与 API 集成**:
+
+```typescript
+import { apiRequestPost } from "@/lib/api-client";
+
+// ✅ 自动显示错误 Toast(默认启用)
+const result = await apiRequestPost("/api/tasks", data);
+
+// ✅ 显示成功 Toast
+const result = await apiRequestPost("/api/tasks", data, {
+  toastType: "success",
+  toastContext: "创建任务",
+});
+
+// ✅ 禁用自动 Toast
+const result = await apiRequestPost("/api/tasks", data, {
+  autoToast: false,
+});
+```
+
+详见 [Toast 使用指南](docs/TOAST_USAGE.md)
 
 ### 状态管理
 

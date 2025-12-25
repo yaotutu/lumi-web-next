@@ -4,11 +4,13 @@ import "./globals.css";
 import AuthProvider from "@/components/providers/AuthProvider";
 // 全局登录弹窗组件
 import LoginModal from "@/components/auth/LoginModal";
+// 全局 Toast 组件
+import GlobalToast from "@/components/ui/GlobalToast";
 
 // 移除自定义字体配置,使用系统默认字体以兼容 Turbopack
 export const metadata: Metadata = {
   title: "AI3D",
-  description: "AI 3D 模型生成平台 - 输入文字描述，一键生成高质量3D模型",
+  description: "AI 3D 模型生成平台 - 输入文字描述,一键生成高质量3D模型",
 };
 
 export default function RootLayout({
@@ -26,6 +28,9 @@ export default function RootLayout({
 
           {/* 全局登录弹窗（响应 API 401 错误） */}
           <LoginModal />
+
+          {/* 全局 Toast 提示 */}
+          <GlobalToast />
         </AuthProvider>
       </body>
     </html>

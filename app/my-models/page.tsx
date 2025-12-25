@@ -10,6 +10,7 @@ import { NoModelsEmptyState } from '@/components/ui/EmptyState';
 import Navigation from '@/components/layout/Navigation';
 import { useModal } from '@/app/home/hooks/useModal';
 import ModelDetailModal from '@/app/home/components/ModelDetailModal';
+import { toast } from '@/lib/toast';
 
 /**
  * 我的模型管理页面
@@ -93,13 +94,13 @@ export default function MyModelsPage() {
 				// 从列表中移除（乐观更新）
 				setModels((prev) => prev.filter((m) => m.id !== modelId));
 				setTotalCount((prev) => prev - 1);
-				alert('删除成功');
+				toast.success('删除成功');
 			} else {
-				alert(`删除失败: ${result.error.message}`);
+				toast.error(`删除失败: ${result.error.message}`);
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : '删除失败';
-			alert(`删除失败: ${message}`);
+			toast.error(`删除失败: ${message}`);
 			console.error('删除模型失败:', err);
 		}
 	};
@@ -133,13 +134,13 @@ export default function MyModelsPage() {
 					setPublicCount((prev) => prev - 1);
 				}
 
-				alert(`${actionText}成功`);
+				toast.success(`${actionText}成功`);
 			} else {
-				alert(`${actionText}失败: ${result.error.message}`);
+				toast.error(`${actionText}失败: ${result.error.message}`);
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : '操作失败';
-			alert(`${actionText}失败: ${message}`);
+			toast.error(`${actionText}失败: ${message}`);
 			console.error('切换可见性失败:', err);
 		}
 	};

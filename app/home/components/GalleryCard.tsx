@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestPost } from "@/lib/api-client";
 import { useUser } from "@/stores/auth-store";
+import { toast } from "@/lib/toast";
 
 export type GalleryCardProps = {
   modelId: string;
@@ -59,7 +59,7 @@ export default function GalleryCard({
   const handleInteraction = async (type: "LIKE" | "FAVORITE") => {
     if (!user) {
       // 未登录用户，显示提示或跳转登录页
-      alert("请先登录后再进行操作");
+      toast.error("请先登录后再进行操作");
       return;
     }
 
@@ -84,42 +84,33 @@ export default function GalleryCard({
       setCurrentFavorites((prev) => (isInteracted ? prev - 1 : prev + 1));
     }
 
-    try {
-      const response = await apiPost(
-        `/api/gallery/models/${modelId}/interactions`,
-        { type },
-      );
+    // 使用新 API 函数
+    const result = await apiRequestPost(
+      `/api/gallery/models/${modelId}/interactions`,
+      { type },
+    );
 
-      if (!response.ok) {
-        throw new Error("操作失败");
-      }
-
-      const data = await response.json();
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        // 使用服务器返回的权威数据（确保前后端同步）
-        const interactionResult = data.data as {
-          isInteracted: boolean;
-          likeCount: number;
-          favoriteCount: number;
-        };
-        setCurrentLikes(interactionResult.likeCount);
-        setCurrentFavorites(interactionResult.favoriteCount);
-        setInteractionStatus((prev) => ({
-          ...prev,
-          isLiked:
-            type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
-          isFavorited:
-            type === "FAVORITE"
-              ? interactionResult.isInteracted
-              : prev.isFavorited,
-        }));
-      } else {
-        throw new Error(getErrorMessage(data));
-      }
-    } catch (error) {
-      console.error("Interaction failed:", error);
+    if (result.success) {
+      // 使用服务器返回的权威数据（确保前后端同步）
+      const interactionResult = result.data as {
+        isInteracted: boolean;
+        likeCount: number;
+        favoriteCount: number;
+      };
+      setCurrentLikes(interactionResult.likeCount);
+      setCurrentFavorites(interactionResult.favoriteCount);
+      setInteractionStatus((prev) => ({
+        ...prev,
+        isLiked:
+          type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
+        isFavorited:
+          type === "FAVORITE"
+            ? interactionResult.isInteracted
+            : prev.isFavorited,
+      }));
+    } else {
       // 回滚到初始状态
+      console.error("Interaction failed:", result.error.message);
       if (type === "LIKE") {
         setInteractionStatus((prev) => ({ ...prev, isLiked: isInteracted }));
         setCurrentLikes(likes);
@@ -130,9 +121,9 @@ export default function GalleryCard({
         }));
         setCurrentFavorites(favorites);
       }
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (

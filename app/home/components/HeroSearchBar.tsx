@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import { apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestPost } from "@/lib/api-client";
 
 export type HeroSearchBarProps = ComponentPropsWithoutRef<"div">;
 
@@ -59,26 +58,16 @@ export default function HeroSearchBar({
     setError("");
     setIsCreating(true);
 
-    try {
-      // 调用API创建任务
-      const response = await apiPost("/api/tasks", { prompt: trimmedPrompt });
+    // 调用 API 创建任务
+    const result = await apiRequestPost("/api/tasks", { prompt: trimmedPrompt });
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        const taskData = data.data as { id: string };
-        // 使用任务ID跳转到工作台
-        router.push(`/workspace?taskId=${taskData.id}`);
-      } else {
-        // 处理API错误
-        setError(getErrorMessage(data));
-        setIsCreating(false);
-      }
-    } catch (err) {
-      // 处理网络错误
-      console.error("Failed to create task:", err);
-      setError("网络错误，请检查连接后重试");
+    if (result.success) {
+      const taskData = result.data as { id: string };
+      // 使用任务ID跳转到工作台
+      router.push(`/workspace?taskId=${taskData.id}`);
+    } else {
+      // 处理 API 错误
+      setError(result.error.message);
       setIsCreating(false);
     }
   };

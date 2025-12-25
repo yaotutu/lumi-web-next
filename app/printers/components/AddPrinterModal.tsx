@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import type { AddPrinterFormData } from "@/types/printer";
+import { toast } from "@/lib/toast";
 
 /**
  * 组件属性接口
@@ -79,7 +80,7 @@ export default function AddPrinterModal({
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // 测试成功，显示提示
-      alert("✅ 连接成功!");
+      toast.success("✅ 连接成功!");
     } catch (err) {
       // 测试失败，设置错误信息
       setError("连接失败，请检查 IP 地址和 API Key");
