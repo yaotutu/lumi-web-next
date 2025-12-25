@@ -7,12 +7,12 @@ Lumi Web Next - AI 3D 模型生成平台前端项目开发指南
 AI 3D 模型生成平台前端：用户输入文本 → 生成 4 张图片 → 选择图片 → 生成 3D 模型
 
 **技术栈核心**：
-- Next.js 15.5.4 (App Router + Turbopack) + React 19 + TypeScript 5
-- Three.js 0.180.0 + @react-three/fiber + @react-three/drei
-- Zustand (状态管理)
+- Next.js 15.5.4 (App Router + Turbopack) + React 19.1.0 + TypeScript 5
+- Three.js 0.180.0 + @react-three/fiber 9.3.0 + @react-three/drei 10.7.6
+- Zustand (状态管理，无 Context API)
 - TailwindCSS + 自定义设计系统
 
-**后端项目**：lumi-server（独立的 Fastify + Prisma 后端）
+**后端项目**：lumi-server（独立的 Fastify + Drizzle ORM 后端）
 
 ## 快速开始
 
@@ -62,40 +62,48 @@ NEXT_PUBLIC_MOCK_MODE=false
 
 ```
 app/
-├── (routes)/               # 页面路由
-│   ├── page.tsx           # 首页（Hero + 模型画廊）
-│   ├── workspace/         # 工作台（图片生成 + 3D 模型生成）
-│   ├── history/           # 历史记录
-│   ├── gallery/[id]/      # 模型详情页
-│   └── login/             # 邮箱验证码登录
-├── api/                   # API 路由（代理服务）
-│   └── proxy/             # CORS 代理（图片/模型）
-└── globals.css            # 全局样式
+├── page.tsx              # 首页（Hero + 模型画廊）
+├── workspace/            # 工作台（图片生成 + 3D 模型生成）
+├── history/              # 历史记录
+├── login/                # 邮箱验证码登录
+├── profile/              # 用户资料（创作历史、收藏）
+├── my-models/            # 我的模型
+├── printers/             # 3D 打印服务
+├── api-docs/             # API 文档
+├── api/                  # API 路由（代理服务）
+│   └── proxy/            # CORS 代理（图片/模型）
+└── globals.css           # 全局样式
 
 components/
-├── layout/                # 布局组件（Navigation、Footer）
-├── ui/                    # 通用 UI 组件
-└── workspace/             # 工作台专用组件
+├── layout/               # 布局组件（Navigation、LoginModal）
+├── ui/                   # 通用 UI 组件（Toast、Tooltip 等）
+└── workspace/            # 工作台专用组件
 
 lib/
-├── api/                   # API 客户端封装
-├── stores/                # Zustand 状态管理
-├── hooks/                 # 自定义 React Hooks
-└── utils/                 # 工具函数
+├── api-client.ts         # ✅ 统一 API 客户端（强制使用）
+├── stores/               # Zustand 状态管理（无 Context API）
+│   ├── auth-store.ts     # 认证状态
+│   ├── login-modal-store.ts  # 登录弹窗状态
+│   └── token-store.ts    # Token 管理
+├── hooks/                # 自定义 React Hooks
+├── utils/                # 工具函数
+│   └── task-adapter-client.ts  # 后端数据适配器
+└── config/               # 配置文件
 
 public/
-├── demo.glb               # 示例 3D 模型
-├── demo.3mf               # 示例 3MF 文件
-└── generated/             # 用户生成的图片和模型
+└── demo.glb              # 示例 3D 模型
 ```
 
 ## 页面结构
 
 - **`/`** - 首页（Hero + 模型画廊）
 - **`/workspace`** - 工作台（图片生成 + 3D 模型生成）
-- **`/history`** - 历史记录
-- **`/gallery/[id]`** - 模型详情页
+- **`/history`** - 历史记录（已废弃，移至 profile）
 - **`/login`** - 邮箱验证码登录
+- **`/profile`** - 用户资料（创作历史、收藏）
+- **`/my-models`** - 我的模型
+- **`/printers`** - 3D 打印服务
+- **`/api-docs`** - API 文档
 
 **关键组件位置**：
 - 页面专用组件：`app/[page]/components/`
@@ -267,28 +275,39 @@ const result = await apiRequestPost("/api/tasks", data, {
 
 ### 状态管理
 
-使用 Zustand 管理全局状态：
+**✅ 使用 Zustand（无 Context API）**
+
+本项目完全使用 Zustand 进行状态管理，不使用 React Context API：
 
 ```typescript
-// stores/workspace-form-store.ts
+// stores/auth-store.ts（认证状态）
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface WorkspaceFormStore {
-  prompt: string;
-  setPrompt: (prompt: string) => void;
+interface AuthStore {
+  user: User | null;
+  isAuthenticated: boolean;
+  setAuth: (user: User) => void;
+  clearAuth: () => void;
 }
 
-export const useWorkspaceFormStore = create<WorkspaceFormStore>()(
+export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
-      prompt: '',
-      setPrompt: (prompt) => set({ prompt }),
+      user: null,
+      isAuthenticated: false,
+      setAuth: (user) => set({ user, isAuthenticated: true }),
+      clearAuth: () => set({ user: null, isAuthenticated: false }),
     }),
-    { name: 'workspace-form' }
+    { name: 'auth-storage' }
   )
 );
 ```
+
+**现有 Zustand Stores**：
+- `auth-store.ts` - 认证状态
+- `login-modal-store.ts` - 登录弹窗状态
+- `token-store.ts` - Token 管理
 
 ## 样式系统
 
@@ -366,10 +385,9 @@ POST /api/auth/verify-code    // 验证验证码（登录/注册）
 GET  /api/auth/me             // 获取当前用户
 POST /api/auth/logout         // 登出
 
-// 客户端使用
-import { getCurrentUser, logout } from '@/lib/auth-client';
-const user = await getCurrentUser();
-await logout();
+// 客户端状态管理（Zustand）
+import { useAuthStore } from '@/stores/auth-store';
+const { user, isAuthenticated } = useAuthStore();
 ```
 
 **特性**：
@@ -377,29 +395,72 @@ await logout();
 - ✅ 开发环境验证码固定为 `0000`
 - ✅ Cookie 会话，有效期 7 天
 - ✅ 自动 401 处理（弹出登录弹窗）
-- ✅ 表单持久化（登录过程不丢失数据）
+- ✅ Zustand 持久化（刷新页面不丢失登录状态）
+- ✅ 登录弹窗组件（全局单例）
+
+## 数据适配器
+
+**后端数据格式转换**（`lib/utils/task-adapter-client.ts`）：
+
+由于后端采用 Worker 架构，需要使用数据适配器转换数据格式：
+
+```typescript
+import { adaptTaskResponse, adaptTasksResponse } from '@/lib/utils/task-adapter-client';
+
+// 单个任务适配
+const rawData = { data: result.data, status: "success" };
+const data = adaptTaskResponse(rawData);
+const task = data.data; // TaskWithDetails
+
+// 任务列表适配
+const rawData = { data: result.data, status: "success" };
+const data = adaptTasksResponse(rawData);
+const tasks = data.data; // TaskWithDetails[]
+```
+
+**适配器作用**：
+- 转换后端 `GenerationRequest` → 前端 `TaskWithDetails`
+- 添加 `url` 兼容字段（imageUrl → url）
+- 推导模型状态（generationStatus、progress）
+- 统一 status 和 phase 字段
+
+
 
 ## 重要提示
 
-1. **优先使用高级 API**（`apiRequest` 系列），让业务代码更简洁
-   - ✅ 推荐：`const result = await apiRequestGet<Task>('/api/tasks/123')`
-   - ❌ 不推荐：`const response = await apiGet('/api/tasks/123')`（需要手动处理响应）
+1. **🔥 强制规则：全局统一使用 `apiRequest` 系列函数**
+   - ✅ 正确：`apiRequestGet<Task>('/api/tasks/123')`
+   - ❌ 错误：`fetch('/api/tasks/123')`（禁止使用原生 fetch）
 
 2. **使用泛型提供类型提示**
-   - ✅ 推荐：`apiRequestGet<Task>('/api/tasks/123')`（有类型提示）
-   - ❌ 不推荐：`apiRequestGet('/api/tasks/123')`（data 类型为 any）
+   - ✅ 推荐：`apiRequestGet<Task>('/api/tasks/123')`
+   - ❌ 不推荐：`apiRequestGet('/api/tasks/123')`
 
-3. **使用代理服务访问外部资源**，避免 CORS 问题
+3. **后端数据必须经过适配器**
+   - ✅ 正确：`adaptTaskResponse(rawData)`
+   - ❌ 错误：直接使用 `result.data`
+
+4. **使用代理服务访问外部资源**，避免 CORS 问题
    - 图片代理：`/api/proxy/image?url=...`
    - 模型代理：`/api/proxy/model?url=...`
 
-4. **优先使用全局样式类**，保持设计系统一致性
-   - `.glass-panel`、`.btn-primary`、`.btn-secondary`、`.fade-in-up`
+5. **优先使用全局样式类**，保持设计系统一致性
+   - `.glass-panel`、`.btn-primary`、`.btn-secondary`
 
-5. **代码注释必须使用中文**，解释代码作用和目的
+6. **状态管理使用 Zustand**，不使用 Context API
+   - ✅ 正确：`useAuthStore`（Zustand）
+   - ❌ 错误：`createContext()`（Context API）
 
-6. **优先使用函数式编程**，统一使用 ESM 语法
-
-7. **状态持久化使用 Zustand persist 中间件**
+7. **代码注释必须使用中文**，解释代码作用和目的
 
 8. **未经允许，不允许提交代码到仓库**
+
+
+<!-- 以下规则为用户手动填写，任何时候都不应该被更改 -->
+# 最重要的规则，优先级最高的规则
+- 优先使用函数式编程
+- 代码注释需详尽，尤其是复杂逻辑部分
+- 每一行代码都要有详细的中文注释说明
+- 避免使用+=，-=等复合赋值运算符，可读性放在首位
+- 前后端交互遵循jsend标准
+- 遇到解决不了的问题，应该去查阅官方文档或者去网上搜索解决方案
