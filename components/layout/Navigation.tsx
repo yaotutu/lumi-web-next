@@ -16,6 +16,7 @@ const NAV_LINKS: NavLink[] = [
   { label: "3D工作台", href: "/workspace" },
   { label: "历史记录", href: "/history" },
   { label: "资产", href: "/assets" },
+  { label: "打印机", href: "/printers" },
 ];
 
 function IconAI3DGlyph() {

@@ -321,6 +321,16 @@ a:hover {
   .border-white-alpha-12 {
     border-color: rgba(255, 255, 255, 0.12);
   }
+
+  /* 隐藏滚动条但保持滚动功能 */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
 }
 
 @layer components {
@@ -398,6 +408,11 @@ a:hover {
     100% {
       background-position: 468px 0;
     }
+  }
+
+  /* 动画类 - 进度条流动光效 */
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
   }
 
   @keyframes fade-in {
