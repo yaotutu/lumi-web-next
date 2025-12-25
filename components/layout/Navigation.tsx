@@ -15,8 +15,8 @@ const NAV_LINKS: NavLink[] = [
   { label: "首页", href: "/" },
   { label: "3D工作台", href: "/workspace" },
   { label: "我的模型", href: "/my-models" },
-  { label: "历史记录", href: "/history" },
   { label: "打印机", href: "/printers" },
+  { label: "个人中心", href: "/profile" },
 ];
 
 function IconAI3DGlyph() {
