@@ -42,6 +42,8 @@ export default function GalleryCard({
   const [currentLikes, setCurrentLikes] = useState(likes);
   const [currentFavorites, setCurrentFavorites] = useState(favorites);
   const [isLoading, setIsLoading] = useState(false);
+  // 图片加载状态
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // 监听父组件传入的交互状态更新
   useEffect(() => {
@@ -147,13 +149,30 @@ export default function GalleryCard({
       }}
     >
       <div className="gallery-card__media">
+        {/* 图片占位符/加载状态 */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-white/5">
+            <div
+              className="absolute inset-0 -translate-x-full animate-[shimmer-wave_2s_infinite]"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
+                backgroundSize: "468px 100%",
+              }}
+            />
+          </div>
+        )}
         <Image
           src={image}
           alt={title}
           fill
           unoptimized
-          className="gallery-card__image"
+          className={`gallery-card__image transition-opacity duration-500 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
           sizes="(min-width: 1280px) 20vw, (min-width: 768px) 28vw, 80vw"
+          onLoad={() => setImageLoaded(true)}
+          loading="lazy"
         />
         <div className="gallery-card__overlay" />
       </div>

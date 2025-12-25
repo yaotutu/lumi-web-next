@@ -92,10 +92,13 @@ export default function HeroSearchBar({
 
   return (
     <div
-      className={`relative mx-auto mt-12 w-full max-w-[780px] ${className}`}
+      className={`relative mx-auto mt-14 w-full max-w-[780px] ${className}`}
       {...props}
     >
-      <div className="relative flex h-[72px] items-center gap-5 rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/4 px-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-[20px] transition-all duration-200 focus-within:border-yellow-1/60 focus-within:shadow-[0_8px_32px_rgba(249,207,0,0.2)]">
+      {/* 搜索框发光背景 */}
+      <div className="pointer-events-none absolute inset-0 -z-10 rounded-2xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-300 group-focus-within:opacity-100" />
+
+      <div className="group relative flex h-[76px] items-center gap-5 rounded-2xl border border-white/12 bg-gradient-to-br from-white/10 to-white/5 px-6 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-[24px] transition-all duration-300 focus-within:border-purple-400/50 focus-within:shadow-[0_12px_40px_rgba(168,85,247,0.25)]">
         {/* TODO: 图生3D功能 - 暂时隐藏，后期实现
             功能说明：用户上传参考图像，AI 根据图像生成 3D 模型
             实现要点：
@@ -142,7 +145,7 @@ export default function HeroSearchBar({
             onKeyDown={handleKeyDown}
             placeholder="描述你想生成的模型..."
             maxLength={IMAGE_GENERATION.MAX_PROMPT_LENGTH}
-            className="border-none bg-transparent text-[16px] text-white/85 outline-none placeholder:text-white/50"
+            className="border-none bg-transparent text-[17px] font-medium text-white/90 outline-none placeholder:text-white/45"
             aria-invalid={!!error}
           />
           {error && (
@@ -156,18 +159,18 @@ export default function HeroSearchBar({
           onClick={handleSubmit}
           disabled={isCreating}
           aria-label="提交生成请求"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-yellow-1/50 bg-gradient-to-br from-yellow-1 to-accent-yellow-dim text-black shadow-[0_8px_24px_rgba(249,207,0,0.4)] transition-all duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(249,207,0,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+          className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border border-yellow-1/60 bg-gradient-to-br from-yellow-1 via-yellow-1 to-accent-yellow-dim text-black shadow-[0_8px_28px_rgba(249,207,0,0.45)] transition-all duration-300 hover:scale-110 hover:shadow-[0_12px_36px_rgba(249,207,0,0.6)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
         >
           {isCreating ? (
             <svg
               aria-hidden="true"
               role="presentation"
               focusable="false"
-              className="h-5 w-5 animate-spin"
+              className="h-6 w-6 animate-spin"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth={2}
+              strokeWidth={2.5}
               strokeLinecap="round"
               strokeLinejoin="round"
             >
@@ -178,11 +181,11 @@ export default function HeroSearchBar({
               aria-hidden="true"
               role="presentation"
               focusable="false"
-              className="h-5 w-5"
+              className="h-6 w-6"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth={2}
+              strokeWidth={2.5}
               strokeLinecap="round"
               strokeLinejoin="round"
             >

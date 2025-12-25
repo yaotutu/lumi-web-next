@@ -3,6 +3,8 @@
 import { useState } from "react";
 import HeroSearchBar from "./HeroSearchBar";
 import WorkflowSteps from "./WorkflowSteps";
+import { useParallax } from "../hooks/useParallax";
+import ParticleBackground from "@/components/ui/ParticleBackground";
 
 // 快速提示词标签
 const PROMPT_TAGS = [
@@ -20,6 +22,10 @@ const PROMPT_TAGS = [
 export default function HeroSection() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
+  // 视差效果 - 不同速度产生层次感
+  const backgroundOffset = useParallax(0.3); // 背景慢速移动
+  const contentOffset = useParallax(0.15); // 内容更慢
+
   // 处理标签点击
   const handleTagClick = (tag: string) => {
     setSelectedTag(tag);
@@ -31,17 +37,29 @@ export default function HeroSection() {
 
   return (
     <section className="hero-section">
-      <div className="hero-background" />
+      {/* 背景层 - 应用视差效果 */}
+      <div
+        className="hero-background"
+        style={{ transform: `translateY(${backgroundOffset}px)` }}
+      />
+      {/* 粒子背景 */}
+      <ParticleBackground count={40} maxSize={5} minSize={1} />
       <div className="hero-noise" />
       <div className="hero-vignette" />
 
-      <div className="hero-container">
+      <div
+        className="hero-container"
+        style={{ transform: `translateY(${contentOffset}px)` }}
+      >
         {/* 标题区域 */}
         <div className="text-center">
-          <h1 className="text-[42px] font-bold uppercase tracking-[0.24em] text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.4)] md:text-[52px]">
-            一键生成任何3D内容
+          <h1 className="relative text-[42px] font-bold uppercase tracking-[0.24em] md:text-[52px]">
+            {/* 渐变文字效果 */}
+            <span className="bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(168,85,247,0.4)]">
+              一键生成任何3D内容
+            </span>
           </h1>
-          <p className="mt-4 text-[20px] font-medium text-white/60 md:text-[22px]">
+          <p className="mt-5 text-[20px] font-medium text-white/70 md:text-[22px]">
             最先进的 AI 3D 模型生成器
           </p>
         </div>

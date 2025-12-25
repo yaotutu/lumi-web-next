@@ -85,15 +85,15 @@ export default function WorkflowSteps() {
                   bg-gradient-to-br ${step.bgGradient}
                   border ${step.borderColor}
                   backdrop-blur-sm
-                  p-4 text-center
-                  min-h-[180px] flex flex-col justify-center
-                  transition-all duration-300 ease-out
+                  p-5 text-center
+                  min-h-[190px] flex flex-col justify-center
+                  transition-all duration-400 ease-out
                   ${
                     hoveredIndex === index
-                      ? "scale-105 shadow-xl border-opacity-60"
-                      : "hover:border-opacity-40"
+                      ? "scale-110 shadow-2xl border-opacity-80 -translate-y-2"
+                      : "hover:border-opacity-50 shadow-lg"
                   }
-                  ${step.highlight ? "ring-2 ring-yellow-1/20" : ""}
+                  ${step.highlight ? "ring-2 ring-yellow-1/30 shadow-[0_0_30px_rgba(249,207,0,0.2)]" : ""}
                 `}
               >
                 {/* 高亮标签 - 仅在"一键打印"步骤显示 */}
@@ -111,16 +111,16 @@ export default function WorkflowSteps() {
                 {/* 图标 */}
                 <div
                   className={`
-                    text-4xl mb-2
-                    transition-transform duration-300
-                    ${hoveredIndex === index ? "scale-110" : ""}
+                    text-5xl mb-3
+                    transition-all duration-400
+                    ${hoveredIndex === index ? "scale-125 rotate-6" : ""}
                   `}
                 >
                   {step.icon}
                 </div>
 
                 {/* 标题 */}
-                <h4 className="text-base font-semibold text-white mb-1">
+                <h4 className="text-lg font-bold text-white mb-1.5">
                   {step.title}
                 </h4>
 

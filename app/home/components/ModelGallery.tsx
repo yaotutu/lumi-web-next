@@ -5,9 +5,11 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { useUser, useIsLoaded } from "@/stores/auth-store";
 import { useModal } from "../hooks/useModal";
+import { useScrollReveal } from "../hooks/useScrollReveal";
 import type { GalleryCardProps } from "./GalleryCard";
 import GalleryCard from "./GalleryCard";
 import ModelDetailModal from "./ModelDetailModal";
+import SkeletonCard from "@/components/ui/SkeletonCard";
 
 // UserAsset 类型（从 API 返回）
 type UserAsset = {
@@ -75,6 +77,9 @@ function mapUserAssetToGalleryCard(
 export default function ModelGallery() {
   // 弹窗状态管理
   const { isOpen, currentModelId, openModal, closeModal } = useModal();
+
+  // 滚动显示动画
+  const { ref: galleryRef, isVisible } = useScrollReveal({ threshold: 0.1 });
 
   // 认证状态
   const user = useUser();
@@ -292,8 +297,14 @@ export default function ModelGallery() {
   }));
 
   return (
-    <section className="model-gallery">
-      <div className="model-gallery__container">
+    <section className="model-gallery" ref={galleryRef}>
+      <div
+        className={`model-gallery__container transition-all duration-700 ${
+          isVisible
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 translate-y-10"
+        }`}
+      >
         {/* 顶部标题和排序 */}
         <div className="model-gallery__header">
           <h2>模型画廊</h2>
@@ -369,22 +380,12 @@ export default function ModelGallery() {
             {loading && galleryItems.length === 0 && (
               <div className="model-gallery__grid">
                 {Array.from({ length: 12 }).map((_, index) => (
-                  <div
+                  <SkeletonCard
                     key={`skeleton-${
                       // biome-ignore lint/suspicious/noArrayIndexKey: skeleton items don't have stable IDs
                       index
                     }`}
-                    className="gallery-card animate-pulse"
-                  >
-                    <div className="gallery-card__media bg-white/5" />
-                    <div className="gallery-card__meta">
-                      <div className="h-4 bg-white/10 rounded mb-2" />
-                      <div className="flex justify-between">
-                        <div className="h-3 bg-white/5 rounded w-20" />
-                        <div className="h-3 bg-white/5 rounded w-10" />
-                      </div>
-                    </div>
-                  </div>
+                  />
                 ))}
               </div>
             )}
