@@ -619,7 +619,7 @@ function WorkspaceContent() {
       */}
       <div className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-auto">
         <ImageGrid
-          initialPrompt={task.prompt} // 传入任务的提示词（用于显示）
+          initialPrompt={task.originalPrompt || ''} // 传入任务的提示词（用于显示）
           onImageSelect={handleImageSelect} // 图片选择回调（预览用）
           onGenerate3D={handleGenerate3D} // 3D 生成回调（确认生成）
           task={task} // 完整的任务数据
@@ -636,7 +636,7 @@ function WorkspaceContent() {
       <div className="flex w-full flex-1 flex-col overflow-hidden">
         <ModelPreview
           imageIndex={selectedImageIndex} // 当前选中的图片索引
-          prompt={task.prompt} // 任务提示词
+          prompt={task.originalPrompt || ''} // 任务提示词
           task={task} // 完整的任务数据
           taskId={task.id} // 任务 ID
           onGenerate3D={handleGenerate3D} // 3D 生成回调

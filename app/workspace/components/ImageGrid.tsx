@@ -36,10 +36,10 @@ export default function ImageGrid({
 
   // 当 task 加载时，初始化 prompt 为服务端数据
   useEffect(() => {
-    if (task?.prompt) {
-      setPrompt(task.prompt);
+    if (task?.originalPrompt) {
+      setPrompt(task.originalPrompt);
     }
-  }, [task?.prompt]);
+  }, [task?.originalPrompt]);
 
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
@@ -274,7 +274,7 @@ export default function ImageGrid({
               原始描述
             </div>
             <div className="flex-1 text-text-muted text-sm leading-relaxed">
-              {task?.originalPrompt || task?.prompt || prompt}
+              {task?.originalPrompt || prompt}
             </div>
           </div>
         </div>

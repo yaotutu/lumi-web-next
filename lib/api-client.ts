@@ -418,7 +418,7 @@ export type ApiResult<T = any> = ApiSuccess<T> | ApiFailure;
  * // 1. 基础用法
  * const result = await apiRequest<Task>('/api/tasks/123');
  * if (result.success) {
- *   console.log(result.data.prompt); // TypeScript 自动推导类型
+ *   console.log(result.data.originalPrompt); // TypeScript 自动推导类型
  * } else {
  *   console.error(result.error.message);
  * }

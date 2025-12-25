@@ -167,7 +167,7 @@ export default function HistoryPage() {
                   {/* 任务信息 */}
                   <div className="p-4">
                     <h3 className="mb-2 line-clamp-2 text-sm font-medium text-white">
-                      {task.prompt}
+                      {task.originalPrompt || '未命名任务'}
                     </h3>
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">
