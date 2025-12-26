@@ -132,7 +132,7 @@ export default function PrinterCard({
   const handleStop = () => {
     // 使用原生 confirm 对话框进行二次确认
     const confirmed = confirm(
-      `确定要停止打印任务 "${printer.currentJob?.name}" 吗?\n\n此操作不可恢复。`
+      `确定要停止打印任务 "${printer.currentJob?.name}" 吗?\n\n此操作不可恢复。`,
     );
 
     // 用户确认后才执行停止操作

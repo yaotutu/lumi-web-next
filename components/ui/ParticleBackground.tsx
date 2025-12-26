@@ -23,15 +23,17 @@ export default function ParticleBackground({
   minDuration = 10,
 }: Partial<ParticleConfig> = {}) {
   // 使用 state 而不是 useMemo,避免 SSR/客户端不一致
-  const [particles, setParticles] = useState<Array<{
-    id: number;
-    size: number;
-    x: number;
-    y: number;
-    duration: number;
-    delay: number;
-    opacity: number;
-  }>>([]);
+  const [particles, setParticles] = useState<
+    Array<{
+      id: number;
+      size: number;
+      x: number;
+      y: number;
+      duration: number;
+      delay: number;
+      opacity: number;
+    }>
+  >([]);
 
   // 只在客户端生成粒子数据
   useEffect(() => {

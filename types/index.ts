@@ -12,55 +12,55 @@
 
 /** 请求状态 */
 export type RequestStatus =
-  | 'IMAGE_PENDING'
-  | 'IMAGE_GENERATING'
-  | 'IMAGE_COMPLETED'
-  | 'IMAGE_FAILED'
-  | 'MODEL_PENDING'
-  | 'MODEL_GENERATING'
-  | 'MODEL_COMPLETED'
-  | 'MODEL_FAILED'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED';
+  | "IMAGE_PENDING"
+  | "IMAGE_GENERATING"
+  | "IMAGE_COMPLETED"
+  | "IMAGE_FAILED"
+  | "MODEL_PENDING"
+  | "MODEL_GENERATING"
+  | "MODEL_COMPLETED"
+  | "MODEL_FAILED"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
 
 /** 请求阶段 */
 export type RequestPhase =
-  | 'IMAGE_GENERATION'
-  | 'AWAITING_SELECTION'
-  | 'MODEL_GENERATION'
-  | 'COMPLETED';
+  | "IMAGE_GENERATION"
+  | "AWAITING_SELECTION"
+  | "MODEL_GENERATION"
+  | "COMPLETED";
 
 /** 图片状态 */
-export type ImageStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+export type ImageStatus = "PENDING" | "GENERATING" | "COMPLETED" | "FAILED";
 
 /** Job 状态 */
 export type JobStatus =
-  | 'PENDING'
-  | 'RUNNING'
-  | 'RETRYING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED'
-  | 'TIMEOUT';
+  | "PENDING"
+  | "RUNNING"
+  | "RETRYING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED"
+  | "TIMEOUT";
 
 /** 模型来源 */
-export type ModelSource = 'AI_GENERATED' | 'USER_UPLOADED';
+export type ModelSource = "AI_GENERATED" | "USER_UPLOADED";
 
 /** 模型可见性 */
-export type ModelVisibility = 'PRIVATE' | 'PUBLIC';
+export type ModelVisibility = "PRIVATE" | "PUBLIC";
 
 /** 交互类型 */
-export type InteractionType = 'LIKE' | 'FAVORITE';
+export type InteractionType = "LIKE" | "FAVORITE";
 
 /** 打印状态 */
 export type PrintStatus =
-  | 'NOT_STARTED'
-  | 'SLICING'
-  | 'SLICE_COMPLETE'
-  | 'PRINTING'
-  | 'PRINT_COMPLETE'
-  | 'FAILED';
+  | "NOT_STARTED"
+  | "SLICING"
+  | "SLICE_COMPLETE"
+  | "PRINTING"
+  | "PRINT_COMPLETE"
+  | "FAILED";
 
 // ============================================
 // 基础数据类型（对应数据库表）

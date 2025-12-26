@@ -47,7 +47,8 @@ export default function EmptyPrinterState({
 
         {/* 描述文案 - 使用 text-white/60 降低视觉权重 */}
         <p className="mb-8 text-sm leading-relaxed text-white/60">
-          绑定你的 3D 打印机，即可远程监控打印进度、控制打印任务，让 3D 打印更高效
+          绑定你的 3D 打印机，即可远程监控打印进度、控制打印任务，让 3D
+          打印更高效
         </p>
 
         {/* 操作按钮组 - 移动端垂直排列，桌面端水平排列 */}

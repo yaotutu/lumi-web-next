@@ -83,4 +83,3 @@ export function buildApiUrl(endpoint: string): string {
 
   return `${normalizedBaseURL}${normalizedEndpoint}`;
 }
-

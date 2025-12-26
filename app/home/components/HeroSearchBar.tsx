@@ -59,7 +59,9 @@ export default function HeroSearchBar({
     setIsCreating(true);
 
     // 调用 API 创建任务
-    const result = await apiRequestPost("/api/tasks", { prompt: trimmedPrompt });
+    const result = await apiRequestPost("/api/tasks", {
+      prompt: trimmedPrompt,
+    });
 
     if (result.success) {
       const taskData = result.data as { id: string };

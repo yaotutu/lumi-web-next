@@ -728,13 +728,13 @@ export default function ModelPreview({
                           await downloadModel(
                             latestModel.modelUrl,
                             latestModel.id,
-                            latestModel.format || 'glb'
+                            latestModel.format || "glb",
                           );
                         } catch (error) {
-                          console.error('下载失败:', error);
+                          console.error("下载失败:", error);
                           setToast({
-                            type: 'error',
-                            message: `下载失败: ${error instanceof Error ? error.message : '未知错误'}`
+                            type: "error",
+                            message: `下载失败: ${error instanceof Error ? error.message : "未知错误"}`,
                           });
                         }
                       }

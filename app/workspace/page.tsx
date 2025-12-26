@@ -26,7 +26,10 @@ import { WorkspaceSkeleton } from "@/components/ui/Skeleton";
 // API 响应辅助函数（JSend 格式）
 import { apiRequestGet, apiRequestPatch } from "@/lib/api-client";
 // 数据适配器
-import { adaptTaskResponse, adaptTasksResponse } from "@/lib/utils/task-adapter-client";
+import {
+  adaptTaskResponse,
+  adaptTasksResponse,
+} from "@/lib/utils/task-adapter-client";
 // Toast 提示
 import { toast } from "@/lib/toast";
 // 任务数据类型定义（包含图片、模型等完整信息）
@@ -156,7 +159,11 @@ function WorkspaceContent() {
 
         // 2. 判断请求是否成功
         // 注意：后端返回 { items: [...], total: 1 }，需要检查 items 数组
-        if (result.success && result.data.items && result.data.items.length > 0) {
+        if (
+          result.success &&
+          result.data.items &&
+          result.data.items.length > 0
+        ) {
           // 3. ✅ 适配后端数据格式
           const rawData = { data: result.data, status: "success" };
           const data = adaptTasksResponse(rawData);
@@ -489,7 +496,10 @@ function WorkspaceContent() {
               // 判断请求是否成功
               if (pollResult.success) {
                 // ✅ 适配后端数据格式
-                const rawPollData = { data: pollResult.data, status: "success" };
+                const rawPollData = {
+                  data: pollResult.data,
+                  status: "success",
+                };
                 const pollData = adaptTaskResponse(rawPollData);
                 const updatedTask = pollData.data;
                 setTask(updatedTask);

@@ -89,7 +89,7 @@ export default function Navigation() {
     setIsLoggingOut(true);
 
     // 调用后端代理接口退出登录
-    await apiRequestPost('/api/auth/logout', {});
+    await apiRequestPost("/api/auth/logout", {});
 
     // 清除前端状态（无论登出接口成功与否）
     authActions.resetAuth();
@@ -158,7 +158,9 @@ export default function Navigation() {
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex h-9 items-center justify-center gap-2 rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
                 >
-                  <span className="max-w-[150px] truncate">{user.name || user.email || user.id}</span>
+                  <span className="max-w-[150px] truncate">
+                    {user.name || user.email || user.id}
+                  </span>
                   <svg
                     className={`h-4 w-4 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
                     fill="none"

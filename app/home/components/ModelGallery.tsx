@@ -115,7 +115,7 @@ export default function ModelGallery() {
    */
   const loadInteractionStatuses = useCallback(
     async (modelIds: string[]) => {
-      console.log('🔍 [批量加载交互状态] 开始', {
+      console.log("🔍 [批量加载交互状态] 开始", {
         hasUser: !!user,
         userId: user?.id,
         modelIdsCount: modelIds.length,
@@ -124,22 +124,25 @@ export default function ModelGallery() {
 
       // 🔥 可选认证：无论用户是否登录，都调用接口获取交互状态
       // 后端会根据 Token 自动判断是否返回用户特定的交互数据
-      console.log('📤 [批量加载交互状态] 发送请求', {
-        url: '/api/gallery/models/batch-interactions',
+      console.log("📤 [批量加载交互状态] 发送请求", {
+        url: "/api/gallery/models/batch-interactions",
         modelIds,
       });
 
       const result = await apiRequestPost<{
         isAuthenticated: boolean;
-        interactions: Record<string, { isLiked: boolean; isFavorited: boolean }>;
+        interactions: Record<
+          string,
+          { isLiked: boolean; isFavorited: boolean }
+        >;
       }>("/api/gallery/models/batch-interactions", { modelIds });
 
-      console.log('📥 [批量加载交互状态] 收到响应', {
+      console.log("📥 [批量加载交互状态] 收到响应", {
         success: result.success,
       });
 
       if (result.success) {
-        console.log('✅ [批量加载交互状态] 成功', {
+        console.log("✅ [批量加载交互状态] 成功", {
           isAuthenticated: result.data.isAuthenticated,
           interactionsCount: Object.keys(result.data.interactions).length,
         });
@@ -244,9 +247,7 @@ export default function ModelGallery() {
     <section className="model-gallery" ref={galleryRef}>
       <div
         className={`model-gallery__container transition-all duration-700 ${
-          isVisible
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 translate-y-10"
+          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
         }`}
       >
         {/* 顶部标题和排序 */}

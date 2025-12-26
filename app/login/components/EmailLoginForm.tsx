@@ -39,7 +39,7 @@ export default function EmailLoginForm() {
   const redirect = searchParams.get("redirect") || "/";
 
   // Tab 切换状态
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
   // 表单状态
   const [email, setEmail] = useState("");
@@ -61,7 +61,7 @@ export default function EmailLoginForm() {
   }, [countdown]);
 
   // 切换 Tab 时重置状态
-  const handleTabChange = (tab: 'login' | 'register') => {
+  const handleTabChange = (tab: "login" | "register") => {
     setActiveTab(tab);
     setCode("");
     setCodeSent(false);
@@ -89,9 +89,9 @@ export default function EmailLoginForm() {
     setIsSendingCode(true);
 
     // 调用后端代理接口
-    const result = await apiRequestPost('/api/auth/send-code', {
+    const result = await apiRequestPost("/api/auth/send-code", {
       email,
-      type: activeTab === 'login' ? 'login' : 'register'
+      type: activeTab === "login" ? "login" : "register",
     });
 
     if (result.success) {
@@ -131,7 +131,7 @@ export default function EmailLoginForm() {
     setIsSubmitting(true);
 
     // 调用后端代理接口
-    const result = await apiRequestPost('/api/auth/login', { email, code });
+    const result = await apiRequestPost("/api/auth/login", { email, code });
 
     if (result.success) {
       // 登录成功，保存 Token
@@ -176,11 +176,11 @@ export default function EmailLoginForm() {
     setIsSubmitting(true);
 
     // 调用后端代理接口
-    const result = await apiRequestPost('/api/auth/register', { email, code });
+    const result = await apiRequestPost("/api/auth/register", { email, code });
 
     if (result.success) {
       // 注册成功，切换到登录 Tab，保留邮箱
-      setActiveTab('login');
+      setActiveTab("login");
       setCode("");
       setCodeSent(false);
       setCountdown(0);
@@ -194,27 +194,30 @@ export default function EmailLoginForm() {
   };
 
   return (
-    <form onSubmit={activeTab === 'login' ? handleLogin : handleRegister} className="space-y-4">{
-      /* Tab 切换 */}
+    <form
+      onSubmit={activeTab === "login" ? handleLogin : handleRegister}
+      className="space-y-4"
+    >
+      {/* Tab 切换 */}
       <div className="flex border-b border-surface-3 mb-4">
         <button
           type="button"
-          onClick={() => handleTabChange('login')}
+          onClick={() => handleTabChange("login")}
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'login'
-              ? 'text-accent-yellow border-b-2 border-accent-yellow'
-              : 'text-text-muted hover:text-text-strong'
+            activeTab === "login"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
           }`}
         >
           登录
         </button>
         <button
           type="button"
-          onClick={() => handleTabChange('register')}
+          onClick={() => handleTabChange("register")}
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'register'
-              ? 'text-accent-yellow border-b-2 border-accent-yellow'
-              : 'text-text-muted hover:text-text-strong'
+            activeTab === "register"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
           }`}
         >
           注册
@@ -279,7 +282,9 @@ export default function EmailLoginForm() {
             value={code}
             onChange={(e) => {
               // 只允许输入字母和数字，最多6位
-              const value = e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, CODE_LENGTH);
+              const value = e.target.value
+                .replace(/[^a-zA-Z0-9]/g, "")
+                .slice(0, CODE_LENGTH);
               setCode(value);
             }}
             placeholder="A1B2C3"
@@ -302,8 +307,12 @@ export default function EmailLoginForm() {
           className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed fade-in-up"
         >
           {isSubmitting
-            ? (activeTab === 'login' ? "登录中..." : "注册中...")
-            : (activeTab === 'login' ? "登录" : "注册")}
+            ? activeTab === "login"
+              ? "登录中..."
+              : "注册中..."
+            : activeTab === "login"
+              ? "登录"
+              : "注册"}
         </button>
       )}
     </form>

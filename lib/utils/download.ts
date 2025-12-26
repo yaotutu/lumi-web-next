@@ -15,23 +15,23 @@ function extractFilename(url: string, fallbackName: string): string {
     const urlObj = new URL(url, window.location.origin);
 
     // 检查是否是代理 URL（包含 ?url= 查询参数）
-    const originalUrl = urlObj.searchParams.get('url');
+    const originalUrl = urlObj.searchParams.get("url");
 
     if (originalUrl) {
       // 代理 URL：从原始 URL 中提取文件名
-      const originalFilename = originalUrl.split('/').pop()?.split('?')[0];
+      const originalFilename = originalUrl.split("/").pop()?.split("?")[0];
       if (originalFilename) {
         return originalFilename;
       }
     } else {
       // 非代理 URL：直接从路径提取
-      const pathFilename = urlObj.pathname.split('/').pop();
+      const pathFilename = urlObj.pathname.split("/").pop();
       if (pathFilename) {
         return pathFilename;
       }
     }
   } catch (error) {
-    console.warn('文件名提取失败，使用备用名称:', error);
+    console.warn("文件名提取失败，使用备用名称:", error);
   }
 
   return fallbackName;
@@ -57,7 +57,7 @@ function extractFilename(url: string, fallbackName: string): string {
  */
 export async function downloadFile(
   url: string,
-  filename?: string
+  filename?: string,
 ): Promise<void> {
   try {
     // 1. 使用 fetch 获取文件内容
@@ -74,10 +74,10 @@ export async function downloadFile(
     const blobUrl = window.URL.createObjectURL(blob);
 
     // 4. 确定文件名
-    const finalFilename = filename || extractFilename(url, 'download');
+    const finalFilename = filename || extractFilename(url, "download");
 
     // 5. 创建临时下载链接
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = blobUrl;
     link.download = finalFilename;
 
@@ -89,7 +89,7 @@ export async function downloadFile(
     // 7. 释放 Blob URL（避免内存泄漏）
     window.URL.revokeObjectURL(blobUrl);
   } catch (error) {
-    console.error('文件下载失败:', error);
+    console.error("文件下载失败:", error);
     throw error;
   }
 }
@@ -113,7 +113,7 @@ export async function downloadFile(
 export async function downloadModel(
   modelUrl: string,
   modelId: string,
-  format: string
+  format: string,
 ): Promise<void> {
   // 生成备用文件名
   const fallbackFilename = `model-${modelId}.${format.toLowerCase()}`;

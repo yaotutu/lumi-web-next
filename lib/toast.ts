@@ -14,12 +14,15 @@ const DEFAULT_DURATION = 3000;
  * @param message 提示消息
  * @param duration 显示时长(毫秒),默认 3000
  */
-export const success = (message: string, duration: number = DEFAULT_DURATION): void => {
-	useToastStore.getState().addToast({
-		type: "success",
-		message,
-		duration,
-	});
+export const success = (
+  message: string,
+  duration: number = DEFAULT_DURATION,
+): void => {
+  useToastStore.getState().addToast({
+    type: "success",
+    message,
+    duration,
+  });
 };
 
 /**
@@ -27,12 +30,15 @@ export const success = (message: string, duration: number = DEFAULT_DURATION): v
  * @param message 提示消息
  * @param duration 显示时长(毫秒),默认 3000
  */
-export const error = (message: string, duration: number = DEFAULT_DURATION): void => {
-	useToastStore.getState().addToast({
-		type: "error",
-		message,
-		duration,
-	});
+export const error = (
+  message: string,
+  duration: number = DEFAULT_DURATION,
+): void => {
+  useToastStore.getState().addToast({
+    type: "error",
+    message,
+    duration,
+  });
 };
 
 /**
@@ -40,12 +46,15 @@ export const error = (message: string, duration: number = DEFAULT_DURATION): voi
  * @param message 提示消息
  * @param duration 显示时长(毫秒),默认 3000
  */
-export const warning = (message: string, duration: number = DEFAULT_DURATION): void => {
-	useToastStore.getState().addToast({
-		type: "warning",
-		message,
-		duration,
-	});
+export const warning = (
+  message: string,
+  duration: number = DEFAULT_DURATION,
+): void => {
+  useToastStore.getState().addToast({
+    type: "warning",
+    message,
+    duration,
+  });
 };
 
 /**
@@ -53,22 +62,25 @@ export const warning = (message: string, duration: number = DEFAULT_DURATION): v
  * @param message 提示消息
  * @param duration 显示时长(毫秒),默认 3000
  */
-export const info = (message: string, duration: number = DEFAULT_DURATION): void => {
-	useToastStore.getState().addToast({
-		type: "info",
-		message,
-		duration,
-	});
+export const info = (
+  message: string,
+  duration: number = DEFAULT_DURATION,
+): void => {
+  useToastStore.getState().addToast({
+    type: "info",
+    message,
+    duration,
+  });
 };
 
 /**
  * Toast 对象,包含所有快捷方法
  */
 export const toast = {
-	success,
-	error,
-	warning,
-	info,
+  success,
+  error,
+  warning,
+  info,
 };
 
 /**
@@ -77,5 +89,5 @@ export const toast = {
  * @returns Toast 状态和方法
  */
 export function useToast() {
-	return useToastStore();
+  return useToastStore();
 }

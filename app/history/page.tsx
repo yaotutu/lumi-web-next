@@ -32,7 +32,10 @@ export default function HistoryPage() {
     const fetchTasks = async () => {
       // 获取任务列表
       const result = await apiRequestGet("/api/tasks");
-      const rawData = { data: result.data, status: result.success ? "success" : "fail" };
+      const rawData = {
+        data: result.data,
+        status: result.success ? "success" : "fail",
+      };
       const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
       // JSend 格式判断
@@ -161,7 +164,7 @@ export default function HistoryPage() {
                   {/* 任务信息 */}
                   <div className="p-4">
                     <h3 className="mb-2 line-clamp-2 text-sm font-medium text-white">
-                      {task.originalPrompt || '未命名任务'}
+                      {task.originalPrompt || "未命名任务"}
                     </h3>
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">

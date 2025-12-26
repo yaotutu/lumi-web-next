@@ -50,8 +50,8 @@ export const useTokenStore = create<TokenStore>()(
     {
       name: "auth-token", // localStorage key
       storage: createJSONStorage(() => localStorage),
-    }
-  )
+    },
+  ),
 );
 
 /**

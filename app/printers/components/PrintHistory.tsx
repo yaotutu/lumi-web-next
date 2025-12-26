@@ -57,7 +57,10 @@ interface PrintHistoryProps {
 /**
  * 打印历史组件
  */
-export default function PrintHistory({ tasks, onTaskClick }: PrintHistoryProps) {
+export default function PrintHistory({
+  tasks,
+  onTaskClick,
+}: PrintHistoryProps) {
   /**
    * 格式化打印时长
    */
@@ -220,12 +223,13 @@ export default function PrintHistory({ tasks, onTaskClick }: PrintHistoryProps) 
                     </div>
                   )}
 
-                  {task.status === "PRINTING" && task.progress !== undefined && (
-                    <div className="flex items-center justify-between font-medium text-yellow-1">
-                      <span>进度</span>
-                      <span>{task.progress}%</span>
-                    </div>
-                  )}
+                  {task.status === "PRINTING" &&
+                    task.progress !== undefined && (
+                      <div className="flex items-center justify-between font-medium text-yellow-1">
+                        <span>进度</span>
+                        <span>{task.progress}%</span>
+                      </div>
+                    )}
                 </div>
               </div>
             </button>

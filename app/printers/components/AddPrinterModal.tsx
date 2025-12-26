@@ -264,9 +264,7 @@ export default function AddPrinterModal({
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={
-                isTesting || !formData.ipAddress || !formData.apiKey
-              }
+              disabled={isTesting || !formData.ipAddress || !formData.apiKey}
               className="btn-secondary flex flex-1 items-center justify-center gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isTesting ? (

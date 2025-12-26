@@ -68,7 +68,7 @@ export const useAuthStore = create<AuthStore>()(
       refreshAuth: async () => {
         // 如果没有 Token，直接设置为未认证
         const token = tokenActions.getToken();
-        console.log('🔍 [refreshAuth] Token 状态:', token ? '存在' : '不存在');
+        console.log("🔍 [refreshAuth] Token 状态:", token ? "存在" : "不存在");
 
         if (!token) {
           get().setAuthState(AuthStatus.UNAUTHENTICATED, null);
@@ -76,25 +76,29 @@ export const useAuthStore = create<AuthStore>()(
         }
 
         // 调用后端代理接口获取用户信息
-        console.log('🌐 [refreshAuth] 调用后端代理接口...');
-        const result = await apiRequestGet('/api/auth/me');
+        console.log("🌐 [refreshAuth] 调用后端代理接口...");
+        const result = await apiRequestGet("/api/auth/me");
 
-        console.log('📦 [refreshAuth] API 响应:', result);
+        console.log("📦 [refreshAuth] API 响应:", result);
 
-        if (result.success && result.data.status === 'authenticated' && result.data.user) {
+        if (
+          result.success &&
+          result.data.status === "authenticated" &&
+          result.data.user
+        ) {
           // 转换为前端用户格式
           const user: User = {
             id: result.data.user.id,
-            email: result.data.user.email || '',
+            email: result.data.user.email || "",
             name: result.data.user.nickName || result.data.user.userName,
             createdAt: new Date().toISOString(),
             lastLoginAt: new Date().toISOString(),
           };
-          console.log('✅ [refreshAuth] 设置认证状态 - AUTHENTICATED', user);
+          console.log("✅ [refreshAuth] 设置认证状态 - AUTHENTICATED", user);
           get().setAuthState(AuthStatus.AUTHENTICATED, user);
         } else {
           // Token 无效或请求失败，清除并设置为未认证
-          console.warn('⚠️ [refreshAuth] 获取用户信息失败，清除认证状态');
+          console.warn("⚠️ [refreshAuth] 获取用户信息失败，清除认证状态");
           tokenActions.clearToken();
           get().setAuthState(AuthStatus.UNAUTHENTICATED, null);
         }

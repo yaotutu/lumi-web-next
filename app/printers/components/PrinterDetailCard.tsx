@@ -127,7 +127,7 @@ export default function PrinterDetailCard({
    */
   const handleStop = () => {
     const confirmed = confirm(
-      `确定要停止打印任务 "${printer.currentJob?.name}" 吗?\n\n此操作不可恢复，已打印的部分将无法继续。`
+      `确定要停止打印任务 "${printer.currentJob?.name}" 吗?\n\n此操作不可恢复，已打印的部分将无法继续。`,
     );
 
     if (confirmed) {
@@ -227,7 +227,10 @@ export default function PrinterDetailCard({
                       style={{
                         strokeDasharray: `${2 * Math.PI * 90}`,
                         strokeDashoffset: `${
-                          2 * Math.PI * 90 * (1 - (printer.currentJob?.progress || 0) / 100)
+                          2 *
+                          Math.PI *
+                          90 *
+                          (1 - (printer.currentJob?.progress || 0) / 100)
                         }`,
                         transition: "stroke-dashoffset 0.5s ease",
                       }}
@@ -254,7 +257,9 @@ export default function PrinterDetailCard({
                     剩余时间
                   </p>
                   <p className="text-xl font-semibold text-white">
-                    {formatTimeRemaining(printer.currentJob?.timeRemaining || 0)}
+                    {formatTimeRemaining(
+                      printer.currentJob?.timeRemaining || 0,
+                    )}
                   </p>
                 </div>
 
@@ -264,7 +269,9 @@ export default function PrinterDetailCard({
                     已打印时长
                   </p>
                   <p className="text-xl font-semibold text-white">
-                    {formatPrintDuration(printer.currentJob?.startedAt || new Date())}
+                    {formatPrintDuration(
+                      printer.currentJob?.startedAt || new Date(),
+                    )}
                   </p>
                 </div>
               </div>
@@ -288,9 +295,7 @@ export default function PrinterDetailCard({
               <h3 className="mb-2 text-xl font-semibold text-white">
                 打印机空闲中
               </h3>
-              <p className="text-sm text-white/60">
-                等待打印任务...
-              </p>
+              <p className="text-sm text-white/60">等待打印任务...</p>
             </div>
           ) : printer.status === "OFFLINE" ? (
             // 离线 - 显示离线提示

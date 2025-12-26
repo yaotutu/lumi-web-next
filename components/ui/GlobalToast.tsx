@@ -10,21 +10,21 @@ import { ToastContainer } from "@/components/ui/Toast";
  * @usage 在 app/layout.tsx 中引入此组件
  */
 export default function GlobalToast() {
-	const toasts = useToastStore((state) => state.toasts);
-	const removeToast = useToastStore((state) => state.removeToast);
+  const toasts = useToastStore((state) => state.toasts);
+  const removeToast = useToastStore((state) => state.removeToast);
 
-	// 只有当有 Toast 时才渲染
-	if (toasts.length === 0) {
-		return null;
-	}
+  // 只有当有 Toast 时才渲染
+  if (toasts.length === 0) {
+    return null;
+  }
 
-	return (
-		<ToastContainer
-			toasts={toasts.map((toast) => ({
-				...toast,
-				onClose: () => removeToast(toast.id),
-			}))}
-			onRemove={removeToast}
-		/>
-	);
+  return (
+    <ToastContainer
+      toasts={toasts.map((toast) => ({
+        ...toast,
+        onClose: () => removeToast(toast.id),
+      }))}
+      onRemove={removeToast}
+    />
+  );
 }
