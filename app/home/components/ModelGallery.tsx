@@ -122,11 +122,8 @@ export default function ModelGallery() {
         modelIds: modelIds.slice(0, 3), // 只显示前3个
       });
 
-      if (!user) {
-        console.log('⚠️ [批量加载交互状态] 用户未登录，跳过');
-        return;
-      }
-
+      // 🔥 可选认证：无论用户是否登录，都调用接口获取交互状态
+      // 后端会根据 Token 自动判断是否返回用户特定的交互数据
       console.log('📤 [批量加载交互状态] 发送请求', {
         url: '/api/gallery/models/batch-interactions',
         modelIds,
@@ -146,14 +143,19 @@ export default function ModelGallery() {
           isAuthenticated: result.data.isAuthenticated,
           interactionsCount: Object.keys(result.data.interactions).length,
         });
+
         if (result.data.isAuthenticated) {
+          // ✅ 已登录：使用后端返回的用户交互状态
           setInteractionStatuses(result.data.interactions);
+        } else {
+          // ⚠️ 未登录：清空交互状态（所有模型都显示为未点赞、未收藏）
+          setInteractionStatuses({});
         }
       } else {
         console.error("❌ [批量加载交互状态] 失败:", result.error.message);
       }
     },
-    [user],
+    [user], // 🔥 保留 user 依赖（虽然逻辑上不需要判断，但保留用于日志调试）
   );
 
   /**
@@ -209,35 +211,6 @@ export default function ModelGallery() {
     loadModels(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 仅在首次渲染时执行
-
-  /**
-   * 当用户登录状态变化或模型列表变化时，重新加载交互状态
-   */
-  useEffect(() => {
-    console.log('👤 [用户状态监听] useEffect 触发', {
-      isLoaded,
-      hasUser: !!user,
-      userId: user?.id,
-      userName: user?.name,
-      modelsCount: models.length,
-    });
-
-    // 等待认证状态加载完成
-    if (!isLoaded) {
-      console.log('⏳ [用户状态监听] 等待认证状态加载');
-      return;
-    }
-
-    if (user && models.length > 0) {
-      console.log('✅ [用户状态监听] 条件满足，准备加载交互状态');
-      const modelIds = models.map((m) => m.id);
-      loadInteractionStatuses(modelIds);
-    } else {
-      console.log('⏭️ [用户状态监听] 条件不满足', {
-        reason: !user ? '用户未登录' : '模型列表为空',
-      });
-    }
-  }, [user, isLoaded, models.length, loadInteractionStatuses]); // 添加完整依赖
 
   /**
    * 切换排序方式

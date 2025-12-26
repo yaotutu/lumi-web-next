@@ -440,20 +440,14 @@ const tasks = data.data; // TaskWithDetails[]
    - ✅ 正确：`adaptTaskResponse(rawData)`
    - ❌ 错误：直接使用 `result.data`
 
-4. **使用代理服务访问外部资源**，避免 CORS 问题
-   - 图片代理：`/api/proxy/image?url=...`
-   - 模型代理：`/api/proxy/model?url=...`
-
-5. **优先使用全局样式类**，保持设计系统一致性
+4. **优先使用全局样式类**，保持设计系统一致性
    - `.glass-panel`、`.btn-primary`、`.btn-secondary`
 
-6. **状态管理使用 Zustand**，不使用 Context API
+5. **状态管理使用 Zustand**，不使用 Context API
    - ✅ 正确：`useAuthStore`（Zustand）
    - ❌ 错误：`createContext()`（Context API）
 
-7. **代码注释必须使用中文**，解释代码作用和目的
-
-8. **未经允许，不允许提交代码到仓库**
+7. **未经允许，不允许提交代码到仓库**
 
 
 <!-- 以下规则为用户手动填写，任何时候都不应该被更改 -->

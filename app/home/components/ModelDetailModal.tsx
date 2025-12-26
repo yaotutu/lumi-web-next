@@ -73,22 +73,30 @@ export default function ModelDetailModal({
         const modelData = result.data;
         setModel(modelData);
 
-        // 初始化交互状态
+        // 初始化交互状态（使用模型详情中的点赞数和收藏数）
         setCurrentLikes(modelData.likeCount);
         setCurrentFavorites(modelData.favoriteCount || 0);
 
-        // 如果用户已登录，获取交互状态
-        if (user) {
-          const interactionResult = await apiRequestGet<{
-            isAuthenticated: boolean;
-            isLiked?: boolean;
-            isFavorited?: boolean;
-          }>(`/api/gallery/models/${id}/interactions`);
+        // 🔥 可选认证：无论用户是否登录，都调用接口获取交互状态
+        // 后端会根据 Token 自动判断是否返回用户特定的交互数据
+        const interactionResult = await apiRequestGet<{
+          isAuthenticated: boolean;
+          isLiked?: boolean;
+          isFavorited?: boolean;
+        }>(`/api/gallery/models/${id}/interactions`);
 
-          if (interactionResult.success && interactionResult.data.isAuthenticated) {
+        if (interactionResult.success) {
+          if (interactionResult.data.isAuthenticated) {
+            // ✅ 已登录：设置用户的交互状态
             setInteractionStatus({
               isLiked: interactionResult.data.isLiked || false,
               isFavorited: interactionResult.data.isFavorited || false,
+            });
+          } else {
+            // ⚠️ 未登录：重置为默认状态（未点赞、未收藏）
+            setInteractionStatus({
+              isLiked: false,
+              isFavorited: false,
             });
           }
         }
@@ -99,7 +107,7 @@ export default function ModelDetailModal({
 
       setLoading(false);
     },
-    [user],
+    [], // 🔥 移除 user 依赖，因为不再需要判断 user 是否存在
   );
 
   /**
