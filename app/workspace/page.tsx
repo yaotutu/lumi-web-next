@@ -293,14 +293,23 @@ function WorkspaceContent() {
 
         // 智能停止轮询的条件：
         // 1. 图片生成完成（status: IMAGE_COMPLETED, phase: AWAITING_SELECTION）
-        // 2. 模型生成完成（status: COMPLETED, phase: COMPLETED）
-        // 3. 任务失败（status: FAILED）
-        if (
-          updatedTask.status === "IMAGE_COMPLETED" || // ✅ 新增：图片全部完成
-          updatedTask.status === "COMPLETED" ||
-          updatedTask.status === "FAILED" ||
-          updatedTask.phase === "COMPLETED"
-        ) {
+        // 2. 图片生成失败（status: IMAGE_FAILED）
+        // 3. 模型生成完成（status: MODEL_COMPLETED 或 COMPLETED, phase: COMPLETED）
+        // 4. 模型生成失败（status: MODEL_FAILED）
+        // 5. 任务失败（status: FAILED）
+        // 6. 任务取消（status: CANCELLED）
+        // 7. 阶段完成（phase: COMPLETED）
+        const shouldStopPolling =
+          updatedTask.status === "IMAGE_COMPLETED" || // ✅ 图片全部完成
+          updatedTask.status === "IMAGE_FAILED" || // ✅ 图片生成失败
+          updatedTask.status === "MODEL_COMPLETED" || // ✅ 模型生成完成
+          updatedTask.status === "MODEL_FAILED" || // ✅ 模型生成失败
+          updatedTask.status === "COMPLETED" || // ✅ 任务完成
+          updatedTask.status === "FAILED" || // ✅ 任务失败
+          updatedTask.status === "CANCELLED" || // ✅ 任务取消
+          updatedTask.phase === "COMPLETED"; // ✅ 阶段完成
+
+        if (shouldStopPolling) {
           console.log("✅ 任务已完成，停止轮询", {
             status: updatedTask.status,
             phase: updatedTask.phase,
@@ -511,11 +520,18 @@ function WorkspaceContent() {
                 }
 
                 // 检查是否需要停止轮询
-                if (
+                // 包含所有可能的结束状态（与主轮询逻辑保持一致）
+                const shouldStopPolling =
+                  updatedTask.status === "IMAGE_COMPLETED" ||
+                  updatedTask.status === "IMAGE_FAILED" ||
+                  updatedTask.status === "MODEL_COMPLETED" ||
+                  updatedTask.status === "MODEL_FAILED" ||
                   updatedTask.status === "COMPLETED" ||
                   updatedTask.status === "FAILED" ||
-                  updatedTask.phase === "COMPLETED"
-                ) {
+                  updatedTask.status === "CANCELLED" ||
+                  updatedTask.phase === "COMPLETED";
+
+                if (shouldStopPolling) {
                   console.log("✅ 模型生成完成，停止轮询");
                   if (pollingIntervalRef.current) {
                     clearInterval(pollingIntervalRef.current);
