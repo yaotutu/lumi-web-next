@@ -93,6 +93,8 @@ export const useAuthStore = create<AuthStore>()(
             name: result.data.user.nickName || result.data.user.userName,
             createdAt: new Date().toISOString(),
             lastLoginAt: new Date().toISOString(),
+            // 添加统计数据（如果后端返回了 stats 字段）
+            stats: result.data.user.stats,
           };
           console.log("✅ [refreshAuth] 设置认证状态 - AUTHENTICATED", user);
           get().setAuthState(AuthStatus.AUTHENTICATED, user);

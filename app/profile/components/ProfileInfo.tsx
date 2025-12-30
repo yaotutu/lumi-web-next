@@ -28,12 +28,24 @@ export default function ProfileInfo() {
     }
   }, [user]);
 
-  // 模拟统计数据 (实际应从 API 获取)
+  // 从用户对象中获取统计数据
+  // 如果 stats 不存在，使用默认值 0
   const stats = [
-    { label: "生成图片", value: "128", icon: "🎨" },
-    { label: "3D 模型", value: "56", icon: "🎲" },
-    { label: "收藏", value: "23", icon: "⭐" },
-    { label: "浏览量", value: "1.2k", icon: "👁" },
+    {
+      label: "3D 模型",
+      value: user?.stats?.totalModels?.toString() || "0",
+      icon: "🎲",
+    },
+    {
+      label: "收藏",
+      value: user?.stats?.favoritedModelsCount?.toString() || "0",
+      icon: "⭐",
+    },
+    {
+      label: "浏览量",
+      value: user?.stats?.totalViews?.toString() || "0",
+      icon: "👁",
+    },
   ];
 
   // 处理保存
@@ -285,7 +297,7 @@ export default function ProfileInfo() {
       {/* 统计数据 */}
       <div>
         <h3 className="mb-4 text-lg font-semibold text-white">统计数据</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {stats.map((stat) => (
             <div key={stat.label} className="glass-panel p-4 text-center">
               <div className="mb-2 text-3xl">{stat.icon}</div>

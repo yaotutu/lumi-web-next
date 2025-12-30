@@ -1123,6 +1123,8 @@ a:hover {
 
   .model-detail-modal__content {
     position: relative;
+    display: flex; /* 添加 flex 布局 */
+    flex-direction: column; /* 垂直排列子元素 */
     width: 100%;
     max-width: min(80vw, 1200px);
     max-height: 94vh;
@@ -1166,10 +1168,10 @@ a:hover {
   }
 
   .model-detail-modal__body {
-    height: 100%;
-    max-height: 90vh;
-    overflow: hidden;
-    padding: 0;
+    flex: 1; /* 允许内容区域占据剩余空间 */
+    min-height: 0; /* 重要：允许 flex 子项收缩 */
+    overflow: hidden; /* 防止内容溢出 */
+    padding: 0; /* 无内边距 */
   }
 
   /* 移动端适配 */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom"; // 导入 createPortal 用于渲染弹窗到 body 下
 import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
@@ -55,6 +56,17 @@ export default function ModelDetailModal({
   const model3DViewerRef = useRef<Model3DViewerRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // 客户端挂载状态（用于 Portal）
+  const [isMounted, setIsMounted] = useState(false);
+
+  /**
+   * 检测客户端环境
+   */
+  useEffect(() => {
+    setIsMounted(true); // 组件挂载后设置为 true
+    return () => setIsMounted(false); // 组件卸载时重置
+  }, []);
 
   /**
    * 加载模型详情
@@ -322,13 +334,14 @@ export default function ModelDetailModal({
     });
   };
 
-  // 弹窗未打开时不渲染
-  if (!isOpen) return null;
+  // 弹窗未打开或未挂载时不渲染
+  if (!isOpen || !isMounted) return null;
 
   // 直接使用后端返回的模型 URL（已经是 S3 URL）
   const modelUrl = model?.modelUrl || null;
 
-  return (
+  // 弹窗内容
+  const modalContent = (
     // biome-ignore lint/a11y/useKeyWithClickEvents: 背景点击关闭弹窗
     // biome-ignore lint/a11y/noStaticElementInteractions: 这是弹窗遮罩层，需要点击关闭功能
     <div ref={modalRef} className="model-detail-modal" onClick={onClose}>
@@ -750,4 +763,7 @@ export default function ModelDetailModal({
       </div>
     </div>
   );
+
+  // 使用 Portal 将弹窗渲染到 document.body，确保弹窗始终固定在视口中央
+  return createPortal(modalContent, document.body);
 }
