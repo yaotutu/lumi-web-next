@@ -31,7 +31,10 @@ export default function CreationHistory() {
       if (result.success) {
         // ✅ 适配后端数据格式(与原历史记录页面保持一致)
         // 后端返回 { items: [...], total: number } 格式
-        const rawData = { data: result.data as any, status: "success" as const };
+        const rawData = {
+          data: result.data as any,
+          status: "success" as const,
+        };
         const data = adaptTasksResponse(rawData);
 
         // 类型守卫：确保是成功响应
@@ -56,13 +59,10 @@ export default function CreationHistory() {
     if (!confirmed) return;
 
     // ✅ 使用 apiRequestDelete,自动处理错误和 Toast
-    const result = await apiRequestDelete(
-      `/api/tasks/${taskId}`,
-      {
-        toastType: "success",
-        toastContext: "删除任务",
-      },
-    );
+    const result = await apiRequestDelete(`/api/tasks/${taskId}`, {
+      toastType: "success",
+      toastContext: "删除任务",
+    });
 
     if (result.success) {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));

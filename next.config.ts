@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "http",
-        hostname: "192.168.88.100",
+        hostname: "192.168.123.100",
         port: "3000",
         pathname: "/api/proxy/**",
       },

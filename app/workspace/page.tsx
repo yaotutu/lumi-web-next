@@ -300,7 +300,11 @@ function WorkspaceContent() {
       return;
     }
 
-    console.log("🔄 启动轮询", { taskId, status: task?.status, phase: task?.phase });
+    console.log("🔄 启动轮询", {
+      taskId,
+      status: task?.status,
+      phase: task?.phase,
+    });
 
     /**
      * 执行一次轮询查询
