@@ -30,7 +30,7 @@ export default function ProfilePage() {
   // 检查登录状态:未登录时自动弹出登录弹窗
   // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   if (isAuthLoaded && !isAuthenticated) {
-    loginModalActions.open("profile");
+    loginModalActions.open("profile" as any);
   }
 
   // 渲染当前选中的内容

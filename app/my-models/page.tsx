@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   apiRequestGet,
+  apiRequestPost,
   apiRequestDelete,
   apiRequestPatch,
 } from "@/lib/api-client";
@@ -351,7 +352,7 @@ export default function MyModelsPage() {
                     modelId={model.id}
                     image={model.previewImageUrl || "/placeholder.png"}
                     title={model.name || "未命名模型"}
-                    author={model.user?.name || "我"}
+                    author={(model as any).user?.name || "我"}
                     likes={model.likeCount}
                     favorites={model.favoriteCount || 0}
                     onClick={handleView}
@@ -364,7 +365,7 @@ export default function MyModelsPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onToggleVisibility(model.id, model.visibility);
+                        handleToggleVisibility(model.id, model.visibility);
                       }}
                       className={`rounded-lg px-2 py-1 text-xs font-medium transition-all ${
                         model.visibility === "PUBLIC"
@@ -378,7 +379,7 @@ export default function MyModelsPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDelete(model.id, model.name || "未命名模型");
+                        handleDelete(model.id, model.name || "未命名模型");
                       }}
                       className="rounded-lg bg-red-500/10 px-2 py-1 text-xs font-medium text-red-500 transition-all hover:bg-red-500/20"
                     >

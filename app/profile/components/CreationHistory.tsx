@@ -30,12 +30,15 @@ export default function CreationHistory() {
 
       if (result.success) {
         // ✅ 适配后端数据格式(与原历史记录页面保持一致)
-        const rawData = { data: result.data, status: "success" };
+        // 后端返回 { items: [...], total: number } 格式
+        const rawData = { data: result.data as any, status: "success" as const };
         const data = adaptTasksResponse(rawData);
 
-        // 确保 data 是数组
-        const tasksArray = Array.isArray(data.data) ? data.data : [];
-        setTasks(tasksArray);
+        // 类型守卫：确保是成功响应
+        if (data.status === "success") {
+          const tasksArray = Array.isArray(data.data) ? data.data : [];
+          setTasks(tasksArray);
+        }
       } else {
         // 失败时设置错误状态(用于显示错误 UI)
         setError(result.error.message);
@@ -55,7 +58,6 @@ export default function CreationHistory() {
     // ✅ 使用 apiRequestDelete,自动处理错误和 Toast
     const result = await apiRequestDelete(
       `/api/tasks/${taskId}`,
-      {},
       {
         toastType: "success",
         toastContext: "删除任务",

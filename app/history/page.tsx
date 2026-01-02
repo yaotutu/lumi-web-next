@@ -32,15 +32,20 @@ export default function HistoryPage() {
     const fetchTasks = async () => {
       // 获取任务列表
       const result = await apiRequestGet("/api/tasks");
-      const rawData = {
-        data: result.data,
-        status: result.success ? "success" : "fail",
-      };
-      const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
 
-      // JSend 格式判断
-      if (data.status === "success") {
-        setTasks(data.data);
+      // 判断请求是否成功
+      if (result.success) {
+        // 适配后端数据格式
+        const rawData = {
+          data: result.data,
+          status: "success" as const,
+        };
+        const data = adaptTasksResponse(rawData);
+
+        // 类型守卫：确保是成功响应
+        if (data.status === "success") {
+          setTasks(data.data);
+        }
       }
 
       setLoading(false);

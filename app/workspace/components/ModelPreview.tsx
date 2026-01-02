@@ -8,7 +8,7 @@ import { downloadModel } from "@/lib/utils/download";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
-import { toast } from "@/lib/toast";
+import { toast as showToast } from "@/lib/toast";
 
 // 材质颜色选项
 const MATERIAL_COLORS = [
@@ -829,7 +829,7 @@ export default function ModelPreview({
                     window.location.reload();
                   } else {
                     console.error("重试失败:", result.error.message);
-                    toast.error(`重试失败: ${result.error.message}`);
+                    showToast.error(`重试失败: ${result.error.message}`);
                   }
                 }}
               >

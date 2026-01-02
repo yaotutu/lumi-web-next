@@ -24,7 +24,7 @@ export default function ProfileInfo() {
   useEffect(() => {
     if (user) {
       setName(user.name || "");
-      setBio(user.bio || "");
+      setBio((user as any).bio || "");
     }
   }, [user]);
 
@@ -181,9 +181,9 @@ export default function ProfileInfo() {
           {/* 头像 */}
           <div className="relative group">
             <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white/10">
-              {user?.avatar ? (
+              {(user as any)?.avatar ? (
                 <Image
-                  src={user.avatar}
+                  src={(user as any).avatar}
                   alt="头像"
                   fill
                   className="object-cover"
@@ -274,7 +274,7 @@ export default function ProfileInfo() {
                 />
               ) : (
                 <span className="text-sm text-white/90">
-                  {user?.bio || "这个人很懒,还没有填写个人简介"}
+                  {(user as any)?.bio || "这个人很懒,还没有填写个人简介"}
                 </span>
               )}
             </div>

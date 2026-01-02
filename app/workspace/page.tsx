@@ -40,6 +40,43 @@ import ImageGrid from "./components/ImageGrid";
 import ModelPreview from "./components/ModelPreview";
 
 /**
+ * 任务完成状态集合
+ *
+ * 包含所有表示任务已结束（不再需要轮询）的状态
+ */
+const FINISHED_STATUSES = [
+  "IMAGE_COMPLETED", // 图片生成完成
+  "IMAGE_FAILED", // 图片生成失败
+  "MODEL_COMPLETED", // 模型生成完成
+  "MODEL_FAILED", // 模型生成失败
+  "COMPLETED", // 任务完成
+  "FAILED", // 任务失败
+  "CANCELLED", // 任务取消
+] as const;
+
+/**
+ * 判断任务是否已完成（不再需要轮询）
+ *
+ * @param task - 任务对象
+ * @returns true 表示任务已完成，false 表示仍在进行中
+ */
+function isTaskFinished(task: TaskWithDetails | null): boolean {
+  if (!task) return false;
+
+  // 检查 status 是否为完成状态
+  if (FINISHED_STATUSES.includes(task.status as any)) {
+    return true;
+  }
+
+  // 检查 phase 是否为 COMPLETED
+  if (task.phase === "COMPLETED") {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * 工作台核心内容组件
  *
  * 职责：
@@ -123,26 +160,30 @@ function WorkspaceContent() {
         // 2. 判断请求是否成功
         if (result.success) {
           // 3. ✅ 适配后端数据格式
-          const rawData = { data: result.data, status: "success" };
+          const rawData = { data: result.data, status: "success" as const };
           const data = adaptTaskResponse(rawData);
-          const adaptedTask = data.data;
 
-          // 4. 更新任务状态
-          setTask(adaptedTask);
+          // 4. 类型守卫：确保是成功响应
+          if (data.status === "success") {
+            const adaptedTask = data.data;
 
-          // 5. 保存 updatedAt 用于轮询优化
-          if (adaptedTask.updatedAt) {
-            lastUpdatedAtRef.current = new Date(
-              adaptedTask.updatedAt,
-            ).toISOString();
-          }
+            // 5. 更新任务状态
+            setTask(adaptedTask);
 
-          // 6. 恢复用户之前选中的图片（如果有）
-          if (
-            adaptedTask.selectedImageIndex !== null &&
-            adaptedTask.selectedImageIndex !== undefined
-          ) {
-            setSelectedImageIndex(adaptedTask.selectedImageIndex);
+            // 6. 保存 updatedAt 用于轮询优化
+            if (adaptedTask.updatedAt) {
+              lastUpdatedAtRef.current = new Date(
+                adaptedTask.updatedAt,
+              ).toISOString();
+            }
+
+            // 7. 恢复用户之前选中的图片（如果有）
+            if (
+              adaptedTask.selectedImageIndex !== null &&
+              adaptedTask.selectedImageIndex !== undefined
+            ) {
+              setSelectedImageIndex(adaptedTask.selectedImageIndex);
+            }
           }
         } else {
           // 请求失败，记录错误
@@ -165,30 +206,34 @@ function WorkspaceContent() {
           result.data.items.length > 0
         ) {
           // 3. ✅ 适配后端数据格式
-          const rawData = { data: result.data, status: "success" };
+          const rawData = { data: result.data, status: "success" as const };
           const data = adaptTasksResponse(rawData);
-          const adaptedTasks = data.data;
-          const latestTask = adaptedTasks[0];
 
-          // 4. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
-          router.replace(`/workspace?taskId=${latestTask.id}`);
+          // 4. 类型守卫：确保是成功响应
+          if (data.status === "success") {
+            const adaptedTasks = data.data;
+            const latestTask = adaptedTasks[0];
 
-          // 5. 更新任务状态
-          setTask(latestTask);
+            // 5. 更新 URL 为最新任务 ID（用户刷新页面时能保持状态）
+            router.replace(`/workspace?taskId=${latestTask.id}`);
 
-          // 6. 保存 updatedAt 用于轮询优化
-          if (latestTask.updatedAt) {
-            lastUpdatedAtRef.current = new Date(
-              latestTask.updatedAt,
-            ).toISOString();
-          }
+            // 6. 更新任务状态
+            setTask(latestTask);
 
-          // 7. 恢复选中的图片
-          if (
-            latestTask.selectedImageIndex !== null &&
-            latestTask.selectedImageIndex !== undefined
-          ) {
-            setSelectedImageIndex(latestTask.selectedImageIndex);
+            // 7. 保存 updatedAt 用于轮询优化
+            if (latestTask.updatedAt) {
+              lastUpdatedAtRef.current = new Date(
+                latestTask.updatedAt,
+              ).toISOString();
+            }
+
+            // 8. 恢复选中的图片
+            if (
+              latestTask.selectedImageIndex !== null &&
+              latestTask.selectedImageIndex !== undefined
+            ) {
+              setSelectedImageIndex(latestTask.selectedImageIndex);
+            }
           }
         } else {
           // 没有任何任务时，保持空状态（后续会显示"暂无任务"提示）
@@ -245,7 +290,17 @@ function WorkspaceContent() {
     // 如果没有任务 ID，不启动轮询
     if (!taskId) return;
 
-    console.log("🔄 启动轮询", { taskId });
+    // ✅ 优化：如果任务已经完成，不启动轮询
+    if (task && isTaskFinished(task)) {
+      console.log("✅ 任务已完成，跳过轮询启动", {
+        taskId,
+        status: task.status,
+        phase: task.phase,
+      });
+      return;
+    }
+
+    console.log("🔄 启动轮询", { taskId, status: task?.status, phase: task?.phase });
 
     /**
      * 执行一次轮询查询
@@ -270,53 +325,40 @@ function WorkspaceContent() {
       // 判断请求是否成功
       if (result.success) {
         // ✅ 适配后端数据格式
-        const rawData = { data: result.data, status: "success" };
+        const rawData = { data: result.data, status: "success" as const };
         const data = adaptTaskResponse(rawData);
-        const updatedTask = data.data;
 
-        console.log("📥 收到任务状态更新", {
-          status: updatedTask.status,
-          phase: updatedTask.phase,
-          imagesCount: updatedTask.images?.length,
-          hasModel: !!updatedTask.model,
-        });
+        // 类型守卫：确保是成功响应
+        if (data.status === "success") {
+          const updatedTask = data.data;
 
-        // 更新任务状态
-        setTask(updatedTask);
-
-        // 更新 lastUpdatedAt 用于下次轮询
-        if (updatedTask.updatedAt) {
-          lastUpdatedAtRef.current = new Date(
-            updatedTask.updatedAt,
-          ).toISOString();
-        }
-
-        // 智能停止轮询的条件：
-        // 1. 图片生成完成（status: IMAGE_COMPLETED, phase: AWAITING_SELECTION）
-        // 2. 图片生成失败（status: IMAGE_FAILED）
-        // 3. 模型生成完成（status: MODEL_COMPLETED 或 COMPLETED, phase: COMPLETED）
-        // 4. 模型生成失败（status: MODEL_FAILED）
-        // 5. 任务失败（status: FAILED）
-        // 6. 任务取消（status: CANCELLED）
-        // 7. 阶段完成（phase: COMPLETED）
-        const shouldStopPolling =
-          updatedTask.status === "IMAGE_COMPLETED" || // ✅ 图片全部完成
-          updatedTask.status === "IMAGE_FAILED" || // ✅ 图片生成失败
-          updatedTask.status === "MODEL_COMPLETED" || // ✅ 模型生成完成
-          updatedTask.status === "MODEL_FAILED" || // ✅ 模型生成失败
-          updatedTask.status === "COMPLETED" || // ✅ 任务完成
-          updatedTask.status === "FAILED" || // ✅ 任务失败
-          updatedTask.status === "CANCELLED" || // ✅ 任务取消
-          updatedTask.phase === "COMPLETED"; // ✅ 阶段完成
-
-        if (shouldStopPolling) {
-          console.log("✅ 任务已完成，停止轮询", {
+          console.log("📥 收到任务状态更新", {
             status: updatedTask.status,
             phase: updatedTask.phase,
+            imagesCount: updatedTask.images?.length,
+            hasModel: !!updatedTask.model,
           });
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
+
+          // 更新任务状态
+          setTask(updatedTask);
+
+          // 更新 lastUpdatedAt 用于下次轮询
+          if (updatedTask.updatedAt) {
+            lastUpdatedAtRef.current = new Date(
+              updatedTask.updatedAt,
+            ).toISOString();
+          }
+
+          // 智能停止轮询：检查任务是否已完成
+          if (isTaskFinished(updatedTask)) {
+            console.log("✅ 任务已完成，停止轮询", {
+              status: updatedTask.status,
+              phase: updatedTask.phase,
+            });
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
           }
         }
       } else {
@@ -341,7 +383,8 @@ function WorkspaceContent() {
         pollingIntervalRef.current = null;
       }
     };
-  }, [taskId]); // 依赖项：URL 中的 taskId 变化时重新启动轮询
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]); // 依赖项：仅在 taskId 变化时重新启动轮询（task 状态更新由轮询本身处理）
 
   // ============================================
   // 事件处理函数
@@ -507,35 +550,28 @@ function WorkspaceContent() {
                 // ✅ 适配后端数据格式
                 const rawPollData = {
                   data: pollResult.data,
-                  status: "success",
+                  status: "success" as const,
                 };
                 const pollData = adaptTaskResponse(rawPollData);
-                const updatedTask = pollData.data;
-                setTask(updatedTask);
 
-                if (updatedTask.updatedAt) {
-                  lastUpdatedAtRef.current = new Date(
-                    updatedTask.updatedAt,
-                  ).toISOString();
-                }
+                // 类型守卫：确保是成功响应
+                if (pollData.status === "success") {
+                  const updatedTask = pollData.data;
+                  setTask(updatedTask);
 
-                // 检查是否需要停止轮询
-                // 包含所有可能的结束状态（与主轮询逻辑保持一致）
-                const shouldStopPolling =
-                  updatedTask.status === "IMAGE_COMPLETED" ||
-                  updatedTask.status === "IMAGE_FAILED" ||
-                  updatedTask.status === "MODEL_COMPLETED" ||
-                  updatedTask.status === "MODEL_FAILED" ||
-                  updatedTask.status === "COMPLETED" ||
-                  updatedTask.status === "FAILED" ||
-                  updatedTask.status === "CANCELLED" ||
-                  updatedTask.phase === "COMPLETED";
+                  if (updatedTask.updatedAt) {
+                    lastUpdatedAtRef.current = new Date(
+                      updatedTask.updatedAt,
+                    ).toISOString();
+                  }
 
-                if (shouldStopPolling) {
-                  console.log("✅ 模型生成完成，停止轮询");
-                  if (pollingIntervalRef.current) {
-                    clearInterval(pollingIntervalRef.current);
-                    pollingIntervalRef.current = null;
+                  // 检查是否需要停止轮询
+                  if (isTaskFinished(updatedTask)) {
+                    console.log("✅ 模型生成完成，停止轮询");
+                    if (pollingIntervalRef.current) {
+                      clearInterval(pollingIntervalRef.current);
+                      pollingIntervalRef.current = null;
+                    }
                   }
                 }
               } else {

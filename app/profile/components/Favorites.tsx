@@ -232,7 +232,7 @@ export default function Favorites() {
               modelId={model.id}
               image={model.previewImageUrl || "/placeholder.png"}
               title={model.name || "未命名模型"}
-              author={model.user?.name || "未知作者"}
+              author={(model as any).user?.name || "未知作者"}
               likes={model.likeCount}
               favorites={model.favoriteCount || 0}
               onClick={handleView}
