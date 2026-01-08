@@ -10,6 +10,8 @@ import { downloadModel } from "@/lib/utils/download";
 import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
 import { toast } from "@/lib/toast";
+import { createSliceTask, getSliceTaskStatus } from "@/lib/api/slice"; // 导入切片 API
+import type { SliceStatus } from "@/types/slice"; // 导入切片状态类型
 
 // 材质颜色选项（从详情页复制）
 const MATERIAL_COLORS = [
@@ -42,6 +44,10 @@ export default function ModelDetailModal({
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  // 切片相关状态
+  const [slicing, setSlicing] = useState(false); // 切片进行中
+  const [sliceTaskId, setSliceTaskId] = useState<string | null>(null); // 切片任务 ID
+
   // 用户状态和交互状态
   const user = useUser();
   const [interactionStatus, setInteractionStatus] = useState({
@@ -56,6 +62,7 @@ export default function ModelDetailModal({
   const model3DViewerRef = useRef<Model3DViewerRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null); // 轮询定时器 ID（用于清理）
 
   // 客户端挂载状态（用于 Portal）
   const [isMounted, setIsMounted] = useState(false);
@@ -123,6 +130,97 @@ export default function ModelDetailModal({
   );
 
   /**
+   * 开始轮询切片任务状态
+   */
+  const startPolling = useCallback((taskId: string) => {
+    const maxDuration = 10 * 60 * 1000; // 10 分钟超时
+    const interval = 5000; // 5 秒轮询一次
+    const startTime = Date.now();
+    let retryCount = 0;
+
+    const poll = setInterval(async () => {
+      // 超时检查
+      if (Date.now() - startTime > maxDuration) {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.error("切片超时，请重试");
+        return;
+      }
+
+      // 查询状态
+      const statusResult = await getSliceTaskStatus(taskId);
+
+      if (!statusResult.success) {
+        retryCount = retryCount + 1;
+        if (retryCount > 3) {
+          clearInterval(poll);
+          setSlicing(false);
+          toast.error("查询切片状态失败");
+        }
+        return;
+      }
+
+      const { sliceStatus, gcodeUrl, errorMessage } = statusResult.data;
+
+      // 切片完成
+      if (sliceStatus === "COMPLETED") {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.success("切片完成！G-code 文件已生成");
+        return;
+      }
+
+      // 切片失败
+      if (sliceStatus === "FAILED") {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.error(`切片失败: ${errorMessage || "未知错误"}`);
+        return;
+      }
+
+      // 继续等待（PENDING / PROCESSING）
+    }, interval);
+
+    // 保存 interval ID 用于清理
+    pollIntervalRef.current = poll;
+  }, []);
+
+  /**
+   * 处理一键切片
+   */
+  const handleSlice = useCallback(async () => {
+    if (!model) return;
+
+    // 如果已经在切片中，不重复创建
+    if (slicing) return;
+
+    setSlicing(true);
+
+    try {
+      // 创建切片任务
+      const createResult = await createSliceTask(model.id);
+
+      if (!createResult.success) {
+        toast.error(`创建切片任务失败: ${createResult.error.message}`);
+        setSlicing(false);
+        return;
+      }
+
+      const { sliceTaskId: newSliceTaskId } = createResult.data;
+      setSliceTaskId(newSliceTaskId);
+
+      toast.info("切片任务已创建，正在处理中...");
+
+      // 开始轮询
+      startPolling(newSliceTaskId);
+    } catch (error) {
+      console.error("切片错误:", error);
+      toast.error("切片失败，请重试");
+      setSlicing(false);
+    }
+  }, [model, slicing, startPolling]);
+
+  /**
    * 当模型ID变化时重新加载模型
    */
   useEffect(() => {
@@ -133,8 +231,40 @@ export default function ModelDetailModal({
       setModel(null);
       setError(null);
       setCurrentMaterial(null);
+      setSlicing(false);
+      setSliceTaskId(null);
+
+      // 清除轮询定时器
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     }
   }, [isOpen, modelId, loadModel]);
+
+  /**
+   * 弹窗打开时检查切片状态，如果正在切片则恢复轮询
+   */
+  useEffect(() => {
+    if (isOpen && model && model.sliceTaskId && model.sliceStatus === 'PROCESSING') {
+      // 恢复轮询
+      setSlicing(true);
+      setSliceTaskId(model.sliceTaskId);
+      startPolling(model.sliceTaskId);
+    }
+  }, [isOpen, model, startPolling]);
+
+  /**
+   * 组件卸载时清除轮询定时器
+   */
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * 重置相机视角
@@ -723,6 +853,42 @@ export default function ModelDetailModal({
                       )}
                     </div>
                   </div>
+
+                  {/* 切片按钮 */}
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-1 to-blue-1/80 hover:from-blue-1/90 hover:to-blue-1/70 text-white font-bold transition-all duration-[250ms] transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-1/25 hover:shadow-xl hover:shadow-blue-1/35 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm"
+                    onClick={handleSlice}
+                    disabled={slicing}
+                  >
+                    {slicing ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                        <span>切片中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        <span>
+                          {model.sliceStatus === "COMPLETED"
+                            ? "重新切片"
+                            : "一键切片"}
+                        </span>
+                      </>
+                    )}
+                  </button>
 
                   {/* 下载按钮 */}
                   <button

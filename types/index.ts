@@ -62,6 +62,9 @@ export type PrintStatus =
   | "PRINT_COMPLETE"
   | "FAILED";
 
+/** 切片状态 */
+export type SliceStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+
 // ============================================
 // 基础数据类型（对应数据库表）
 // ============================================
@@ -139,6 +142,13 @@ export interface Model {
   favoriteCount: number;
   downloadCount: number;
   sliceTaskId: string | null;
+  sliceStatus: SliceStatus | null;
+  gcodeUrl: string | null;
+  gcodeMetadata: {
+    layer_height?: number;
+    print_time?: number;
+    filament_used?: number;
+  } | null;
   printStatus: PrintStatus;
   printProgress: number;
   createdAt: string;
