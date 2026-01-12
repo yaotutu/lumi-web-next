@@ -5,7 +5,7 @@
  */
 
 import { type ApiResult, apiRequestGet } from "@/lib/api-client";
-import type { Model } from "@/types/model";
+import type { Model } from "@/types";
 
 /**
  * 获取用户收藏的模型列表
