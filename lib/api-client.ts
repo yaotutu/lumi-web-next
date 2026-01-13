@@ -11,57 +11,9 @@
  * - 所有请求通过 lumi-server 统一网关
  */
 
-import { buildApiUrl } from "@/lib/config/api";
 import type { LoginModalContext } from "@/stores/login-modal-store";
 import { loginModalActions } from "@/stores/login-modal-store";
 import { tokenActions } from "@/stores/token-store";
-
-/**
- * URL 字段名称列表（需要自动转换的字段）
- */
-const URL_FIELDS = [
-  "url",
-  "imageUrl",
-  "modelUrl",
-  "mtlUrl",
-  "textureUrl",
-  "previewImageUrl",
-] as const;
-
-/**
- * 递归转换对象中的所有 URL 字段（相对路径 → 完整 URL）
- */
-function transformUrls<T>(data: T): T {
-  if (data === null || data === undefined) {
-    return data;
-  }
-
-  if (Array.isArray(data)) {
-    return data.map((item) => transformUrls(item)) as T;
-  }
-
-  if (typeof data === "object") {
-    const result: any = {};
-
-    for (const [key, value] of Object.entries(data)) {
-      if (
-        URL_FIELDS.includes(key as any) &&
-        typeof value === "string" &&
-        value.startsWith("/")
-      ) {
-        result[key] = buildApiUrl(value);
-      } else if (typeof value === "object") {
-        result[key] = transformUrls(value);
-      } else {
-        result[key] = value;
-      }
-    }
-
-    return result as T;
-  }
-
-  return data;
-}
 
 /**
  * API 错误类
@@ -131,8 +83,8 @@ function wrapResponse(response: Response): Response {
   // 重写 json 方法
   response.json = async function () {
     const data = await originalJson();
-    // ✅ 自动转换响应中的所有 URL 字段（相对路径 → 完整 URL）
-    return transformUrls(data);
+    // ✅ 前端不再改写 URL，直接使用后端返回的完整地址
+    return data;
   };
 
   return response;
