@@ -18,6 +18,14 @@ module.exports = {
       watch: false, // 生产环境不需要文件监听
       max_memory_restart: '1G', // 内存超过 1G 自动重启
       merge_logs: true, // 合并日志
+
+      // 重启策略优化 - 解决端口占用问题
+      kill_timeout: 5000, // 等待进程优雅关闭的时间（毫秒）
+      wait_ready: true, // 等待应用准备就绪
+      min_uptime: '10s', // 最小运行时间，如果进程在这时间内崩溃，不标记为稳定运行
+      max_restarts: 10, // 1分钟内最大重启次数
+      restart_delay: 4000, // 重启延迟时间（毫秒），给旧进程足够时间释放端口
+      exp_backoff_restart_delay: 100, // 退避重启延迟：每次重启后延迟增加
     },
   ],
 };
