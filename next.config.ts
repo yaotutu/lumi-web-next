@@ -42,14 +42,14 @@ const nextConfig: NextConfig = {
   //   2. Vercel 拦截请求并代理到后端 HTTP 服务
   //   3. 浏览器看到的是同域 HTTPS 请求，不会触发 Mixed Content 错误
   // 注意：需要配合环境变量 NEXT_PUBLIC_API_BASE_URL 留空使用
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*", // 前端请求路径（相对路径）
-        destination: "http://lumi.ai3d.top/api/:path*", // 后端实际地址（HTTP）
-      },
-    ];
-  },
+  // async rewrites() {
+  //   return [
+  //     {
+  //       source: "/api/:path*", // 前端请求路径（相对路径）
+  //       destination: "http://lumi.ai3d.top/api/:path*", // 后端实际地址（HTTP）
+  //     },
+  //   ];
+  // },
 };
 
 export default nextConfig;
