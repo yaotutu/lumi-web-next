@@ -18,26 +18,34 @@
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiPost } from "@/lib/api-client";
 import { useEffect, useState } from "react";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { authActions } from "@/stores/auth-store";
+import { tokenActions } from "@/stores/token-store";
+import { apiRequestPost } from "@/lib/api-client";
 
 /**
  * 倒计时秒数
  */
 const COUNTDOWN_SECONDS = 60;
 
+/**
+ * 验证码长度（外部用户服务使用 6 位验证码）
+ */
+const CODE_LENGTH = 6;
+
 export default function EmailLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
 
+  // Tab 切换状态
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+
   // 表单状态
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -52,8 +60,17 @@ export default function EmailLoginForm() {
     }
   }, [countdown]);
 
+  // 切换 Tab 时重置状态
+  const handleTabChange = (tab: "login" | "register") => {
+    setActiveTab(tab);
+    setCode("");
+    setCodeSent(false);
+    setError("");
+    setCountdown(0);
+  };
+
   /**
-   * 发送验证码
+   * 发送验证码（登录或注册）
    */
   const handleSendCode = async () => {
     // 清除之前的错误
@@ -71,25 +88,21 @@ export default function EmailLoginForm() {
 
     setIsSendingCode(true);
 
-    try {
-      const response = await apiPost("/api/auth/send-code", { email });
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/send-code", {
+      email,
+      type: activeTab === "login" ? "login" : "register",
+    });
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        // 发送成功
-        setCodeSent(true);
-        setCountdown(COUNTDOWN_SECONDS);
-        setError("");
-      } else {
-        throw new Error(getErrorMessage(data));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "发送验证码失败");
-    } finally {
-      setIsSendingCode(false);
+    if (result.success) {
+      setCodeSent(true);
+      setCountdown(COUNTDOWN_SECONDS);
+      setError("");
+    } else {
+      setError(result.error.message || "发送验证码失败");
     }
+
+    setIsSendingCode(false);
   };
 
   /**
@@ -110,39 +123,107 @@ export default function EmailLoginForm() {
       setError("请输入验证码");
       return;
     }
-    if (code.length !== 4) {
-      setError("验证码必须是4位数字");
+    if (code.length !== CODE_LENGTH) {
+      setError(`验证码必须是${CODE_LENGTH}位数字`);
       return;
     }
 
-    setIsLoggingIn(true);
+    setIsSubmitting(true);
 
-    try {
-      const response = await apiPost("/api/auth/verify-code", { email, code });
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/login", { email, code });
 
-      const data = await response.json();
+    if (result.success) {
+      // 登录成功，保存 Token
+      tokenActions.setToken(result.data.token);
 
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        // 登录成功
-        // 1. 更新认证状态
-        await authActions.refreshAuth();
+      // 更新认证状态
+      await authActions.refreshAuth();
 
-        // 2. 跳转
-        router.push(redirect);
-        router.refresh(); // 刷新服务端组件
-      } else {
-        throw new Error(getErrorMessage(data));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
-    } finally {
-      setIsLoggingIn(false);
+      // 跳转
+      router.push(redirect);
+      router.refresh(); // 刷新服务端组件
+    } else {
+      setError(result.error.message || "登录失败");
     }
+
+    setIsSubmitting(false);
+  };
+
+  /**
+   * 注册
+   */
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 清除之前的错误
+    setError("");
+
+    // 验证输入
+    if (!email) {
+      setError("请输入邮箱");
+      return;
+    }
+    if (!code) {
+      setError("请输入验证码");
+      return;
+    }
+    if (code.length !== CODE_LENGTH) {
+      setError(`验证码必须是${CODE_LENGTH}位数字`);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/register", { email, code });
+
+    if (result.success) {
+      // 注册成功，切换到登录 Tab，保留邮箱
+      setActiveTab("login");
+      setCode("");
+      setCodeSent(false);
+      setCountdown(0);
+      setError("");
+      // email 保持不变，自动填充
+    } else {
+      setError(result.error.message || "注册失败");
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4">
+    <form
+      onSubmit={activeTab === "login" ? handleLogin : handleRegister}
+      className="space-y-4"
+    >
+      {/* Tab 切换 */}
+      <div className="flex border-b border-surface-3 mb-4">
+        <button
+          type="button"
+          onClick={() => handleTabChange("login")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            activeTab === "login"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
+          }`}
+        >
+          登录
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("register")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            activeTab === "register"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
+          }`}
+        >
+          注册
+        </button>
+      </div>
+
       {/* 错误提示 */}
       {error && (
         <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
@@ -165,7 +246,7 @@ export default function EmailLoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
           className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors"
-          disabled={isLoggingIn}
+          disabled={isSubmitting}
           required
         />
       </div>
@@ -174,7 +255,7 @@ export default function EmailLoginForm() {
       <button
         type="button"
         onClick={handleSendCode}
-        disabled={isSendingCode || countdown > 0 || isLoggingIn}
+        disabled={isSendingCode || countdown > 0 || isSubmitting}
         className="w-full btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSendingCode
@@ -200,30 +281,38 @@ export default function EmailLoginForm() {
             type="text"
             value={code}
             onChange={(e) => {
-              // 只允许输入数字，最多4位
-              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+              // 只允许输入字母和数字，最多6位
+              const value = e.target.value
+                .replace(/[^a-zA-Z0-9]/g, "")
+                .slice(0, CODE_LENGTH);
               setCode(value);
             }}
-            placeholder="0000"
-            maxLength={4}
-            className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors text-center text-2xl font-mono tracking-widest"
-            disabled={isLoggingIn}
+            placeholder="A1B2C3"
+            maxLength={CODE_LENGTH}
+            className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors text-center text-2xl font-mono tracking-widest uppercase"
+            disabled={isSubmitting}
             required
           />
           <p className="mt-2 text-xs text-text-subtle text-center">
-            请输入邮箱收到的4位验证码
+            请输入邮箱收到的{CODE_LENGTH}位验证码（字母或数字）
           </p>
         </div>
       )}
 
-      {/* 登录按钮 */}
+      {/* 提交按钮 */}
       {codeSent && (
         <button
           type="submit"
-          disabled={isLoggingIn || code.length !== 4}
+          disabled={isSubmitting || code.length !== CODE_LENGTH}
           className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed fade-in-up"
         >
-          {isLoggingIn ? "登录中..." : "登录"}
+          {isSubmitting
+            ? activeTab === "login"
+              ? "登录中..."
+              : "注册中..."
+            : activeTab === "login"
+              ? "登录"
+              : "注册"}
         </button>
       )}
     </form>

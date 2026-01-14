@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiPost } from "@/lib/api-client";
 import { authActions, useIsLoaded, useUser } from "@/stores/auth-store";
+import { apiRequestPost } from "@/lib/api-client";
 
 type NavLink = {
   label: string;
@@ -14,8 +14,9 @@ type NavLink = {
 const NAV_LINKS: NavLink[] = [
   { label: "首页", href: "/" },
   { label: "3D工作台", href: "/workspace" },
-  { label: "历史记录", href: "/history" },
-  { label: "资产", href: "/assets" },
+  { label: "我的模型", href: "/my-models" },
+  { label: "打印机", href: "/printers" },
+  { label: "个人中心", href: "/profile" },
 ];
 
 function IconAI3DGlyph() {
@@ -85,29 +86,22 @@ export default function Navigation() {
 
   // 退出登录
   const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      const response = await apiPost("/api/auth/logout", {});
+    setIsLoggingOut(true);
 
-      if (response.ok) {
-        // 清除前端状态
-        authActions.resetAuth();
-        setShowUserMenu(false);
-        // 先跳转，再刷新
-        router.push("/");
-        // 延迟一点时间，确保跳转完成后再刷新
-        setTimeout(() => {
-          router.refresh();
-        }, 100);
-      } else {
-        alert("退出登录失败，请重试");
-      }
-    } catch (error) {
-      console.error("退出登录失败：", error);
-      alert("退出登录失败，请重试");
-    } finally {
-      setIsLoggingOut(false);
-    }
+    // 调用后端代理接口退出登录
+    await apiRequestPost("/api/auth/logout", {});
+
+    // 清除前端状态（无论登出接口成功与否）
+    authActions.resetAuth();
+    setShowUserMenu(false);
+    // 先跳转，再刷新
+    router.push("/");
+    // 延迟一点时间，确保跳转完成后再刷新
+    setTimeout(() => {
+      router.refresh();
+    }, 100);
+
+    setIsLoggingOut(false);
   };
 
   return (
@@ -123,7 +117,7 @@ export default function Navigation() {
                 AI3D
               </span>
             </Link>
-            <nav className="hidden items-center gap-7 text-[13px] text-foreground-subtle lg:flex">
+            <nav className="flex items-center gap-7 text-[13px] text-foreground-subtle">
               {NAV_LINKS.map(({ label, href }) => {
                 const isActive = pathname === href;
                 return (
@@ -157,14 +151,16 @@ export default function Navigation() {
               // 加载中
               <div className="h-9 w-24 animate-pulse rounded-full bg-surface-3" />
             ) : user ? (
-              // 已登录：显示用户邮箱和下拉菜单
+              // 已登录：显示用户名和下拉菜单
               <div className="relative" data-user-menu>
                 <button
                   type="button"
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex h-9 items-center justify-center gap-2 rounded-full border border-border-subtle px-5 text-[13px] font-medium text-foreground transition-all duration-200 hover:border-yellow-1/60 hover:bg-yellow-1/5 hover:text-yellow-1"
                 >
-                  <span className="max-w-[150px] truncate">{user.email}</span>
+                  <span className="max-w-[150px] truncate">
+                    {user.name || user.email || user.id}
+                  </span>
                   <svg
                     className={`h-4 w-4 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
                     fill="none"
@@ -186,7 +182,7 @@ export default function Navigation() {
                     <div className="p-3 border-b border-border-subtle">
                       <p className="text-xs text-text-muted">登录身份</p>
                       <p className="mt-1 text-sm text-text-strong truncate">
-                        {user.email}
+                        {user.name || user.email || user.id}
                       </p>
                     </div>
                     <div className="p-2">

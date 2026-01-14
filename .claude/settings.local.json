@@ -45,5 +45,7 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["context7"]
+  "enabledMcpjsonServers": [
+    "context7"
+  ]
 }

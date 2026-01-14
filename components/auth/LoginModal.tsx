@@ -17,10 +17,10 @@
  */
 
 import { useEffect, useState } from "react";
-import { apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import { authActions } from "@/stores/auth-store";
+import { tokenActions } from "@/stores/token-store";
 import { loginModalActions, useLoginModal } from "@/stores/login-modal-store";
+import { apiRequestPost } from "@/lib/api-client";
 
 /**
  * 倒计时秒数
@@ -28,17 +28,25 @@ import { loginModalActions, useLoginModal } from "@/stores/login-modal-store";
 const COUNTDOWN_SECONDS = 60;
 
 /**
+ * 验证码长度（外部用户服务使用 6 位验证码）
+ */
+const CODE_LENGTH = 6;
+
+/**
  * 登录弹窗内容组件
- * 复用 EmailLoginForm 的逻辑，但适配弹窗模式
+ * 支持登录/注册 Tab 切换
  */
 function LoginModalContent() {
   const { onSuccess } = useLoginModal();
+
+  // Tab 切换状态
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
   // 表单状态
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -53,8 +61,17 @@ function LoginModalContent() {
     }
   }, [countdown]);
 
+  // 切换 Tab 时重置状态
+  const handleTabChange = (tab: "login" | "register") => {
+    setActiveTab(tab);
+    setCode("");
+    setCodeSent(false);
+    setError("");
+    setCountdown(0);
+  };
+
   /**
-   * 发送验证码
+   * 发送验证码（登录或注册）
    */
   const handleSendCode = async () => {
     // 清除之前的错误
@@ -72,25 +89,21 @@ function LoginModalContent() {
 
     setIsSendingCode(true);
 
-    try {
-      const response = await apiPost("/api/auth/send-code", { email });
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/send-code", {
+      email,
+      type: activeTab === "login" ? "login" : "register",
+    });
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        // 发送成功
-        setCodeSent(true);
-        setCountdown(COUNTDOWN_SECONDS);
-        setError("");
-      } else {
-        throw new Error(getErrorMessage(data));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "发送验证码失败");
-    } finally {
-      setIsSendingCode(false);
+    if (result.success) {
+      setCodeSent(true);
+      setCountdown(COUNTDOWN_SECONDS);
+      setError("");
+    } else {
+      setError(result.error.message || "发送验证码失败");
     }
+
+    setIsSendingCode(false);
   };
 
   /**
@@ -111,137 +124,216 @@ function LoginModalContent() {
       setError("请输入验证码");
       return;
     }
-    if (code.length !== 4) {
-      setError("验证码必须是4位数字");
+    if (code.length !== CODE_LENGTH) {
+      setError(`验证码必须是${CODE_LENGTH}位数字`);
       return;
     }
 
-    setIsLoggingIn(true);
+    setIsSubmitting(true);
 
-    try {
-      const response = await apiPost("/api/auth/verify-code", { email, code });
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/login", { email, code });
 
-      const data = await response.json();
+    if (result.success) {
+      // 登录成功，保存 Token
+      tokenActions.setToken(result.data.token);
 
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        // 登录成功
-        // 1. 刷新认证状态
-        await authActions.refreshAuth();
+      // 刷新认证状态（从外部用户服务获取用户信息）
+      await authActions.refreshAuth();
 
-        // 2. 执行成功回调（如重试失败的请求）
-        if (onSuccess) {
-          await onSuccess();
-        }
-
-        // 3. 关闭弹窗
-        loginModalActions.close();
-      } else {
-        throw new Error(getErrorMessage(data));
+      // 执行成功回调（如重试失败的请求）
+      if (onSuccess) {
+        await onSuccess();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
-    } finally {
-      setIsLoggingIn(false);
+
+      // 关闭弹窗
+      loginModalActions.close();
+    } else {
+      setError(result.error.message || "登录失败");
     }
+
+    setIsSubmitting(false);
+  };
+
+  /**
+   * 注册
+   */
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 清除之前的错误
+    setError("");
+
+    // 验证输入
+    if (!email) {
+      setError("请输入邮箱");
+      return;
+    }
+    if (!code) {
+      setError("请输入验证码");
+      return;
+    }
+    if (code.length !== CODE_LENGTH) {
+      setError(`验证码必须是${CODE_LENGTH}位数字`);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // 调用后端代理接口
+    const result = await apiRequestPost("/api/auth/register", { email, code });
+
+    if (result.success) {
+      // 注册成功，切换到登录 Tab，保留邮箱
+      setActiveTab("login");
+      setCode("");
+      setCodeSent(false);
+      setCountdown(0);
+      setError("");
+      // email 保持不变，自动填充
+    } else {
+      setError(result.error.message || "注册失败");
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4">
-      {/* 错误提示 */}
-      {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-          <p className="text-sm text-red-400">{error}</p>
-        </div>
-      )}
-
-      {/* 邮箱输入 */}
-      <div>
-        <label
-          htmlFor="modal-email"
-          className="block text-sm font-medium text-text-muted mb-2"
+    <div className="space-y-4">
+      {/* Tab 切换 */}
+      <div className="flex border-b border-surface-3">
+        <button
+          type="button"
+          onClick={() => handleTabChange("login")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            activeTab === "login"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
+          }`}
         >
-          邮箱
-        </label>
-        <input
-          id="modal-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="your@email.com"
-          className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors"
-          disabled={isLoggingIn}
-          required
-        />
+          登录
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("register")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            activeTab === "register"
+              ? "text-accent-yellow border-b-2 border-accent-yellow"
+              : "text-text-muted hover:text-text-strong"
+          }`}
+        >
+          注册
+        </button>
       </div>
 
-      {/* 发送验证码按钮 */}
-      <button
-        type="button"
-        onClick={handleSendCode}
-        disabled={isSendingCode || countdown > 0 || isLoggingIn}
-        className="w-full btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+      {/* 表单内容 */}
+      <form
+        onSubmit={activeTab === "login" ? handleLogin : handleRegister}
+        className="space-y-4"
       >
-        {isSendingCode
-          ? "发送中..."
-          : countdown > 0
-            ? `${countdown}秒后可重新发送`
-            : codeSent
-              ? "重新发送验证码"
-              : "发送验证码"}
-      </button>
+        {/* 错误提示 */}
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
-      {/* 验证码输入 */}
-      {codeSent && (
-        <div className="fade-in-up">
+        {/* 邮箱输入 */}
+        <div>
           <label
-            htmlFor="modal-code"
+            htmlFor="modal-email"
             className="block text-sm font-medium text-text-muted mb-2"
           >
-            验证码
+            邮箱
           </label>
           <input
-            id="modal-code"
-            type="text"
-            value={code}
-            onChange={(e) => {
-              // 只允许输入数字，最多4位
-              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-              setCode(value);
-            }}
-            placeholder="0000"
-            maxLength={4}
-            className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors text-center text-2xl font-mono tracking-widest"
-            disabled={isLoggingIn}
+            id="modal-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your@email.com"
+            className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors"
+            disabled={isSubmitting}
             required
           />
-          <p className="mt-2 text-xs text-text-subtle text-center">
-            请输入邮箱收到的4位验证码
-          </p>
         </div>
-      )}
 
-      {/* 登录按钮 */}
-      {codeSent && (
+        {/* 发送验证码按钮 */}
         <button
-          type="submit"
-          disabled={isLoggingIn || code.length !== 4}
-          className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed fade-in-up"
+          type="button"
+          onClick={handleSendCode}
+          disabled={isSendingCode || countdown > 0 || isSubmitting}
+          className="w-full btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoggingIn ? "登录中..." : "登录"}
+          {isSendingCode
+            ? "发送中..."
+            : countdown > 0
+              ? `${countdown}秒后可重新发送`
+              : codeSent
+                ? "重新发送验证码"
+                : "发送验证码"}
         </button>
-      )}
 
-      {/* 在完整页面登录链接 */}
-      <div className="text-center">
-        <a
-          href="/login"
-          className="text-sm text-text-subtle hover:text-accent-yellow transition-colors"
-        >
-          在完整页面登录
-        </a>
-      </div>
-    </form>
+        {/* 验证码输入 */}
+        {codeSent && (
+          <div className="fade-in-up">
+            <label
+              htmlFor="modal-code"
+              className="block text-sm font-medium text-text-muted mb-2"
+            >
+              验证码
+            </label>
+            <input
+              id="modal-code"
+              type="text"
+              value={code}
+              onChange={(e) => {
+                // 只允许输入字母和数字，最多6位
+                const value = e.target.value
+                  .replace(/[^a-zA-Z0-9]/g, "")
+                  .slice(0, CODE_LENGTH);
+                setCode(value);
+              }}
+              placeholder="A1B2C3"
+              maxLength={CODE_LENGTH}
+              className="w-full px-4 py-3 bg-surface-1 border border-surface-3 rounded-lg text-text-strong placeholder:text-text-subtle focus:outline-none focus:border-accent-yellow transition-colors text-center text-2xl font-mono tracking-widest uppercase"
+              disabled={isSubmitting}
+              required
+            />
+            <p className="mt-2 text-xs text-text-subtle text-center">
+              请输入邮箱收到的{CODE_LENGTH}位验证码（字母或数字）
+            </p>
+          </div>
+        )}
+
+        {/* 提交按钮 */}
+        {codeSent && (
+          <button
+            type="submit"
+            disabled={isSubmitting || code.length !== CODE_LENGTH}
+            className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed fade-in-up"
+          >
+            {isSubmitting
+              ? activeTab === "login"
+                ? "登录中..."
+                : "注册中..."
+              : activeTab === "login"
+                ? "登录"
+                : "注册"}
+          </button>
+        )}
+
+        {/* 在完整页面登录链接 */}
+        <div className="text-center">
+          <a
+            href="/login"
+            className="text-sm text-text-subtle hover:text-accent-yellow transition-colors"
+          >
+            在完整页面登录
+          </a>
+        </div>
+      </form>
+    </div>
   );
 }
 

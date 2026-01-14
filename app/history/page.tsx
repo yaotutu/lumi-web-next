@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/layout/Navigation";
-import { apiDelete, apiGet } from "@/lib/api-client";
+import { apiRequestDelete, apiRequestGet } from "@/lib/api-client";
 import { adaptTasksResponse } from "@/lib/utils/task-adapter-client";
 // 认证状态管理
 import { useIsAuthenticated, useIsLoaded } from "@/stores/auth-store";
@@ -30,20 +30,25 @@ export default function HistoryPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
-      try {
-        const response = await apiGet("/api/tasks");
-        const rawData = await response.json();
-        const data = adaptTasksResponse(rawData); // ✅ 适配后端数据
+      // 获取任务列表
+      const result = await apiRequestGet("/api/tasks");
 
-        // JSend 格式判断
+      // 判断请求是否成功
+      if (result.success) {
+        // 适配后端数据格式
+        const rawData = {
+          data: result.data,
+          status: "success" as const,
+        };
+        const data = adaptTasksResponse(rawData);
+
+        // 类型守卫：确保是成功响应
         if (data.status === "success") {
           setTasks(data.data);
         }
-      } catch (error) {
-        console.error("Failed to fetch tasks:", error);
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     // 只在已登录时获取任务列表
@@ -57,14 +62,11 @@ export default function HistoryPage() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("确定要删除这个任务吗？")) return;
 
-    try {
-      const response = await apiDelete(`/api/tasks/${taskId}`);
+    // 调用删除 API
+    const result = await apiRequestDelete(`/api/tasks/${taskId}`);
 
-      if (response.ok) {
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      }
-    } catch (error) {
-      console.error("Failed to delete task:", error);
+    if (result.success) {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
     }
   };
 
@@ -120,11 +122,18 @@ export default function HistoryPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {tasks.map((task) => (
-                <button
+                <div
                   key={task.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className="glass-panel group cursor-pointer overflow-hidden transition-all hover:border-yellow-1/30 text-left"
                   onClick={() => router.push(`/workspace?taskId=${task.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/workspace?taskId=${task.id}`);
+                    }
+                  }}
                 >
                   {/* 缩略图 */}
                   <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-white/5 to-[#0d0d0d]">
@@ -160,7 +169,7 @@ export default function HistoryPage() {
                   {/* 任务信息 */}
                   <div className="p-4">
                     <h3 className="mb-2 line-clamp-2 text-sm font-medium text-white">
-                      {task.prompt}
+                      {task.originalPrompt || "未命名任务"}
                     </h3>
 
                     <div className="mb-3 flex items-center gap-3 text-xs text-white/50">
@@ -186,7 +195,7 @@ export default function HistoryPage() {
                       删除
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

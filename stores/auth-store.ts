@@ -5,8 +5,9 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { apiGet } from "@/lib/api-client";
 import { type AuthState, AuthStatus, type User } from "@/types/auth";
+import { tokenActions } from "@/stores/token-store";
+import { apiRequestGet } from "@/lib/api-client";
 
 // 导出类型供外部使用
 export type { User } from "@/types/auth";
@@ -62,29 +63,46 @@ export const useAuthStore = create<AuthStore>()(
 
       /**
        * 刷新认证状态
-       * 从服务器获取最新的认证状态
+       * 从后端获取最新的认证状态（后端会代理到外部用户服务）
        */
       refreshAuth: async () => {
-        try {
-          const response = await apiGet("/api/auth/me");
+        // 如果没有 Token，直接设置为未认证
+        const token = tokenActions.getToken();
+        console.log("🔍 [refreshAuth] Token 状态:", token ? "存在" : "不存在");
 
-          if (!response.ok) {
-            throw new Error(`认证检查失败: ${response.status}`);
-          }
+        if (!token) {
+          get().setAuthState(AuthStatus.UNAUTHENTICATED, null);
+          return;
+        }
 
-          const data = await response.json();
+        // 调用后端代理接口获取用户信息
+        console.log("🌐 [refreshAuth] 调用后端代理接口...");
+        const result = await apiRequestGet("/api/auth/me");
 
-          // JSend 格式判断
-          if (data.status === "success") {
-            get().setAuthState(data.data.status, data.data.user);
-          } else {
-            // API 返回错误，重置为错误状态
-            get().setAuthState(AuthStatus.ERROR, null);
-          }
-        } catch (error) {
-          console.error("认证状态检查失败:", error);
-          // 发生错误时，设置为错误状态
-          get().setAuthState(AuthStatus.ERROR, null);
+        console.log("📦 [refreshAuth] API 响应:", result);
+
+        if (
+          result.success &&
+          result.data.status === "authenticated" &&
+          result.data.user
+        ) {
+          // 转换为前端用户格式
+          const user: User = {
+            id: result.data.user.id,
+            email: result.data.user.email || "",
+            name: result.data.user.nickName || result.data.user.userName,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            // 添加统计数据（如果后端返回了 stats 字段）
+            stats: result.data.user.stats,
+          };
+          console.log("✅ [refreshAuth] 设置认证状态 - AUTHENTICATED", user);
+          get().setAuthState(AuthStatus.AUTHENTICATED, user);
+        } else {
+          // Token 无效或请求失败，清除并设置为未认证
+          console.warn("⚠️ [refreshAuth] 获取用户信息失败，清除认证状态");
+          tokenActions.clearToken();
+          get().setAuthState(AuthStatus.UNAUTHENTICATED, null);
         }
       },
 
@@ -93,6 +111,10 @@ export const useAuthStore = create<AuthStore>()(
        * 用户登出时调用
        */
       resetAuth: () => {
+        // 清除 Token
+        tokenActions.clearToken();
+
+        // 重置认证状态
         set({
           status: AuthStatus.UNAUTHENTICATED,
           user: null,

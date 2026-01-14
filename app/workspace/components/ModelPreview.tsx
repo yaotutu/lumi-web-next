@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Toast, { type ToastType } from "@/components/ui/Toast";
 import Tooltip from "@/components/ui/Tooltip";
-import { apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestPost } from "@/lib/api-client";
+import { downloadModel } from "@/lib/utils/download";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 import GenerationProgress from "./GenerationProgress";
 import Model3DViewer, { type Model3DViewerRef } from "./Model3DViewer";
+import { toast as showToast } from "@/lib/toast";
 
 // 材质颜色选项
 const MATERIAL_COLORS = [
@@ -112,32 +113,22 @@ export default function ModelPreview({
 
     setIsPrinting(true);
 
-    try {
-      const response = await apiPost(`/api/tasks/${taskId}/print`, {});
+    // 调用打印 API
+    const result = await apiRequestPost(`/api/tasks/${taskId}/print`, {});
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (isSuccess(data)) {
-        setToast({
-          type: "success",
-          message: "打印任务已开始，正在处理中...",
-        });
-      } else {
-        setToast({
-          type: "error",
-          message: `打印任务提交失败：${getErrorMessage(data)}`,
-        });
-      }
-    } catch (error) {
-      console.error("提交打印任务失败:", error);
+    if (result.success) {
+      setToast({
+        type: "success",
+        message: "打印任务已开始，正在处理中...",
+      });
+    } else {
       setToast({
         type: "error",
-        message: `提交打印任务失败：${error instanceof Error ? error.message : "网络错误"}`,
+        message: `打印任务提交失败：${result.error.message}`,
       });
-    } finally {
-      setIsPrinting(false);
     }
+
+    setIsPrinting(false);
   }, [taskId]);
 
   // 切换全屏
@@ -730,9 +721,22 @@ export default function ModelPreview({
                   <button
                     type="button"
                     className="btn-primary flex items-center justify-center gap-2 h-12 px-6"
-                    onClick={() => {
+                    onClick={async () => {
                       if (latestModel?.modelUrl) {
-                        window.open(latestModel.modelUrl, "_blank");
+                        try {
+                          // 使用封装的下载函数下载文件
+                          await downloadModel(
+                            latestModel.modelUrl,
+                            latestModel.id,
+                            latestModel.format || "glb",
+                          );
+                        } catch (error) {
+                          console.error("下载失败:", error);
+                          setToast({
+                            type: "error",
+                            message: `下载失败: ${error instanceof Error ? error.message : "未知错误"}`,
+                          });
+                        }
                       }
                     }}
                     disabled={!latestModel?.modelUrl}
@@ -813,25 +817,19 @@ export default function ModelPreview({
                 className="btn-primary w-full"
                 onClick={async () => {
                   if (!taskId) return;
-                  try {
-                    // 调用重试API
-                    const response = await apiPost(
-                      `/api/tasks/${taskId}/retry`,
-                      { type: "model" },
-                    );
 
-                    const data = await response.json();
-                    // JSend 格式判断
-                    if (isSuccess(data)) {
-                      // 重试成功,刷新页面以获取最新任务状态
-                      window.location.reload();
-                    } else {
-                      console.error("重试失败:", getErrorMessage(data));
-                      alert(`重试失败: ${getErrorMessage(data)}`);
-                    }
-                  } catch (error) {
-                    console.error("重试请求失败:", error);
-                    alert("重试请求失败,请检查网络连接");
+                  // 调用重试 API
+                  const result = await apiRequestPost(
+                    `/api/tasks/${taskId}/retry`,
+                    { type: "model" },
+                  );
+
+                  if (result.success) {
+                    // 重试成功,刷新页面以获取最新任务状态
+                    window.location.reload();
+                  } else {
+                    console.error("重试失败:", result.error.message);
+                    showToast.error(`重试失败: ${result.error.message}`);
                   }
                 }}
               >

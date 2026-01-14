@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Tooltip from "@/components/ui/Tooltip";
 // 全局 API 客户端（自动处理 401 登录）
-import { apiPost } from "@/lib/api-client";
+import { apiRequestPost } from "@/lib/api-client";
 import { IMAGE_GENERATION, VALIDATION_MESSAGES } from "@/lib/constants";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
 import type { GenerationStatus, TaskWithDetails } from "@/types";
 
 interface ImageGridProps {
@@ -36,10 +35,10 @@ export default function ImageGrid({
 
   // 当 task 加载时，初始化 prompt 为服务端数据
   useEffect(() => {
-    if (task?.prompt) {
-      setPrompt(task.prompt);
+    if (task?.originalPrompt) {
+      setPrompt(task.originalPrompt);
     }
-  }, [task?.prompt]);
+  }, [task?.originalPrompt]);
 
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>([]);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
@@ -60,38 +59,53 @@ export default function ImageGrid({
   // 如果任务已有图片数据，初始化图片槽位
   useEffect(() => {
     if (task?.images && task.images.length > 0) {
-      const slots: ImageSlot[] = Array.from(
-        { length: IMAGE_GENERATION.COUNT },
-        (_, index) => {
-          const image = task.images.find((img) => img.index === index);
-          if (!image) {
-            return { url: null, status: "pending" };
-          }
+      // ✅ 使用函数式更新，避免完全替换 imageSlots
+      setImageSlots((prevSlots) => {
+        // 创建新的槽位数组（保持 4 个槽位）
+        const newSlots: ImageSlot[] = Array.from(
+          { length: IMAGE_GENERATION.COUNT },
+          (_, index) => {
+            const image = task.images.find((img) => img.index === index);
 
-          // ✅ 根据 imageStatus 映射到组件状态
-          let slotStatus: ImageSlotStatus = "pending";
-          switch (image.imageStatus) {
-            case "COMPLETED":
-              slotStatus = "completed";
-              break;
-            case "GENERATING":
-              slotStatus = "loading";
-              break;
-            case "FAILED":
-              slotStatus = "failed";
-              break;
-            default:
-              slotStatus = "pending";
-              break;
-          }
+            // 如果后端没有该图片数据，保留之前的槽位状态（如果有）
+            if (!image) {
+              return prevSlots[index] || { url: null, status: "pending" };
+            }
 
-          return {
-            url: (image as any).url || image.imageUrl, // 兼容适配器的 url 字段
-            status: slotStatus,
-          };
-        },
-      );
-      setImageSlots(slots);
+            // ✅ 根据 imageStatus 映射到组件状态
+            let slotStatus: ImageSlotStatus = "pending";
+            switch (image.imageStatus) {
+              case "COMPLETED":
+                slotStatus = "completed";
+                break;
+              case "GENERATING":
+                slotStatus = "loading";
+                break;
+              case "FAILED":
+                slotStatus = "failed";
+                break;
+              default:
+                slotStatus = "pending";
+                break;
+            }
+
+            const imageUrl = (image as any).url || image.imageUrl;
+
+            // ✅ 关键优化：如果图片已经是 completed 状态，保持不变（避免闪烁）
+            const prevSlot = prevSlots[index];
+            if (prevSlot?.status === "completed" && prevSlot.url === imageUrl) {
+              return prevSlot;
+            }
+
+            return {
+              url: imageUrl,
+              status: slotStatus,
+            };
+          },
+        );
+
+        return newSlots;
+      });
 
       // 根据任务状态设置组件状态
       if (task.status === "IMAGE_COMPLETED") {
@@ -157,28 +171,21 @@ export default function ImageGrid({
     );
     setImageSlots(slots);
 
-    try {
-      // 使用 apiPost 创建新任务（自动处理 401 登录）
-      // 登录成功后会自动重试请求，prompt 保留在 store 中
-      const response = await apiPost(
-        "/api/tasks",
-        { prompt: trimmedText },
-        { context: "workspace" }, // 指定上下文为 workspace
-      );
+    // 使用新 API 创建新任务（自动处理 401 登录）
+    // 登录成功后会自动重试请求，prompt 保留在 store 中
+    const result = await apiRequestPost(
+      "/api/tasks",
+      { prompt: trimmedText },
+      { context: "workspace" }, // 指定上下文为 workspace
+    );
 
-      const data = await response.json();
-
-      // JSend 格式判断
-      if (!isSuccess(data)) {
-        throw new Error(getErrorMessage(data));
-      }
-
-      const taskData = data.data as { id: string };
+    if (result.success) {
       // 任务创建成功，导航到新任务页面(轮询逻辑会自动更新任务状态)
+      const taskData = result.data as { id: string };
       window.location.href = `/workspace?taskId=${taskData.id}`;
-    } catch (err) {
-      console.error("创建任务失败:", err);
-      setError(err instanceof Error ? err.message : "创建任务失败,请重试");
+    } else {
+      console.error("创建任务失败:", result.error.message);
+      setError(result.error.message);
       setStatus("failed");
     }
   }, [prompt]);
@@ -252,14 +259,14 @@ export default function ImageGrid({
     <div className="flex h-full w-full flex-col gap-4 overflow-hidden lg:w-[600px]">
       {/* 输入与生成区域 - 模型完成后折叠为只读卡片 */}
       {isModelCompleted ? (
-        // 只读卡片：显示原始 prompt
+        // 只读卡片：显示原始 prompt（优先使用 originalPrompt，回退到 prompt 或 prop）
         <div className="glass-panel shrink-0 p-4 border border-white/5">
           <div className="flex items-start gap-3">
             <div className="text-text-subtle text-sm font-medium shrink-0">
               原始描述
             </div>
             <div className="flex-1 text-text-muted text-sm leading-relaxed">
-              {task?.prompt || prompt}
+              {task?.originalPrompt || prompt}
             </div>
           </div>
         </div>

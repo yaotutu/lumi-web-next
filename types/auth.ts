@@ -19,6 +19,37 @@ export enum AuthStatus {
 }
 
 /**
+ * 用户统计数据
+ * 从后端 /api/auth/me 接口获取
+ */
+export interface UserStats {
+  /** 总模型数 */
+  totalModels: number;
+  /** 公开模型数 */
+  publicModels: number;
+  /** 私有模型数 */
+  privateModels: number;
+  /** 获得的总点赞数 */
+  totalLikes: number;
+  /** 获得的总收藏数 */
+  totalFavorites: number;
+  /** 获得的总浏览数 */
+  totalViews: number;
+  /** 总下载数 */
+  totalDownloads: number;
+  /** 用户点赞的模型数 */
+  likedModelsCount: number;
+  /** 用户收藏的模型数 */
+  favoritedModelsCount: number;
+  /** 总生成请求数 */
+  totalRequests: number;
+  /** 已完成的请求数 */
+  completedRequests: number;
+  /** 失败的请求数 */
+  failedRequests: number;
+}
+
+/**
  * 用户基本信息
  */
 export interface User {
@@ -27,6 +58,8 @@ export interface User {
   name: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  /** 用户统计数据（可选，从后端获取） */
+  stats?: UserStats;
 }
 
 /**

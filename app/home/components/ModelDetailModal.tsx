@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom"; // 导入 createPortal 用于渲染弹窗到 body 下
 import Model3DViewer, {
   type Model3DViewerRef,
 } from "@/app/workspace/components/Model3DViewer";
-import { apiGet, apiPost } from "@/lib/api-client";
-import { getErrorMessage, isSuccess } from "@/lib/utils/api-helpers";
+import { apiRequestGet, apiRequestPost } from "@/lib/api-client";
+import { downloadModel } from "@/lib/utils/download";
 import { useUser } from "@/stores/auth-store";
 import type { UserAssetWithUser } from "@/types";
+import { toast } from "@/lib/toast";
+import { createSliceTask, getSliceTaskStatus } from "@/lib/api/slice"; // 导入切片 API
+import type { SliceStatus } from "@/types/slice"; // 导入切片状态类型
 
 // 材质颜色选项（从详情页复制）
 const MATERIAL_COLORS = [
@@ -40,6 +44,10 @@ export default function ModelDetailModal({
   const [currentMaterial, setCurrentMaterial] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  // 切片相关状态
+  const [slicing, setSlicing] = useState(false); // 切片进行中
+  const [sliceTaskId, setSliceTaskId] = useState<string | null>(null); // 切片任务 ID
+
   // 用户状态和交互状态
   const user = useUser();
   const [interactionStatus, setInteractionStatus] = useState({
@@ -54,6 +62,18 @@ export default function ModelDetailModal({
   const model3DViewerRef = useRef<Model3DViewerRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null); // 轮询定时器 ID（用于清理）
+
+  // 客户端挂载状态（用于 Portal）
+  const [isMounted, setIsMounted] = useState(false);
+
+  /**
+   * 检测客户端环境
+   */
+  useEffect(() => {
+    setIsMounted(true); // 组件挂载后设置为 true
+    return () => setIsMounted(false); // 组件卸载时重置
+  }, []);
 
   /**
    * 加载模型详情
@@ -63,62 +83,142 @@ export default function ModelDetailModal({
       setLoading(true);
       setError(null);
 
-      try {
-        // 直接使用 fetch + JSend 格式
-        const response = await apiGet(`/api/gallery/models/${id}`);
-        if (!response.ok) {
-          throw new Error(`加载失败: ${response.status}`);
-        }
+      // 加载模型详情
+      const result = await apiRequestGet<UserAssetWithUser>(
+        `/api/gallery/models/${id}`,
+      );
 
-        const data = await response.json();
-        // JSend 格式判断
-        if (isSuccess(data)) {
-          const modelData = data.data as UserAssetWithUser;
-          setModel(modelData);
+      if (result.success) {
+        const modelData = result.data;
+        setModel(modelData);
 
-          // 初始化交互状态
-          setCurrentLikes(modelData.likeCount);
-          setCurrentFavorites(modelData.favoriteCount || 0);
+        // 初始化交互状态（使用模型详情中的点赞数和收藏数）
+        setCurrentLikes(modelData.likeCount);
+        setCurrentFavorites(modelData.favoriteCount || 0);
 
-          // 如果用户已登录，获取交互状态
-          if (user) {
-            try {
-              const interactionResponse = await apiGet(
-                `/api/gallery/models/${id}/interactions`,
-              );
-              if (interactionResponse.ok) {
-                const interactionData = await interactionResponse.json();
-                // JSend 格式判断
-                if (isSuccess(interactionData)) {
-                  const interactionInfo = interactionData.data as {
-                    isAuthenticated: boolean;
-                    isLiked?: boolean;
-                    isFavorited?: boolean;
-                  };
-                  if (interactionInfo.isAuthenticated) {
-                    setInteractionStatus({
-                      isLiked: interactionInfo.isLiked || false,
-                      isFavorited: interactionInfo.isFavorited || false,
-                    });
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("获取交互状态失败:", error);
-            }
+        // 🔥 可选认证：无论用户是否登录，都调用接口获取交互状态
+        // 后端会根据 Token 自动判断是否返回用户特定的交互数据
+        const interactionResult = await apiRequestGet<{
+          isAuthenticated: boolean;
+          isLiked?: boolean;
+          isFavorited?: boolean;
+        }>(`/api/gallery/models/${id}/interactions`);
+
+        if (interactionResult.success) {
+          if (interactionResult.data.isAuthenticated) {
+            // ✅ 已登录：设置用户的交互状态
+            setInteractionStatus({
+              isLiked: interactionResult.data.isLiked || false,
+              isFavorited: interactionResult.data.isFavorited || false,
+            });
+          } else {
+            // ⚠️ 未登录：重置为默认状态（未点赞、未收藏）
+            setInteractionStatus({
+              isLiked: false,
+              isFavorited: false,
+            });
           }
-        } else {
-          throw new Error(getErrorMessage(data));
         }
-      } catch (err) {
-        console.error("加载模型详情失败:", err);
-        setError(err instanceof Error ? err.message : "加载失败");
-      } finally {
-        setLoading(false);
+      } else {
+        console.error("加载模型详情失败:", result.error.message);
+        setError(result.error.message);
       }
+
+      setLoading(false);
     },
-    [user],
+    [], // 🔥 移除 user 依赖，因为不再需要判断 user 是否存在
   );
+
+  /**
+   * 开始轮询切片任务状态
+   */
+  const startPolling = useCallback((taskId: string) => {
+    const maxDuration = 10 * 60 * 1000; // 10 分钟超时
+    const interval = 5000; // 5 秒轮询一次
+    const startTime = Date.now();
+    let retryCount = 0;
+
+    const poll = setInterval(async () => {
+      // 超时检查
+      if (Date.now() - startTime > maxDuration) {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.error("切片超时，请重试");
+        return;
+      }
+
+      // 查询状态
+      const statusResult = await getSliceTaskStatus(taskId);
+
+      if (!statusResult.success) {
+        retryCount = retryCount + 1;
+        if (retryCount > 3) {
+          clearInterval(poll);
+          setSlicing(false);
+          toast.error("查询切片状态失败");
+        }
+        return;
+      }
+
+      const { sliceStatus, gcodeUrl, errorMessage } = statusResult.data;
+
+      // 切片完成
+      if (sliceStatus === "COMPLETED") {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.success("切片完成！G-code 文件已生成");
+        return;
+      }
+
+      // 切片失败
+      if (sliceStatus === "FAILED") {
+        clearInterval(poll);
+        setSlicing(false);
+        toast.error(`切片失败: ${errorMessage || "未知错误"}`);
+        return;
+      }
+
+      // 继续等待（PENDING / PROCESSING）
+    }, interval);
+
+    // 保存 interval ID 用于清理
+    pollIntervalRef.current = poll;
+  }, []);
+
+  /**
+   * 处理一键切片
+   */
+  const handleSlice = useCallback(async () => {
+    if (!model) return;
+
+    // 如果已经在切片中，不重复创建
+    if (slicing) return;
+
+    setSlicing(true);
+
+    try {
+      // 创建切片任务
+      const createResult = await createSliceTask(model.id);
+
+      if (!createResult.success) {
+        toast.error(`创建切片任务失败: ${createResult.error.message}`);
+        setSlicing(false);
+        return;
+      }
+
+      const { sliceTaskId: newSliceTaskId } = createResult.data;
+      setSliceTaskId(newSliceTaskId);
+
+      toast.info("切片任务已创建，正在处理中...");
+
+      // 开始轮询
+      startPolling(newSliceTaskId);
+    } catch (error) {
+      console.error("切片错误:", error);
+      toast.error("切片失败，请重试");
+      setSlicing(false);
+    }
+  }, [model, slicing, startPolling]);
 
   /**
    * 当模型ID变化时重新加载模型
@@ -131,8 +231,40 @@ export default function ModelDetailModal({
       setModel(null);
       setError(null);
       setCurrentMaterial(null);
+      setSlicing(false);
+      setSliceTaskId(null);
+
+      // 清除轮询定时器
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     }
   }, [isOpen, modelId, loadModel]);
+
+  /**
+   * 弹窗打开时检查切片状态，如果正在切片则恢复轮询
+   */
+  useEffect(() => {
+    if (isOpen && model && model.sliceTaskId && model.sliceStatus === 'PROCESSING') {
+      // 恢复轮询
+      setSlicing(true);
+      setSliceTaskId(model.sliceTaskId);
+      startPolling(model.sliceTaskId);
+    }
+  }, [isOpen, model, startPolling]);
+
+  /**
+   * 组件卸载时清除轮询定时器
+   */
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * 重置相机视角
@@ -212,24 +344,25 @@ export default function ModelDetailModal({
    * 下载模型（增加下载计数）
    */
   const handleDownload = useCallback(async () => {
-    if (!model) return;
+    if (!model || !model.modelUrl) return;
 
     setDownloading(true);
 
-    try {
-      // 使用统一的 API 客户端
-      const { apiClient } = await import("@/lib/api/client");
-      await apiClient.gallery.download(model.id);
+    // 调用下载 API 增加下载计数
+    const result = await apiRequestPost(
+      `/api/gallery/models/${model.id}/download`,
+      {},
+    );
 
-      // 打开下载链接（检查 modelUrl 是否存在）
-      if (model.modelUrl) {
-        window.open(model.modelUrl, "_blank");
-      }
-    } catch (error) {
-      console.error("下载失败:", error);
-    } finally {
-      setDownloading(false);
+    if (result.success) {
+      // 使用封装的下载函数下载文件
+      await downloadModel(model.modelUrl, model.id, model.format);
+    } else {
+      console.error("下载失败:", result.error.message);
+      toast.error(`下载失败: ${result.error.message}`);
     }
+
+    setDownloading(false);
   }, [model]);
 
   /**
@@ -246,7 +379,7 @@ export default function ModelDetailModal({
   const handleInteraction = useCallback(
     async (type: "LIKE" | "FAVORITE") => {
       if (!model || !user) {
-        alert("请先登录后再进行操作");
+        toast.error("请先登录后再进行操作");
         return;
       }
 
@@ -275,48 +408,39 @@ export default function ModelDetailModal({
         );
       }
 
-      try {
-        const response = await apiPost(
-          `/api/gallery/models/${model.id}/interactions`,
-          { type },
-        );
+      // 调用 API
+      const result = await apiRequestPost(
+        `/api/gallery/models/${model.id}/interactions`,
+        { type },
+      );
 
-        if (!response.ok) {
-          throw new Error("操作失败");
-        }
-
-        const data = await response.json();
-        // JSend 格式判断
-        if (isSuccess(data)) {
-          // 使用服务器返回的权威数据（确保前后端同步）
-          const interactionResult = data.data as {
-            isInteracted: boolean;
-            likeCount: number;
-            favoriteCount: number;
-          };
-          setCurrentLikes(interactionResult.likeCount);
-          setCurrentFavorites(interactionResult.favoriteCount);
-          setInteractionStatus((prev) => ({
-            ...prev,
-            isLiked:
-              type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
-            isFavorited:
-              type === "FAVORITE"
-                ? interactionResult.isInteracted
-                : prev.isFavorited,
-          }));
-        } else {
-          throw new Error(getErrorMessage(data));
-        }
-      } catch (error) {
-        console.error("Interaction failed:", error);
+      if (result.success) {
+        // 使用服务器返回的权威数据（确保前后端同步）
+        const interactionResult = result.data as {
+          isInteracted: boolean;
+          likeCount: number;
+          favoriteCount: number;
+        };
+        setCurrentLikes(interactionResult.likeCount);
+        setCurrentFavorites(interactionResult.favoriteCount);
+        setInteractionStatus((prev) => ({
+          ...prev,
+          isLiked:
+            type === "LIKE" ? interactionResult.isInteracted : prev.isLiked,
+          isFavorited:
+            type === "FAVORITE"
+              ? interactionResult.isInteracted
+              : prev.isFavorited,
+        }));
+      } else {
         // 回滚到原始状态
+        console.error("Interaction failed:", result.error.message);
         setInteractionStatus(originalStatus);
         setCurrentLikes(originalLikes);
         setCurrentFavorites(originalFavorites);
-      } finally {
-        setIsInteractionLoading(false);
       }
+
+      setIsInteractionLoading(false);
     },
     [
       model,
@@ -340,13 +464,14 @@ export default function ModelDetailModal({
     });
   };
 
-  // 弹窗未打开时不渲染
-  if (!isOpen) return null;
+  // 弹窗未打开或未挂载时不渲染
+  if (!isOpen || !isMounted) return null;
 
   // 直接使用后端返回的模型 URL（已经是 S3 URL）
   const modelUrl = model?.modelUrl || null;
 
-  return (
+  // 弹窗内容
+  const modalContent = (
     // biome-ignore lint/a11y/useKeyWithClickEvents: 背景点击关闭弹窗
     // biome-ignore lint/a11y/noStaticElementInteractions: 这是弹窗遮罩层，需要点击关闭功能
     <div ref={modalRef} className="model-detail-modal" onClick={onClose}>
@@ -565,7 +690,7 @@ export default function ModelDetailModal({
                       >
                         <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
                       </svg>
-                      <span>{model.user.name || "匿名用户"}</span>
+                      <span>{model.user?.name || "匿名用户"}</span>
                     </div>
                     <span className="text-text-subtle/20">•</span>
                     <span>{formatDate(model.createdAt)}</span>
@@ -729,6 +854,42 @@ export default function ModelDetailModal({
                     </div>
                   </div>
 
+                  {/* 切片按钮 */}
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-1 to-blue-1/80 hover:from-blue-1/90 hover:to-blue-1/70 text-white font-bold transition-all duration-[250ms] transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-1/25 hover:shadow-xl hover:shadow-blue-1/35 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm"
+                    onClick={handleSlice}
+                    disabled={slicing}
+                  >
+                    {slicing ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                        <span>切片中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        <span>
+                          {model.sliceStatus === "COMPLETED"
+                            ? "重新切片"
+                            : "一键切片"}
+                        </span>
+                      </>
+                    )}
+                  </button>
+
                   {/* 下载按钮 */}
                   <button
                     type="button"
@@ -768,4 +929,7 @@ export default function ModelDetailModal({
       </div>
     </div>
   );
+
+  // 使用 Portal 将弹窗渲染到 document.body，确保弹窗始终固定在视口中央
+  return createPortal(modalContent, document.body);
 }
