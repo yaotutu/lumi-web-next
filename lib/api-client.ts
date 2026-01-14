@@ -11,6 +11,7 @@
  * - 所有请求通过 lumi-server 统一网关
  */
 
+import { buildApiUrl } from "@/lib/config/api";
 import type { LoginModalContext } from "@/stores/login-modal-store";
 import { loginModalActions } from "@/stores/login-modal-store";
 import { tokenActions } from "@/stores/token-store";
