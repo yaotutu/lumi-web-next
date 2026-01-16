@@ -188,6 +188,7 @@ export default function CreationHistory() {
                       src={imageUrl}
                       alt="Task thumbnail"
                       fill
+                      unoptimized
                       className="object-cover transition-transform group-hover:scale-105"
                     />
                   ) : (
